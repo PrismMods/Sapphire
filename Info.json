@@ -1,0 +1,10 @@
+{
+  "Id": "Sapphire",
+  "DisplayName": "Sapphire",
+  "Author": "QuartzTeam",
+  "Version": "0.0.1",
+  "ManagerVersion": "0.32.4.0",
+  "AssemblyName": "Sapphire.dll",
+  "EntryMethod": "Sapphire.Startup.Load",
+  "HomePage": ""
+}
