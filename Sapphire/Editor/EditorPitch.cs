@@ -169,11 +169,11 @@ namespace Sapphire
             bg.raycastTarget = true;
 
             float x = pad;
-            MakeLabel("Pitch", x, lblW, h);          x += lblW + gap;
+            MakeLabel(Loc.T("Pitch"), x, lblW, h);          x += lblW + gap;
             MakeButton("<", x, btn, h, () => Nudge(-10)); x += btn + gap;
             _field = MakeField(x, fieldW, h);        x += fieldW + gap;
             MakeButton(">", x, btn, h, () => Nudge(10));  x += btn + gap;
-            MakeButton("Reset", x, resetW, h, ResetPractice);
+            MakeButton(Loc.T("Reset"), x, resetW, h, ResetPractice);
         }
 
         private static void MakeLabel(string text, float x, float w, float h)

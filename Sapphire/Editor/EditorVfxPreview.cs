@@ -20,8 +20,9 @@ namespace Sapphire
 
         internal static void Toggle()
         {
-            if (_on) Exit();
-            else { _on = true; _cooldown = 0; }
+            if (_on) { Exit(); return; }
+            EditorToolbar.DeactivateAllTools(); // one tool at a time — nothing stays armed while hidden
+            _on = true; _cooldown = 0;
         }
 
         internal static void Tick()

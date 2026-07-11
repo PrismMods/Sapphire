@@ -103,12 +103,12 @@ namespace Sapphire
 
             var entries = new List<KeyValuePair<string, Action>>
             {
-                Row("Copy",      ed => ed.MultiCopyFloors(false)),
-                Row("Cut",       ed => ed.MultiCutFloors()),
-                Row("Paste",     ed => ed.PasteFloors(false)),
-                Row("Delete",    ed => ed.DeleteSingleSelection(false)),
-                Row("Rotate CW",  ed => ed.RotateSelection(true)),
-                Row("Rotate CCW", ed => ed.RotateSelection(false)),
+                Row(Loc.T("Copy"),      ed => ed.MultiCopyFloors(false)),
+                Row(Loc.T("Cut"),       ed => ed.MultiCutFloors()),
+                Row(Loc.T("Paste"),     ed => ed.PasteFloors(false)),
+                Row(Loc.T("Delete"),    ed => ed.DeleteSingleSelection(false)),
+                Row(Loc.T("Rotate CW"),  ed => ed.RotateSelection(true)),
+                Row(Loc.T("Rotate CCW"), ed => ed.RotateSelection(false)),
             };
 
             const float rowH = 30f, padY = 6f, width = 190f;

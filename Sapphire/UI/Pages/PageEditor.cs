@@ -3,16 +3,31 @@ using UnityEngine;
 
 namespace Sapphire.UI.Pages
 {
-    // "Editor" tab — level-editor helpers: autoplay pause key, tile readouts, the event
-    // timeline, and the experimental dark reskin of the game's editor menus.
+    /* "Editor" tab — behavior preferences only. The per-feature toggles are gone (July 11):
+       every suite feature ships ON and the in-editor master switch is the single gate. What
+       remains: language, Editor mode, the autoplay pause key, and the layout tools. */
     internal static class PageEditor
     {
+        private static readonly string[] LangLabels = { "Auto (follow game)", "English", "한국어" };
+
         public static void Build(PageStack stack)
         {
             var content = stack.Root;
             var s = UICore.Settings;
             var notify = UICore.OnSettingsChanged;
 
+            UIBuilder.SectionHeaderWithHelp(content, "Language",
+                "Language for Sapphire's editor UI and help.\nAuto follows the game's language setting.");
+            TextMeshProUGUI langLabel = null;
+            var langBtn = UIBuilder.Button(content, "Language: " + LangLabels[Mathf.Clamp(s.UiLanguage, 0, 2)], () =>
+            {
+                s.UiLanguage = (s.UiLanguage + 1) % 3;
+                notify?.Invoke();
+                if (langLabel != null) langLabel.text = "Language: " + LangLabels[s.UiLanguage];
+            });
+            langLabel = langBtn.GetComponentInChildren<TextMeshProUGUI>();
+
+            UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Editor mode",
                 "Clean screen for charting: while in the editor\n(play-testing included), " +
                 "Sapphire overlays and the key\nviewer stand down, and the game's difficulty,\n" +
@@ -50,50 +65,10 @@ namespace Sapphire.UI.Pages
             };
 
             UIBuilder.Spacer(content);
-            UIBuilder.SectionHeaderWithHelp(content, "Tile info",
-                "Readouts at the top of the editor for the selected tile:\nits angle (180° = straight) " +
-                "and its events as chips —\nhover a chip for that event's settings.");
-            UIBuilder.Collapsible(content, "Show selected tile angle", s.EditorTileAngle,
-                v => { s.EditorTileAngle = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Show selected tile events", s.EditorShowEvents,
-                v => { s.EditorShowEvents = v; notify?.Invoke(); }, null);
-
-            UIBuilder.Spacer(content);
-            UIBuilder.SectionHeaderWithHelp(content, "Timeline",
-                "Every event in the level on one strip, one lane per\ncategory (twirls are hidden). " +
-                "Hover a marker for details,\nclick it to jump there, drag the playhead to scrub.\n" +
-                "+/- buttons zoom, the wheel pans, and the view\nfollows the run during play-testing.\n" +
-                "Measure lines assume 4/4 from the first input tile.");
-            UIBuilder.Collapsible(content, "Show event timeline", s.EditorTimeline,
-                v => { s.EditorTimeline = v; notify?.Invoke(); }, null);
-
-            UIBuilder.Spacer(content);
-            UIBuilder.SectionHeaderWithHelp(content, "Editor UI",
-                "Restyles the game's own editor menus to match\nSapphire's look. Experimental — " +
-                "if a panel looks broken,\nturn it off and it restores the original colors.\n\n" +
-                "Layout: drag the editor's own elements (file bar,\npanel tabs) to new positions. " +
-                "Drag to move, scroll\nto scale, right-click to reset one element.");
-            UIBuilder.Collapsible(content, "Dark editor theme", s.EditorDarkTheme,
-                v => { s.EditorDarkTheme = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Sapphire file menu", s.EditorFileChip,
-                v => { s.EditorFileChip = v; notify?.Invoke(); }, null);
-            // Lives inside the timeline strip, so it needs the timeline on.
-            UIBuilder.Collapsible(content, "Transport in timeline", s.EditorTransport,
-                v => { s.EditorTransport = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Sapphire panel rail", s.EditorPanelRail,
-                v => { s.EditorPanelRail = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Sapphire event palette", s.EditorEventDock,
-                v => { s.EditorEventDock = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Sapphire event tabs", s.EditorEventInspector,
-                v => { s.EditorEventInspector = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Sapphire popups", s.EditorPopupBox,
-                v => { s.EditorPopupBox = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Top tool toolbar", s.EditorTopToolbar,
-                v => { s.EditorTopToolbar = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Right-click tile menu + free angle (right-Alt)", s.EditorTileActions,
-                v => { s.EditorTileActions = v; notify?.Invoke(); }, null);
-            UIBuilder.Collapsible(content, "Pitch modifier overlay", s.EditorPitchOverlay,
-                v => { s.EditorPitchOverlay = v; notify?.Invoke(); }, null);
+            UIBuilder.SectionHeaderWithHelp(content, "Editor UI layout",
+                "All Sapphire editor features are on — the switch in the\neditor's top-right corner " +
+                "turns the whole suite on/off.\n\nLayout: drag the editor's own elements (file bar,\n" +
+                "panel tabs) to new positions. Drag to move, scroll\nto scale, right-click to reset one element.");
             UIBuilder.Button(content, "Edit editor UI on screen", EditorUiEditor.Open);
             UIBuilder.DangerButton(content, "Reset editor layout to Sapphire defaults", () =>
             {

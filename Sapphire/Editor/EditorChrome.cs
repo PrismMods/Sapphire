@@ -51,6 +51,25 @@ namespace Sapphire
         private static readonly List<RoundedRectGraphic> _dockEvtBgs = new List<RoundedRectGraphic>();
         private static readonly List<int> _dockEvtTypes = new List<int>();
         private static int _dockEvtSelected = int.MinValue;
+        // tall-category overflow: the event column scrolls inside a mask
+        private static RectTransform _dockEvtContent;
+        private static float _dockScroll, _dockScrollMax;
+
+        // The editor zooms on ANY wheel input — the ZoomCamera patch yields while the dock
+        // (with an overflowing column) is hovered so the wheel can scroll it.
+        internal static bool DockHovered
+        {
+            get
+            {
+                try
+                {
+                    return _dockGo != null && _dockGo.activeInHierarchy && _dockScrollMax > 0f
+                        && RectTransformUtility.RectangleContainsScreenPoint(
+                            (RectTransform)_dockGo.transform, Input.mousePosition, null);
+                }
+                catch { return false; }
+            }
+        }
 
         internal static void Tick()
         {
@@ -503,6 +522,16 @@ namespace Sapphire
             // Keyboard flow runs EVERY frame (GetKeyDown is missed behind the rebuild cooldown):
             // digits pick the nth event of the current category; Enter stamps the selected tile.
             TickDockKeys(ed);
+            // Wheel scrolls an overflowing event column while hovered.
+            if (_dockScrollMax > 0f && _dockEvtContent != null && DockHovered)
+            {
+                float wheel = Input.mouseScrollDelta.y;
+                if (wheel != 0f)
+                {
+                    _dockScroll = Mathf.Clamp(_dockScroll - wheel * 40f, 0f, _dockScrollMax);
+                    _dockEvtContent.anchoredPosition = new Vector2(0f, _dockScroll);
+                }
+            }
             if (--_dockCooldown > 0) return;
             _dockCooldown = 10;
             // No selection → the game hides its palette; match it.
@@ -626,7 +655,14 @@ namespace Sapphire
             int nEvt = evts != null ? evts.Count : 0;
             float catColH = cats.Count > 0 ? cats.Count * (catSize + catGap) - catGap : 0f;
             float evtColH = nEvt > 0 ? nEvt * (evtSize + evtGap) - evtGap : 0f;
-            float height = Mathf.Max(catColH, evtColH) + pad * 2f;
+            // Tall categories would run past the screen — cap to the space between the dock's
+            // top anchor (-56) and the timeline, and let the event column scroll inside a mask.
+            float maxColH = 1080f;
+            try { maxColH = _canvasRect.rect.height - 56f - 140f; } catch { }
+            float shownEvtH = Mathf.Min(evtColH, maxColH);
+            _dockScrollMax = Mathf.Max(0f, evtColH - shownEvtH);
+            _dockScroll = Mathf.Clamp(_dockScroll, 0f, _dockScrollMax);
+            float height = Mathf.Max(catColH, shownEvtH) + pad * 2f;
             float width = pad * 2f + catSize + (nEvt > 0 ? colGap + evtSize : 0f);
 
             _dockGo = new GameObject("EventDock", typeof(RectTransform));
@@ -658,14 +694,31 @@ namespace Sapphire
             // Current category's events in a column to the right of the categories. Each event is a
             // persistent TOOL (pick it, then click tiles to keep inserting) rather than a one-shot.
             scnEditor edNow = null; try { edNow = scnEditor.instance; } catch { }
-            float evtTop = -pad; // top-aligned
             float evtX = pad + catSize + colGap;
+
+            // masked viewport for the event column; its content shifts up when scrolled
+            var viewGo = new GameObject("EvtView", typeof(RectTransform));
+            viewGo.transform.SetParent(_dockGo.transform, false);
+            var vr = (RectTransform)viewGo.transform;
+            vr.anchorMin = vr.anchorMax = new Vector2(0f, 1f);
+            vr.pivot = new Vector2(0f, 1f);
+            vr.anchoredPosition = new Vector2(evtX, -pad);
+            vr.sizeDelta = new Vector2(evtSize, shownEvtH);
+            viewGo.AddComponent<RectMask2D>();
+            var contentGo = new GameObject("EvtContent", typeof(RectTransform));
+            contentGo.transform.SetParent(viewGo.transform, false);
+            _dockEvtContent = (RectTransform)contentGo.transform;
+            _dockEvtContent.anchorMin = _dockEvtContent.anchorMax = new Vector2(0f, 1f);
+            _dockEvtContent.pivot = new Vector2(0f, 1f);
+            _dockEvtContent.anchoredPosition = new Vector2(0f, _dockScroll);
+            _dockEvtContent.sizeDelta = new Vector2(evtSize, evtColH);
+
             for (int i = 0; i < nEvt; i++)
             {
                 int type = ResolveEventType(edNow, evts[i]);
                 var evtBg = MakeDockCell(evts[i], evtSize,
-                    new Vector2(evtX, evtTop - i * (evtSize + evtGap)),
-                    new Color(1f, 1f, 1f, 0.1f), type);
+                    new Vector2(0f, -i * (evtSize + evtGap)),
+                    new Color(1f, 1f, 1f, 0.1f), type, _dockEvtContent);
                 _dockEvtBgs.Add(evtBg);
                 _dockEvtTypes.Add(type);
             }
@@ -686,10 +739,10 @@ namespace Sapphire
             return -1;
         }
 
-        private static RoundedRectGraphic MakeDockCell(Button gameBtn, float size, Vector2 topLeft, Color border, int eventType = -2)
+        private static RoundedRectGraphic MakeDockCell(Button gameBtn, float size, Vector2 topLeft, Color border, int eventType = -2, Transform parent = null)
         {
             var cellGo = new GameObject("Cell", typeof(RectTransform));
-            cellGo.transform.SetParent(_dockGo.transform, false);
+            cellGo.transform.SetParent(parent != null ? parent : _dockGo.transform, false);
             var cr = (RectTransform)cellGo.transform;
             cr.anchorMin = cr.anchorMax = new Vector2(0f, 1f); // panel top-left origin
             cr.pivot = new Vector2(0f, 1f);

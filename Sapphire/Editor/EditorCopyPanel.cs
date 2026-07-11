@@ -142,14 +142,14 @@ namespace Sapphire
         {
             switch (cat)
             {
-                case 0: return "Gameplay";
-                case 1: return "Track";
-                case 2: return "Decorations";
-                case 3: return "VFX";
-                case 4: return "Modifiers";
-                case 5: return "Conveniences";
-                case 6: return "Jank";
-                default: return "Other";
+                case 0: return Loc.T("Gameplay");
+                case 1: return Loc.T("Track");
+                case 2: return Loc.T("Decorations");
+                case 3: return Loc.T("VFX");
+                case 4: return Loc.T("Modifiers");
+                case 5: return Loc.T("Conveniences");
+                case 6: return Loc.T("DLC");
+                default: return Loc.T("Other");
             }
         }
 
@@ -284,28 +284,28 @@ namespace Sapphire
             if (!_inspMode)
             {
                 // Mirror section (multi-select mode only)
-                Label("Mirror", Pad, y, 120f, 16f, Theme.TextMuted, TextAnchor.MiddleLeft); y -= 18f;
+                Label(Loc.T("Mirror"), Pad, y, 120f, 16f, Theme.TextMuted, TextAnchor.MiddleLeft); y -= 18f;
                 float halfW = (PanelW - Pad * 2f - Gap) * 0.5f;
-                Cell("Horizontal", Pad, y, halfW, RowH, () => MirrorSelection(true), true);
-                Cell("Vertical", Pad + halfW + Gap, y, halfW, RowH, () => MirrorSelection(false), true);
+                Cell(Loc.T("Horizontal"), Pad, y, halfW, RowH, () => MirrorSelection(true), true);
+                Cell(Loc.T("Vertical"), Pad + halfW + Gap, y, halfW, RowH, () => MirrorSelection(false), true);
                 y -= RowH + Gap;
-                _pbBg = Cell("Preserve beats", Pad, y, PanelW - Pad * 2f, RowH, () => { _preserveBeats = !_preserveBeats; SyncTints(); }, false, TextAnchor.MiddleLeft);
+                _pbBg = Cell(Loc.T("Preserve beats"), Pad, y, PanelW - Pad * 2f, RowH, () => { _preserveBeats = !_preserveBeats; SyncTints(); }, false, TextAnchor.MiddleLeft);
                 y -= RowH + 8f;
             }
 
             // Copy section (inspector mode: this tree IS the paste filter)
-            Label(_inspMode ? "Paste filter" : "Copy", Pad, y, 120f, 16f, Theme.TextMuted, TextAnchor.MiddleLeft); y -= 18f;
+            Label(Loc.T(_inspMode ? "Paste filter" : "Copy"), Pad, y, 120f, 16f, Theme.TextMuted, TextAnchor.MiddleLeft); y -= 18f;
             const float allW = 40f, noneW = 46f;
             float togW = PanelW - Pad * 2f - allW - noneW - Gap * 2f;
-            _masterBg = Cell("Events", Pad, y, togW, RowH, () => { _eventsMaster = !_eventsMaster; _layoutSig = null; }, false, TextAnchor.MiddleLeft);
-            Cell("All", Pad + togW + Gap, y, allW, RowH, () => SetAll(true), true);
-            Cell("None", Pad + togW + Gap + allW + Gap, y, noneW, RowH, () => SetAll(false), true);
+            _masterBg = Cell(Loc.T("Events"), Pad, y, togW, RowH, () => { _eventsMaster = !_eventsMaster; _layoutSig = null; }, false, TextAnchor.MiddleLeft);
+            Cell(Loc.T("All"), Pad + togW + Gap, y, allW, RowH, () => SetAll(true), true);
+            Cell(Loc.T("None"), Pad + togW + Gap + allW + Gap, y, noneW, RowH, () => SetAll(false), true);
             y -= RowH + Gap;
 
             if (_eventsMaster)
             {
                 var groups = Grouped();
-                if (groups.Count == 0) { Label("(no events)", Pad + Indent, y, 160f, RowH, Theme.TextMuted, TextAnchor.MiddleLeft); y -= RowH + Gap; }
+                if (groups.Count == 0) { Label(Loc.T("(no events)"), Pad + Indent, y, 160f, RowH, Theme.TextMuted, TextAnchor.MiddleLeft); y -= RowH + Gap; }
                 foreach (var g in groups)
                 {
                     var catTypes = g.Value;
@@ -328,7 +328,7 @@ namespace Sapphire
             if (!_inspMode)
             {
                 const float copyW = 90f;
-                Cell("Copy", (PanelW - copyW) * 0.5f, y, copyW, RowH + 2f, DoCopy, true);
+                Cell(Loc.T("Copy"), (PanelW - copyW) * 0.5f, y, copyW, RowH + 2f, DoCopy, true);
                 y -= RowH + 2f + Pad;
             }
             else y -= Pad - 4f;

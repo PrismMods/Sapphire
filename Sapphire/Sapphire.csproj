@@ -91,6 +91,7 @@
         <Compile Include="UI\Pages\PageEditor.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
         <Compile Include="Util\SapphireLog.cs" />
+        <Compile Include="Util\Loc.cs" />
         <Compile Include="Util\FontLoader.cs" />
         <Compile Include="Util\TmpShadow.cs" />
         <Compile Include="Util\KeyListener.cs" />

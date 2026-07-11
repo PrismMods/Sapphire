@@ -138,12 +138,15 @@ namespace Sapphire
                 if (_pseudoTool) DeactivatePseudo();
                 if (_eventTool >= 0) ClearEventTool();
                 if (_inspectorTool) DeactivateInspector();
+                if (_zipTool) DeactivateZip();
+                if (EditorCameraPath.IsOn) DeactivateCamera();
             }
 
             TickFreeAngle(ed);
             if (_pseudoTool) TickPseudoTool(ed);
             if (_eventTool >= 0) TickEventTool(ed);
             if (_inspectorTool) TickInspectorTool(ed);
+            if (_zipTool) TickZipTool(ed);
             TickToolHotkeys(ed);
             TickToolLabel();
         }
@@ -258,6 +261,8 @@ namespace Sapphire
             _pseudoCounterLbl = null; _fPseudoTap = null; _fPseudoCustom = null;
             _pseudoCustomBg = null; _pseudoCustomFieldGo = null; _pseudoPresetObjs.Clear(); _fPseudoN = null;
             _toolLabelGo = null; _toolLabelText = null; _tipGo = null; _tipText = null;
+            _zipMenuGo = null; _zipCellBg = null; _fZipBeats = null;
+            for (int i = 0; i < _zipBtnBgs.Length; i++) _zipBtnBgs[i] = null;
             for (int i = 0; i < _pseudoAngleBtnBgs.Length; i++) _pseudoAngleBtnBgs[i] = null;
             for (int i = 0; i < _pseudoBtnBgs.Length; i++) _pseudoBtnBgs[i] = null;
         }
@@ -280,7 +285,7 @@ namespace Sapphire
             _canvasRect = (RectTransform)_canvasGo.transform;
 
             const float cell = 32f, gap = 4f, pad = 5f;
-            const int tools = 6;
+            const int tools = 7;
             _barGo = new GameObject("ToolBar", typeof(RectTransform));
             _barGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_barGo.transform;
@@ -295,13 +300,15 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.09f);
             bg.raycastTarget = true; // toolbar swallows clicks under it
 
-            MakeToolCell(0, "Circular path", cell, pad, DrawCircleIcon, OpenDialog);
-            _freeAngleCellBg = MakeToolCell(1, "Free angle", cell, pad, DrawAngleIcon, ToggleFreeAngle);
-            _pseudoCellBg = MakeToolCell(2, "Pseudo", cell, pad, DrawPseudoIcon, TogglePseudo);
-            _cameraCellBg = MakeToolCell(3, "Camera path", cell, pad, DrawCameraIcon, ToggleCameraPath);
-            MakeToolCell(4, "VFX preview (ESC exits)", cell, pad, DrawEyeOffIcon, EditorVfxPreview.Toggle);
-            _inspCellBg = MakeToolCell(5, "Inspector (copy tile events)", cell, pad, DrawDropperIcon, ToggleInspector);
+            MakeToolCell(0, Loc.T("Circular path"), cell, pad, DrawCircleIcon, OpenDialog);
+            _freeAngleCellBg = MakeToolCell(1, Loc.T("Free angle"), cell, pad, DrawAngleIcon, ToggleFreeAngle);
+            _pseudoCellBg = MakeToolCell(2, Loc.T("Pseudo"), cell, pad, DrawPseudoIcon, TogglePseudo);
+            _cameraCellBg = MakeToolCell(3, Loc.T("Camera path"), cell, pad, DrawCameraIcon, ToggleCameraPath);
+            MakeToolCell(4, Loc.T("VFX preview (ESC exits)"), cell, pad, DrawEyeOffIcon, EditorVfxPreview.Toggle);
+            _inspCellBg = MakeToolCell(5, Loc.T("Inspector (copy tile events)"), cell, pad, DrawDropperIcon, ToggleInspector);
+            _zipCellBg = MakeToolCell(6, Loc.T("Zip (redirect through tiny angles)"), cell, pad, DrawZipIcon, ToggleZip);
             SyncInspectorHighlight();
+            SyncZipHighlight();
             SyncFreeAngleHighlight();
             SyncPseudoHighlight();
             SyncCameraHighlight();
@@ -316,7 +323,7 @@ namespace Sapphire
         {
             try
             {
-                if (_pseudoTool) return; // its digits set the key count; every other tool can be
+                if (_pseudoTool || _zipTool) return; // their digits set the key count; every other tool can be
                                          // switched away directly (gating on AnyToolActive made
                                          // the digits "work once, then die")
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return;
@@ -329,6 +336,7 @@ namespace Sapphire
             else if (Input.GetKeyDown(KeyCode.Alpha4)) ToggleCameraPath();
             else if (Input.GetKeyDown(KeyCode.Alpha5)) EditorVfxPreview.Toggle();
             else if (Input.GetKeyDown(KeyCode.Alpha6)) ToggleInspector();
+            else if (Input.GetKeyDown(KeyCode.Alpha7)) ToggleZip();
         }
 
         // Small hover-hint text just below the toolbar (Adobe-style).
@@ -413,7 +421,7 @@ namespace Sapphire
             var g = UIBuilder.Tmp(glyphGo, "?", 13f, TextAnchor.MiddleCenter, Theme.Text);
             g.raycastTarget = false;
             var hov = go.AddComponent<CellHover>();
-            hov.Bg = bg; hov.Base = bg.color; hov.Tip = "Instruction manual";
+            hov.Bg = bg; hov.Base = bg.color; hov.Tip = Loc.T("Instruction manual");
             UI.ClickHandler.Attach(go, EditorHelp.Toggle);
         }
 
@@ -421,10 +429,11 @@ namespace Sapphire
         private static void TickToolLabel()
         {
             if (_toolLabelGo == null) return;
-            string tool = _pseudoTool ? "Pseudo · " + _pseudoN + "k"
-                        : _freeAngleTool ? "Free angle"
+            string tool = _pseudoTool ? Loc.T("Pseudo") + " · " + _pseudoN + "k"
+                        : _zipTool ? Loc.T("Zip") + " · " + _zipN + "k"
+                        : _freeAngleTool ? Loc.T("Free angle")
                         : _inspectorTool ? (_inspEvents.Count > 0
-                            ? "Inspector · " + _inspEvents.Count + " ev" : "Inspector · pick a tile")
+                            ? Loc.T("Inspector") + " · " + _inspEvents.Count + " ev" : Loc.T("Inspector · pick a tile"))
                         : ExternalTool;
             bool show = !string.IsNullOrEmpty(tool);
             if (_toolLabelGo.activeSelf != show) _toolLabelGo.SetActive(show);
@@ -565,13 +574,27 @@ namespace Sapphire
             MakeBar(cellGo, Vector2.zero, new Vector2(21f, 2.8f), 45f); // the cross-out
         }
 
-        // Passive overlay toggle — doesn't own clicks, so it doesn't deactivate the other tools.
         private static void ToggleCameraPath()
         {
+            if (EditorCameraPath.IsOn) { DeactivateCamera(); return; }
+            DeactivatePseudo(); DeactivateFreeAngle(); ClearEventTool(); DeactivateInspector(); DeactivateZip();
             EditorCameraPath.Toggle();
             SyncCameraHighlight();
-            if (EditorCameraPath.IsOn) ShowCameraMenu();
-            else if (_cameraMenuGo != null) _cameraMenuGo.SetActive(false);
+            ShowCameraMenu();
+        }
+
+        private static void DeactivateCamera()
+        {
+            if (EditorCameraPath.IsOn) EditorCameraPath.Toggle();
+            SyncCameraHighlight();
+            if (_cameraMenuGo != null) _cameraMenuGo.SetActive(false);
+        }
+
+        // VFX preview entry point: hide-everything must not leave a click-owning tool armed.
+        internal static void DeactivateAllTools()
+        {
+            DeactivatePseudo(); DeactivateFreeAngle(); ClearEventTool();
+            DeactivateInspector(); DeactivateZip(); DeactivateCamera();
         }
 
         // Camera submenu: sits beside the toolbar (the pseudo submenu owns the space below it).
@@ -582,13 +605,13 @@ namespace Sapphire
         private static void ShowCameraMenu()
         {
             if (_cameraMenuGo != null) { _cameraMenuGo.SetActive(true); SyncCameraGaps(); return; }
-            const float pad = 7f, bh = 34f, gap = 5f, playW = 84f, selW = 62f, gapsW = 56f;
+            const float pad = 7f, bh = 34f, gap = 5f, playW = 96f, selW = 92f, gapsW = 100f;
             _cameraMenuGo = new GameObject("CameraMenu", typeof(RectTransform));
             _cameraMenuGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_cameraMenuGo.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
-            r.pivot = new Vector2(0f, 1f);
-            r.anchoredPosition = new Vector2(120f, -10f); // clear of the 6-cell bar's right edge
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, -64f); // below the bar, like the other submenus
             r.sizeDelta = new Vector2(pad * 2f + playW + gap + selW + gap + gapsW, bh + pad * 2f);
             var bg = _cameraMenuGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 12f;
@@ -597,10 +620,10 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
             bg.raycastTarget = true;
 
-            MakeCameraMenuBtn("PlayAll", "▶ Play all", pad, playW, bh, EditorCameraPath.PlayAll);
-            MakeCameraMenuBtn("PlaySel", "▶ Sel", pad + playW + gap, selW, bh,
+            MakeCameraMenuBtn("PlayAll", Loc.T("▶ Play all"), pad, playW, bh, EditorCameraPath.PlayAll);
+            MakeCameraMenuBtn("PlaySel", Loc.T("▶ Selected"), pad + playW + gap, selW, bh,
                 EditorCameraPath.PlayAllFromSelection);
-            _cameraGapsBg = MakeCameraMenuBtn("Gaps", "Gaps", pad + playW + gap + selW + gap, gapsW, bh,
+            _cameraGapsBg = MakeCameraMenuBtn("Gaps", Loc.T("Play Gaps"), pad + playW + gap + selW + gap, gapsW, bh,
                 () => { EditorCameraPath.UseGaps = !EditorCameraPath.UseGaps; SyncCameraGaps(); });
             SyncCameraGaps();
         }
@@ -678,7 +701,7 @@ namespace Sapphire
             if (s == null || !s.EditorTileActions)
             { SapphireLog.Log("Toolbar: enable 'Right-click tile menu' to use the free-angle tool"); return; }
             if (_freeAngleTool) DeactivateFreeAngle();
-            else { DeactivatePseudo(); ClearEventTool(); _freeAngleTool = true; SyncFreeAngleHighlight(); } // one tool at a time
+            else { DeactivatePseudo(); ClearEventTool(); DeactivateInspector(); DeactivateZip(); DeactivateCamera(); _freeAngleTool = true; SyncFreeAngleHighlight(); } // one tool at a time
         }
 
         private static void DeactivateFreeAngle()
@@ -750,7 +773,7 @@ namespace Sapphire
         private static void TogglePseudo()
         {
             if (_pseudoTool) DeactivatePseudo();
-            else { DeactivateFreeAngle(); ClearEventTool(); _pseudoTool = true; SyncPseudoHighlight(); ShowPseudoMenu(); } // one tool at a time
+            else { DeactivateFreeAngle(); ClearEventTool(); DeactivateInspector(); DeactivateZip(); DeactivateCamera(); _pseudoTool = true; SyncPseudoHighlight(); ShowPseudoMenu(); } // one tool at a time
         }
 
         private static void DeactivatePseudo()
@@ -759,6 +782,225 @@ namespace Sapphire
             _pseudoTool = false;
             SyncPseudoHighlight();
             HidePseudoMenu();
+        }
+
+        // ── zip tool: redirect the path through a run of tiny angles + swirls ─
+        // The reserved BuildSwirlRedirect construction (born as a single-click pseudo bug, kept
+        // as a feature): REPLACES the clicked tile with K redirecting facings + the swirl rules.
+        // Key count / angle / custom charters come from the pseudo submenu (shown while active).
+        private static bool _zipTool;
+        private static RoundedRectGraphic _zipCellBg;
+        private static bool _zipPending;
+        private static int _zipPreSel = -1, _zipPrevSel = -1;
+        private static Vector3 _zipClickWorld;
+        // Zips are 360° TOTAL: charter = 360/N per tile (8k = 45° each). No angle/midspin
+        // parameters — key count (min 4) is the only knob.
+        private static int _zipN = 8;
+        private static double _zipBeats = 2.0;   // total sweep: beats × 180° (2 beats = 360°)
+        private static TMP_InputField _fZipBeats;
+        private static readonly int[] ZipNumbers = { 4, 5, 6, 8, 10, 12, 16 };
+        private static GameObject _zipMenuGo;
+        private static readonly RoundedRectGraphic[] _zipBtnBgs = new RoundedRectGraphic[7];
+
+        private static void ToggleZip()
+        {
+            if (_zipTool) { DeactivateZip(); return; }
+            DeactivatePseudo(); DeactivateFreeAngle(); ClearEventTool(); DeactivateInspector(); DeactivateCamera();
+            _zipTool = true;
+            _zipPending = false; _zipPrevSel = -1;
+            SyncZipHighlight();
+            ShowZipMenu();
+        }
+
+        private static void DeactivateZip()
+        {
+            if (!_zipTool) return;
+            _zipTool = false;
+            _zipPending = false;
+            SyncZipHighlight();
+            if (_zipMenuGo != null) _zipMenuGo.SetActive(false);
+        }
+
+        // Minimal submenu: just the key count (zips start at 4k).
+        private static void ShowZipMenu()
+        {
+            if (_zipMenuGo != null) { _zipMenuGo.SetActive(true); SyncZipMenuHighlight(); return; }
+            const float bw = 34f, bgap = 5f, bpad = 7f, bh = 28f, labW = 42f;
+            const float beatsLabW = 44f, beatsW = 48f;
+            float beatsX = bpad + labW + ZipNumbers.Length * (bw + bgap) - bgap + 12f;
+            float width = beatsX + beatsLabW + 4f + beatsW + bpad;
+
+            _zipMenuGo = new GameObject("ZipMenu", typeof(RectTransform));
+            _zipMenuGo.transform.SetParent(_canvasGo.transform, false);
+            var r = (RectTransform)_zipMenuGo.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, -64f);
+            r.sizeDelta = new Vector2(width, bh + bpad * 2f);
+            var bg = _zipMenuGo.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 10f;
+            bg.color = new Color(0.07f, 0.07f, 0.09f, 0.92f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
+            bg.raycastTarget = true;
+
+            var lblGo = new GameObject("Lbl", typeof(RectTransform));
+            lblGo.transform.SetParent(_zipMenuGo.transform, false);
+            var lr = (RectTransform)lblGo.transform;
+            lr.anchorMin = new Vector2(0f, 0.5f); lr.anchorMax = new Vector2(0f, 0.5f);
+            lr.pivot = new Vector2(0f, 0.5f);
+            lr.anchoredPosition = new Vector2(bpad, 0f);
+            lr.sizeDelta = new Vector2(labW, 16f);
+            var lbl = UIBuilder.Tmp(lblGo, Loc.T("Keys"), 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            lbl.raycastTarget = false;
+
+            for (int i = 0; i < ZipNumbers.Length; i++)
+            {
+                int num = ZipNumbers[i];
+                var go = new GameObject("Z" + num, typeof(RectTransform));
+                go.transform.SetParent(_zipMenuGo.transform, false);
+                var br = (RectTransform)go.transform;
+                br.anchorMin = br.anchorMax = new Vector2(0f, 0.5f);
+                br.pivot = new Vector2(0f, 0.5f);
+                br.anchoredPosition = new Vector2(bpad + labW + i * (bw + bgap), 0f);
+                br.sizeDelta = new Vector2(bw, bh);
+                var bbg = go.AddComponent<RoundedRectGraphic>();
+                bbg.Radius = 6f;
+                bbg.color = new Color(1f, 1f, 1f, 0.05f);
+                bbg.BorderWidth = 1f;
+                bbg.BorderColor = new Color(1f, 1f, 1f, 0.1f);
+                bbg.raycastTarget = true;
+                _zipBtnBgs[i] = bbg;
+                var tGo = new GameObject("L", typeof(RectTransform));
+                tGo.transform.SetParent(go.transform, false);
+                var tr = (RectTransform)tGo.transform;
+                tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+                tr.offsetMin = Vector2.zero; tr.offsetMax = Vector2.zero;
+                var t = UIBuilder.Tmp(tGo, num.ToString(), 13f, TextAnchor.MiddleCenter, Theme.Text);
+                t.raycastTarget = false;
+                UI.ClickHandler.Attach(go, () => { _zipN = num; SyncZipMenuHighlight(); });
+            }
+
+            // total sweep in beats (2 = 360°)
+            var bLblGo = new GameObject("BeatsLbl", typeof(RectTransform));
+            bLblGo.transform.SetParent(_zipMenuGo.transform, false);
+            var blr = (RectTransform)bLblGo.transform;
+            blr.anchorMin = blr.anchorMax = new Vector2(0f, 0.5f);
+            blr.pivot = new Vector2(0f, 0.5f);
+            blr.anchoredPosition = new Vector2(beatsX, 0f);
+            blr.sizeDelta = new Vector2(beatsLabW, 16f);
+            var bLbl = UIBuilder.Tmp(bLblGo, Loc.T("Beats"), 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            bLbl.raycastTarget = false;
+
+            var fGo = new GameObject("BeatsField", typeof(RectTransform));
+            fGo.transform.SetParent(_zipMenuGo.transform, false);
+            var fr = (RectTransform)fGo.transform;
+            fr.anchorMin = fr.anchorMax = new Vector2(0f, 0.5f);
+            fr.pivot = new Vector2(0f, 0.5f);
+            fr.anchoredPosition = new Vector2(beatsX + beatsLabW + 4f, 0f);
+            fr.sizeDelta = new Vector2(beatsW, bh);
+            var fbg = fGo.AddComponent<RoundedRectGraphic>();
+            fbg.Radius = 5f;
+            fbg.color = new Color(1f, 1f, 1f, 0.07f);
+            fbg.BorderWidth = 1f;
+            fbg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
+            fbg.raycastTarget = true;
+            var ftGo = new GameObject("Text", typeof(RectTransform));
+            ftGo.transform.SetParent(fGo.transform, false);
+            var ftr = (RectTransform)ftGo.transform;
+            ftr.anchorMin = Vector2.zero; ftr.anchorMax = Vector2.one;
+            ftr.offsetMin = new Vector2(6f, 0f); ftr.offsetMax = new Vector2(-6f, 0f);
+            var ft = UIBuilder.Tmp(ftGo, "2", 13f, TextAnchor.MiddleCenter, Theme.Text);
+            ft.richText = false;
+            _fZipBeats = UIBuilder.BuildInputField(fGo, ft);
+            _fZipBeats.contentType = TMP_InputField.ContentType.DecimalNumber;
+            _fZipBeats.lineType = TMP_InputField.LineType.SingleLine;
+            _fZipBeats.text = _zipBeats.ToString("0.##", CultureInfo.InvariantCulture);
+            _fZipBeats.onValueChanged.AddListener(t =>
+            {
+                if (double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0.0)
+                    _zipBeats = v;
+            });
+
+            SyncZipMenuHighlight();
+        }
+
+        private static void SyncZipMenuHighlight()
+        {
+            for (int i = 0; i < _zipBtnBgs.Length && i < ZipNumbers.Length; i++)
+            {
+                if (_zipBtnBgs[i] == null) continue;
+                _zipBtnBgs[i].color = ZipNumbers[i] == _zipN
+                    ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                    : new Color(1f, 1f, 1f, 0.05f);
+            }
+        }
+
+        private static void SyncZipHighlight()
+        {
+            if (_zipCellBg == null) return;
+            var rest = _zipTool
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _zipCellBg.color = rest;
+            var hover = _zipCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        private static void TickZipTool(scnEditor ed)
+        {
+            // digits set the key count (zips start at 4)
+            for (int i = 0; i < ZipNumbers.Length; i++)
+            {
+                int num = ZipNumbers[i];
+                if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
+                { _zipN = num; SyncZipMenuHighlight(); }
+            }
+
+            // two-click guard: re-click the selected tile to zip it
+            int curSel = -1;
+            try { if (ed.SelectionIsSingle()) curSel = ed.selectedFloors[0].seqID; } catch { }
+            if (_zipPending)
+            {
+                _zipPending = false;
+                if (curSel >= 0 && curSel == _zipPreSel)
+                {
+                    scrFloor tile = null;
+                    try { tile = ed.selectedFloors[0]; } catch { }
+                    if (tile != null && NearClick(tile, _zipClickWorld)) ApplyZip(ed, tile);
+                }
+            }
+            if (Input.GetMouseButtonDown(0) && _dialogGo == null && !PointerOverSapphireUI())
+            {
+                _zipPending = true;
+                _zipPreSel = _zipPrevSel;
+                _zipClickWorld = ClickWorld(ed);
+            }
+            _zipPrevSel = curSel;
+        }
+
+        private static void ApplyZip(scnEditor ed, scrFloor tile)
+        {
+            try
+            {
+                if (ed.lockPathEditing) { SapphireLog.Log("Zip: path editing locked"); return; }
+                int n = Mathf.Max(4, _zipN);
+                double total = Mathf.Max(0.1f, (float)_zipBeats) * 180.0; // 2 beats = 360°
+                var charters = new double[n];
+                for (int k = 0; k < n; k++) charters[k] = total / n;   // default 8k = 45° each
+                using (new SaveStateScope(ed))
+                    BuildSwirlRedirect(ed, tile, charters, +1, invertFirstParity: true);
+            }
+            catch (Exception ex) { SapphireLog.Log("Zip: failed: " + ex.Message); }
+        }
+
+        // Zip icon: two free-angle "∠"s stacked — the zip's compressed zigzag.
+        private static void DrawZipIcon(GameObject cell)
+        {
+            MakeBar(cell, new Vector2(0f, -7f), new Vector2(14f, 2.2f), 0f);
+            MakeBar(cell, new Vector2(-2f, -2.5f), new Vector2(12f, 2.2f), 38f);
+            MakeBar(cell, new Vector2(0f, 1f), new Vector2(14f, 2.2f), 0f);
+            MakeBar(cell, new Vector2(-2f, 5.5f), new Vector2(12f, 2.2f), 38f);
         }
 
         // ── inspector tool: copy one tile's events, paste onto others ───────
@@ -775,7 +1017,7 @@ namespace Sapphire
         private static Vector3 _inspClickWorld;
 
         internal static bool InspectorActive => _inspectorTool;
-        internal static bool PseudoToolOn => _pseudoTool;   // its digit shortcuts win over others
+        internal static bool PseudoToolOn => _pseudoTool || _zipTool;   // their digits set the key count
         internal static int InspectorVersion => _inspVersion;
 
         internal static System.Collections.Generic.List<int> InspectorTypes()
@@ -788,7 +1030,7 @@ namespace Sapphire
         private static void ToggleInspector()
         {
             if (_inspectorTool) { DeactivateInspector(); return; }
-            DeactivatePseudo(); DeactivateFreeAngle(); ClearEventTool();
+            DeactivatePseudo(); DeactivateFreeAngle(); ClearEventTool(); DeactivateZip(); DeactivateCamera();
             _inspectorTool = true;
             _inspPending = false; _inspPrevSel = -1;
             SyncInspectorHighlight();
@@ -895,7 +1137,7 @@ namespace Sapphire
         // ── event palette tool ──────────────────────────────────────────────
         internal static int EventTool => _eventTool;
         // True while any editor tool owns the click (so passive overlays like the copy panel yield).
-        internal static bool AnyToolActive => _pseudoTool || _freeAngleTool || _eventTool >= 0 || _inspectorTool;
+        internal static bool AnyToolActive => _pseudoTool || _freeAngleTool || _eventTool >= 0 || _inspectorTool || _zipTool || EditorCameraPath.IsOn;
         internal static bool DialogOpen => _dialogGo != null;
 
         // The event dock (EditorChrome) calls this when a palette event is picked: it becomes the
@@ -905,6 +1147,8 @@ namespace Sapphire
             DeactivatePseudo();
             DeactivateFreeAngle();
             DeactivateInspector();
+            DeactivateZip();
+            DeactivateCamera();
             _eventTool = eventType;
             ExternalTool = name;
             _evtPending = false;
@@ -1054,7 +1298,7 @@ namespace Sapphire
             bg.raycastTarget = true;
 
             // Row 1: "keys" label + key-count buttons + custom-N field + midspin toggle + counter.
-            MakeRowLabel("Keys", bpad, row1Y, labW, bh);
+            MakeRowLabel(Loc.T("Keys"), bpad, row1Y, labW, bh);
             for (int i = 0; i < nNum; i++)
             {
                 int num = PseudoNumbers[i];
@@ -1066,14 +1310,14 @@ namespace Sapphire
                 {
                     if (int.TryParse(t, out var v) && v >= 2) { _pseudoN = v; SyncPseudoMenuHighlight(); }
                 });
-            _pseudoMidspinBg = MakeMiniBtn("Midspin", mspinX, row1Y, mspinW, bh, "Midspin",
+            _pseudoMidspinBg = MakeMiniBtn("Midspin", mspinX, row1Y, mspinW, bh, Loc.T("Midspin"),
                 () => { _pseudoMidspin = !_pseudoMidspin; SyncPseudoMidspin(); });
             SyncPseudoMidspin();
             _pseudoCounterLbl = MakeInlineLabel("Counter", cntX, row1Y, cntW, bh, "spins: 0");
 
             // Row 2: "Angle" label + preset buttons + tap box. The Custom toggle sits at the right,
             // next to the field, and swaps the presets/tap box for the per-tile custom field.
-            MakeRowLabel("Angle", bpad, row2Y, labW, bh);
+            MakeRowLabel(Loc.T("Angle"), bpad, row2Y, labW, bh);
             _pseudoPresetObjs.Clear();
             for (int i = 0; i < nAng; i++)
             {
@@ -1094,7 +1338,7 @@ namespace Sapphire
             _pseudoPresetObjs.Add(_fPseudoTap.gameObject);
             SyncPseudoAngle();
 
-            _pseudoCustomBg = MakeMiniBtn("Custom", custTogX, row2Y, custTogW, bh, "Custom",
+            _pseudoCustomBg = MakeMiniBtn("Custom", custTogX, row2Y, custTogW, bh, Loc.T("Custom"),
                 () => { _pseudoCustomAngles = !_pseudoCustomAngles; SyncPseudoCustomMode(); });
 
             // Custom-mode field: per-tile angles (space-separated), one per tap — e.g. "30 60 90"
@@ -1125,7 +1369,7 @@ namespace Sapphire
             var cuPhR = (RectTransform)cuPhGo.transform;
             cuPhR.anchorMin = Vector2.zero; cuPhR.anchorMax = Vector2.one;
             cuPhR.offsetMin = new Vector2(6f, 0f); cuPhR.offsetMax = new Vector2(-6f, 0f);
-            var cuPh = UIBuilder.Tmp(cuPhGo, "per-tile angles, e.g. 30 60 90", 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            var cuPh = UIBuilder.Tmp(cuPhGo, Loc.T("per-tile angles, e.g. 30 60 90"), 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
             _fPseudoCustom = UIBuilder.BuildInputField(_pseudoCustomFieldGo, cuTxt);
             _fPseudoCustom.placeholder = cuPh;
             _fPseudoCustom.lineType = TMP_InputField.LineType.SingleLine;
@@ -1371,7 +1615,8 @@ namespace Sapphire
         // swirl rules). Not used by single-click anymore — reserved for the future ZIP TOOL (large
         // key counts make a "zip": a run of tiny angles that zip by; a bug as a pseudo, a feature as
         // its own tool). Caller wraps in a SaveStateScope. turnSign +1 turns one way, −1 the other.
-        private static void BuildSwirlRedirect(scnEditor ed, scrFloor tile, double[] charters, int turnSign)
+        private static void BuildSwirlRedirect(scnEditor ed, scrFloor tile, double[] charters, int turnSign,
+            bool invertFirstParity = false)
         {
             if (charters == null || charters.Length == 0) return;
             int i = tile.seqID;
@@ -1398,7 +1643,9 @@ namespace Sapphire
                 AppendAbs(ed, facing); seq++;
                 localSign = -localSign;
             }
-            PseudoSwirls(twirlSeqs, i, charters.Length, turnSign, spin, true, 0); // one pseudo → parity on tile 0
+            // Zips invert the first-tile parity: the whole swirl chain must resolve RED, and the
+            // first swirl's presence flips every downstream spin (user: "all swirls red").
+            PseudoSwirls(twirlSeqs, i, charters.Length, turnSign, invertFirstParity ? -spin : spin, true, 0);
             foreach (var s in twirlSeqs) if (s >= i - 1 && s <= seq) AddTwirl(ed, s);
             try { ed.RemakePath(true, true); } catch { }
         }
@@ -2003,21 +2250,21 @@ namespace Sapphire
             title.fontStyle = FontStyles.Bold;
             y -= 34f;
 
-            _fPseudoBatchInterval = MakeLabeledField(card, "Pseudo interval", y, _pseudoBatchIntervalStr, w, padX);
+            _fPseudoBatchInterval = MakeLabeledField(card, Loc.T("Pseudo interval"), y, _pseudoBatchIntervalStr, w, padX);
             y -= 40f;
 
             // Upwards/Sideways (directed excursions) only make sense on a STRAIGHT run — a tile
             // that already turns has no clean up/down. Off a straight selection, only Inline.
             if (SelectionIsStraight())
             {
-                MakeSegmented3(card, "Style", "Upwards", "Sideways", "Inline", padX, y, w,
+                MakeSegmented3(card, Loc.T("Style"), Loc.T("Upwards"), Loc.T("Sideways"), Loc.T("Inline"), padX, y, w,
                     () => _pseudoBatchStyle, v => { _pseudoBatchStyle = v; RebuildPseudoBatchDialog(); });
                 y -= 52f;
             }
             else
             {
                 if (_pseudoBatchStyle != 2) _pseudoBatchStyle = 2; // force Inline
-                MakeLabel(card, "Style: Inline (selection isn't straight)", padX, y, 13f, Theme.TextMuted, TextAnchor.UpperLeft);
+                MakeLabel(card, Loc.T("Style: Inline (selection isn't straight)"), padX, y, 13f, Theme.TextMuted, TextAnchor.UpperLeft);
                 y -= 30f;
             }
 

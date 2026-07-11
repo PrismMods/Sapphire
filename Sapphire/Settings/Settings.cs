@@ -126,6 +126,8 @@ namespace Sapphire
         // Master switch for the whole editor suite — the top-right corner button flips it, so
         // everything can be killed/restored in-game without the Ctrl+E panel.
         public bool EditorSuiteOn = true;
+        // UI language: 0 = auto (follow the game), 1 = English, 2 = Korean.
+        public int UiLanguage = 0;
         // Tweaks tab → Editor: on-screen angle readout for the selected editor tile.
         public bool EditorTileAngle = false;
         // Tweaks tab → Editor: chips listing the selected tile's events (hover = details).
@@ -608,6 +610,13 @@ namespace Sapphire
 
         public void EnsureDefaults()
         {
+            // July 11: per-feature toggles removed from the panel — the master switch is the
+            // only gate now, so every suite feature is forced on (stale saved falses migrate).
+            EditorTileAngle = EditorShowEvents = EditorTimeline = EditorDarkTheme = true;
+            EditorFileChip = EditorTransport = EditorPanelRail = EditorEventDock = true;
+            EditorEventInspector = EditorPopupBox = EditorTopToolbar = EditorTileActions = true;
+            EditorPitchOverlay = true;
+
             // July 11: Sapphire's accent is blue now — migrate settings still on the old
             // Bismuth-red default.
             if (System.Math.Abs(UiAccentR - 0.886f) < 0.005f
