@@ -63,8 +63,10 @@ namespace Sapphire
         private static TextMeshProUGUI _playGlyph;
         private static GameObject _pauseBars;
         private static TextMeshProUGUI _clockText;
+        private static TextMeshProUGUI _bpmText;
         private static RoundedRectGraphic _autoBg;
         private static TextMeshProUGUI _autoLabel;
+        private static GameObject _diffMenuGo;
         private static bool _autoShown;
         private static bool _transportOn;
         private static CanvasGroup _fadedPlayCluster;
@@ -88,6 +90,11 @@ namespace Sapphire
         private static bool _userZoomed;     // manual zoom sticks until the strip hides
         private static bool _draggingHead;   // scrubbing the playhead with the mouse
         private static bool _cursorForced;   // we re-showed the game-hidden cursor
+        private static bool _tlUserHidden;    // fold-arrow-toggled timeline visibility
+        private static GameObject _foldCanvasGo;   // own canvas: must outlive the hidden strip
+        private static RectTransform _foldRect;
+        private static TMPro.TextMeshProUGUI _foldGlyph;
+        private static bool _foldGlyphUp;
         private static int _lastSelSeq = -1;
         private const double DefaultViewBeats = 64.0;
         private const double MinViewBeats = 4.0; // zoom-in limit
@@ -96,6 +103,36 @@ namespace Sapphire
         private static double _totalTime = 1.0;
         private static double _timeOffset;   // time of the first INPUT tile — the musical beat 0
         private static double _secPerBeat = 0.5; // 60 / base BPM, for the measure grid
+
+        /* Tempo map: the game's (entryBeat → entryTime) pairs form a piecewise-linear
+           beat↔time map, so the measure grid lives in BEAT domain — genuine BPM shifts
+           change its spacing automatically. Detection splits it into segments where the
+           grid must RE-ANCHOR: a sustained seconds-per-beat change (base-BPM shift,
+           different-tempo intro) or a persistent onbeat phase shift (odd pause, intro on
+           a different beat lattice). Magicshapes keep constant effective TBPM and pauses
+           grow beat and time together, so neither trips the detector. A 4/4-signature
+           intro over a 3/4 song with the SAME tempo and lattice leaves no geometric
+           trace — undetectable from chart data. */
+        private struct TempoSeg
+        {
+            public double StartBeat; // where the segment begins (game-beat domain)
+            public double Anchor;    // grid phase origin — a downbeat, game-beat domain
+            public double Spb;       // representative seconds per beat (grid density)
+        }
+        private static readonly List<TempoSeg> _tempo = new List<TempoSeg>();
+        private static double[] _beatPrefix; // scrFloor.entryBeat per floor
+        private static double[] _bpmPrefix;  // angle-adjusted effective BPM per floor (eff display)
+        private static double[] _tileBpmPrefix; // tile BPM (speed × base bpm) — base-detection signal
+        private static double[] _baseBpmPrefix; // detected musical BASE bpm per floor
+        private static int _timeSigNum = 4;     // detected beats per measure
+        private static int _timeSigPhase = 0;   // downbeat offset (beats) for measure lines
+        private static double _levelBpm = 100.0;
+        private static double _beatOffset;   // entryBeat of the first input tile = beat 0
+        private static double _lastBeat;
+        private const double PhaseTol = 0.1;     // "on the beat lattice" tolerance (beats)
+        private const double PhaseMinBeats = 3.0;
+        private const int PhaseMinTiles = 4;
+        private const int MaxTempoSegs = 48;     // beyond this = speed-animated chart; bail
 
         // ── tooltip ──
         private static GameObject _tooltipGo;
@@ -139,7 +176,7 @@ namespace Sapphire
                 case LevelEventCategory.VisualFx:     return "Visual FX";
                 case LevelEventCategory.FxModifiers:  return "Modifiers";
                 case LevelEventCategory.Conveniences: return "Convenience";
-                case LevelEventCategory.Jank:         return "Jank";
+                case LevelEventCategory.Jank:         return "DLC";
                 default:                              return "Other";
             }
         }
@@ -159,24 +196,102 @@ namespace Sapphire
 
         // Top edge of the bottom-docked strip in canvas units (0 when hidden) — the event
         // dock stacks itself just above it.
+        // Fold/expand chevron, bottom-centre: rides the strip's top edge when open, hugs the
+        // screen edge when folded. Lives on its own canvas so it survives the strip hiding.
+        private static void TickFoldButton(bool show)
+        {
+            if (!show)
+            {
+                if (_foldCanvasGo != null && _foldCanvasGo.activeSelf) _foldCanvasGo.SetActive(false);
+                return;
+            }
+            if (_foldCanvasGo == null) BuildFoldButton();
+            if (!_foldCanvasGo.activeSelf) _foldCanvasGo.SetActive(true);
+
+            float y = _tlUserHidden ? 6f : BottomStripTop + 4f;
+            if (!Mathf.Approximately(_foldRect.anchoredPosition.y, y))
+                _foldRect.anchoredPosition = new Vector2(0f, y);
+            bool up = _tlUserHidden; // folded → arrow points up (expand)
+            if (up != _foldGlyphUp && _foldGlyph != null)
+            {
+                _foldGlyphUp = up;
+                _foldGlyph.rectTransform.localRotation = Quaternion.Euler(0f, 0f, up ? 90f : -90f);
+            }
+        }
+
+        private static void BuildFoldButton()
+        {
+            _foldCanvasGo = new GameObject("SapphireTimelineFold", typeof(RectTransform));
+            Object.DontDestroyOnLoad(_foldCanvasGo);
+            var canvas = _foldCanvasGo.AddComponent<UnityEngine.Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 903; // just under the strip's canvas
+            var scaler = _foldCanvasGo.AddComponent<UnityEngine.UI.CanvasScaler>();
+            scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            _foldCanvasGo.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+            var go = new GameObject("Fold", typeof(RectTransform));
+            go.transform.SetParent(_foldCanvasGo.transform, false);
+            _foldRect = (RectTransform)go.transform;
+            _foldRect.anchorMin = _foldRect.anchorMax = new Vector2(0.5f, 0f);
+            _foldRect.pivot = new Vector2(0.5f, 0f);
+            _foldRect.anchoredPosition = new Vector2(0f, 6f);
+            _foldRect.sizeDelta = new Vector2(44f, 18f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 9f;
+            bg.color = new Color(0.07f, 0.07f, 0.09f, 0.9f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
+            bg.raycastTarget = true;
+
+            var glyphGo = new GameObject("G", typeof(RectTransform));
+            glyphGo.transform.SetParent(go.transform, false);
+            var gr = (RectTransform)glyphGo.transform;
+            gr.anchorMin = gr.anchorMax = new Vector2(0.5f, 0.5f);
+            gr.pivot = new Vector2(0.5f, 0.5f);
+            gr.sizeDelta = new Vector2(20f, 20f);
+            _foldGlyph = glyphGo.AddComponent<TMPro.TextMeshProUGUI>();
+            _foldGlyph.font = UI.Theme.TmpFont;
+            _foldGlyph.fontSize = 14f;
+            _foldGlyph.color = new Color(0.8f, 0.8f, 0.84f, 1f);
+            _foldGlyph.alignment = TMPro.TextAlignmentOptions.Center;
+            _foldGlyph.raycastTarget = false;
+            _foldGlyph.text = "\u203a"; // "›" rotated ±90° = up/down chevron (proven glyph)
+            _foldGlyph.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+            _foldGlyphUp = false;
+
+            UI.ClickHandler.Attach(go, () => { _tlUserHidden = !_tlUserHidden; });
+        }
+
         internal static float BottomStripTop =>
             _stripRect != null && _stripRect.gameObject.activeInHierarchy
                 ? _stripRect.anchoredPosition.y + _stripRect.sizeDelta.y : 0f;
 
         // Read by the scnEditor.ZoomCamera prefix: the editor zooms on any wheel input, so
-        // it must stand down while the wheel is panning the strip.
+        // it must stand down over ANY timeline surface — the strip, the mode cluster and
+        // tooltip above it, or an open difficulty dropdown (wheel over those leaked into
+        // camera zoom).
         internal static bool TimelineHovered
         {
             get
             {
                 try
                 {
-                    return _stripRect != null && _stripRect.gameObject.activeInHierarchy
-                        && RectTransformUtility.RectangleContainsScreenPoint(_stripRect, Input.mousePosition, null);
+                    if (_diffMenuGo != null) return true;
+                    var mouse = Input.mousePosition;
+                    return HoverRect(_stripRect, mouse) || HoverRect(_modeCluster, mouse)
+                        || HoverRect(_tooltipRect, mouse);
                 }
                 catch { return false; }
             }
         }
+
+        private static bool HoverRect(RectTransform r, Vector3 mouse) =>
+            r != null && r.gameObject.activeInHierarchy
+            && RectTransformUtility.RectangleContainsScreenPoint(r, mouse, null);
 
         private static List<LevelEvent> LevelEventList()
         {
@@ -195,15 +310,19 @@ namespace Sapphire
             bool wantChips = false, wantTl = false;
             try
             {
-                if (s != null && (s.EditorShowEvents || s.EditorTimeline))
+                if (s != null && MainClass.EditorSuiteOn && (s.EditorShowEvents || s.EditorTimeline))
                 {
                     ed = scnEditor.instance;
                     bool editing = ed != null && !ed.playMode && !EditorPanelOpen(ed);
+                    bool inEditor = ed != null && !ed.playMode;
                     bool playing = ed != null && ed.playMode;
                     wantChips = editing && s.EditorShowEvents
                         && ed.selectedFloors != null && ed.selectedFloors.Count > 0;
-                    // The timeline stays up during play-testing (the playhead follows the run).
-                    wantTl = (editing || playing) && s.EditorTimeline;
+                    // Always up while editing (open game panels included) and play-testing
+                    // (the playhead follows the run); only the fold arrow hides it (ESC kept
+                    // colliding with the game's own ESC behaviors — dropped July 11).
+                    wantTl = (inEditor || playing) && s.EditorTimeline && !_tlUserHidden;
+                    TickFoldButton((inEditor || playing) && s.EditorTimeline);
                 }
             }
             catch { }
@@ -251,18 +370,20 @@ namespace Sapphire
         internal static void Dispose()
         {
             if (_canvasGo != null) Object.Destroy(_canvasGo);
+            if (_foldCanvasGo != null) Object.Destroy(_foldCanvasGo);
+            _foldCanvasGo = null; _foldRect = null; _foldGlyph = null;
             if (_markerTex != null) Object.Destroy(_markerTex);
             _canvasGo = null; _canvasRect = null; _canvas = null; _chipsRow = null;
             _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null;
             _playhead = null; _laneLabelHost = null;
             _tooltipGo = null; _tooltipRect = null; _tooltipText = null;
             _chipRects.Clear(); _chipEvents.Clear(); _lanes.Clear(); _laneEvents = null;
-            _timePrefix = null; _chipFloor = -2; _tlSig = int.MinValue;
+            _timePrefix = null; _beatPrefix = null; _bpmPrefix = null; _tileBpmPrefix = null; _baseBpmPrefix = null; _tempo.Clear(); _chipFloor = -2; _tlSig = int.MinValue;
             _zoom = 1f; _viewStart = 0f; _lastSelSeq = -1; _userZoomed = false; _draggingHead = false;
             _cursorForced = false;
             FadePlayCluster(null, false);
-            _transportGo = null; _playGlyph = null; _pauseBars = null; _clockText = null;
-            _autoBg = null; _autoLabel = null; _autoShown = false;
+            _transportGo = null; _playGlyph = null; _pauseBars = null; _clockText = null; _bpmText = null;
+            _autoBg = null; _autoLabel = null; _autoShown = false; _diffMenuGo = null;
             _transportOn = false;
             _modeCluster = null; _emBg = null; _emLabel = null; _diffLabel = null;
             _nfBg = null; _nfLabel = null; _emShown = false; _nfShown = false; _diffShown = -1;
@@ -583,8 +704,31 @@ namespace Sapphire
                 if (target >= 0 && target < floors.Count)
                     try { ed.SelectFloor(floors[target], true); } catch { }
                 if (hit == null) _draggingHead = true;
+                else { _showEvt = hit; _showDelay = 3; } // then open THAT event (deferred: the
+                                                          // selection change rebuilds the inspector)
+            }
+
+            if (_showEvt != null && --_showDelay <= 0)
+            {
+                var evt = _showEvt; _showEvt = null;
+                try
+                {
+                    // index of this instance among same-type events on its floor
+                    int idx = 0;
+                    foreach (var e in ed.events)
+                    {
+                        if (e == null || e.floor != evt.floor || e.eventType != evt.eventType) continue;
+                        if (ReferenceEquals(e, evt)) break;
+                        idx++;
+                    }
+                    ed.levelEventsPanel.ShowPanel(evt.eventType, idx);
+                }
+                catch { }
             }
         }
+
+        private static LevelEvent _showEvt;   // marker-click → open this exact event
+        private static int _showDelay;
 
         private static float FracOfFloor(int floor)
         {
@@ -653,11 +797,58 @@ namespace Sapphire
             try { if (ADOBase.lm != null) ADOBase.lm.CalculateFloorEntryTimes(); } catch { }
             int len = floors.Count;
             _timePrefix = new double[len];
+            _beatPrefix = new double[len];
+            _bpmPrefix = new double[len];
+            _tileBpmPrefix = new double[len];
+            try
+            {
+                var ldb = scnGame.instance != null ? scnGame.instance.levelData : null;
+                _levelBpm = ldb != null && ldb.bpm > 1f ? ldb.bpm : 100.0;
+            }
+            catch { _levelBpm = 100.0; }
             for (int i = 0; i < len; i++)
             {
                 var fl = floors[i];
                 _timePrefix[i] = fl != null ? fl.entryTime : (i > 0 ? _timePrefix[i - 1] : 0.0);
+                _beatPrefix[i] = fl != null ? fl.entryBeat : (i > 0 ? _beatPrefix[i - 1] : 0.0);
+                /* Tile-BPM = speed × base bpm = the game's PULSE, angle-INDEPENDENT: a
+                   pseudo (30°) and its completion (150°) both read the same pulse, since
+                   angle-beats already split the 180° beat between them. This is the base-
+                   detection signal — pseudos, subdivisions and dotted notes never move it.
+                   Effective (perceived) BPM = tileBpm ÷ (angle/180) = tileBpm × π/angleLength
+                   (270°@1000 → 666.7, 90° → 2000) — a per-tile tap rate, shown as `eff`
+                   only; it's wrong as a base because a pseudo's completion tile inflates it. */
+                double al = fl != null ? fl.angleLength : System.Math.PI;
+                double tileBpm = fl != null ? fl.speed * _levelBpm : _levelBpm;
+                _tileBpmPrefix[i] = tileBpm > 1.0 ? tileBpm : (i > 0 ? _tileBpmPrefix[i - 1] : _levelBpm);
+                _bpmPrefix[i] = al > 0.05
+                    ? tileBpm * System.Math.PI / al
+                    : (i > 0 ? _bpmPrefix[i - 1] : tileBpm);
             }
+            /* The game's entryBeat loop stops one floor short: the LAST tile keeps a stale
+               0 (and tile 0 is set to -1), which broke the beat↔time binary searches —
+               every beat extrapolated off the chart's end and the grid vanished. Repair
+               the tail with the game's own accumulation (prev tile's angle-beats +
+               extraBeats) and enforce monotonicity for safety. */
+            if (len >= 2 && _beatPrefix[len - 1] <= _beatPrefix[len - 2])
+            {
+                double db = 0.0;
+                try
+                {
+                    var prev = floors[len - 2];
+                    if (prev != null) db = prev.angleLength / System.Math.PI + prev.extraBeats;
+                }
+                catch { }
+                if (db <= 1e-6)
+                {
+                    double dtl = _timePrefix[len - 1] - _timePrefix[len - 2];
+                    db = _secPerBeat > 1e-9 ? dtl / _secPerBeat : 1.0;
+                }
+                _beatPrefix[len - 1] = _beatPrefix[len - 2] + db;
+            }
+            for (int i = 1; i < len; i++)
+                if (_beatPrefix[i] < _beatPrefix[i - 1]) _beatPrefix[i] = _beatPrefix[i - 1];
+
             // Pad past the last tile's start so end-of-chart markers aren't glued to the edge.
             double lastT = _timePrefix[len - 1];
             _totalTime = lastT > 0.0 ? lastT * 1.02 + 0.05 : 1.0;
@@ -669,6 +860,12 @@ namespace Sapphire
                 if (ld != null && ld.bpm > 1f) _secPerBeat = 60.0 / ld.bpm;
             }
             catch { }
+
+            // Converts _beatPrefix from raw angle-beats to MUSICAL beats — offsets after.
+            RebuildTempoMap(len);
+            _beatOffset = len > 1 ? _beatPrefix[1] : 0.0;
+            _lastBeat = _beatPrefix[len - 1];
+            DetectTimeSignature(len);
 
             // Default view spans 64 beats (zoom 1 = whole level); a manual zoom sticks
             // until the strip is next hidden.
@@ -691,7 +888,8 @@ namespace Sapphire
             if (other) _lanes.Add((LevelEventCategory)(-1));
             int laneCount = Mathf.Max(1, _lanes.Count);
 
-            _stripRect.sizeDelta = new Vector2(0f, StripPad * 2f + laneCount * LaneH);
+            // Min height: the 2-line transport cluster clips on 1-lane charts otherwise.
+            _stripRect.sizeDelta = new Vector2(0f, Mathf.Max(66f, StripPad * 2f + laneCount * LaneH));
 
             int texH = laneCount * TexLaneH;
             if (_markerTex == null || _markerTex.height != texH)
@@ -752,25 +950,54 @@ namespace Sapphire
             var px = new Color32[TexW * texH];
             float viewEnd = _viewStart + 1f / _zoom;
 
-            // Measure grid: assume 4/4 at the base BPM (the level format has no time-
-            // signature data), with an every-4th-measure brighter line. Spacing doubles as
-            // needed so zoomed-out views don't smear into solid grey. Track pauses don't
-            // pause the song, so the grid marches on through them — that's what keeps
-            // post-pause events on-beat.
-            double interval = 4.0 * _secPerBeat;
-            double viewSpan = _totalTime / _zoom;
-            while (viewSpan / interval > TexW / 26.0) interval *= 2.0;
+            /* Measure grid: 4/4 measures in BEAT domain, mapped to time through the game's
+               own (entryBeat → entryTime) pairs — BPM shifts change the spacing by
+               themselves. Each tempo segment re-anchors the lattice (detected base-BPM
+               changes, onbeat-shifting pauses, odd intros); the segment boundary itself is
+               marked amber. Spacing doubles per segment when a zoomed-out view would smear
+               into solid grey. The level format has no time-signature data — measures
+               default to 4 beats. */
             var faint = new Color32(255, 255, 255, 22);
             var strong = new Color32(255, 255, 255, 44);
-            long k = (long)System.Math.Ceiling((_viewStart * _totalTime - _timeOffset) / interval);
-            if (k < 0) k = 0;
-            for (int guard = 0; guard < 2048; guard++, k++)
+            var boundary = new Color32(255, 190, 80, 70);
+            double viewStartT = _viewStart * _totalTime;
+            double viewEndT = viewEnd * _totalTime;
+            double viewSpan = _totalTime / _zoom;
+            double viewStartBeat = BeatAtTime(viewStartT);
+            // One line per measure, phased to the detected downbeat so the drop lands on a
+            // strong line even if the intro doesn't fill whole measures.
+            int measure = System.Math.Max(1, _timeSigNum);
+            double gridOrigin = _beatOffset + _timeSigPhase;
+            for (int s = 0; s < _tempo.Count; s++)
             {
-                double frac = (_timeOffset + k * interval) / _totalTime;
-                if (frac > viewEnd) break;
-                int gx = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 1)), 0, TexW - 1);
-                var gcol = (k & 3) == 0 ? strong : faint;
-                for (int y = 0; y < texH; y++) px[y * TexW + gx] = gcol;
+                var seg = _tempo[s];
+                double segEnd = s + 1 < _tempo.Count ? _tempo[s + 1].StartBeat : _lastBeat + 64.0;
+                double spb = seg.Spb > 1e-6 ? seg.Spb : _secPerBeat;
+                double beatsPerLine = measure;
+                while (viewSpan / (beatsPerLine * spb) > TexW / 26.0) beatsPerLine *= 2.0;
+                double from = System.Math.Max(seg.StartBeat, viewStartBeat - beatsPerLine);
+                long n = (long)System.Math.Ceiling((from - gridOrigin) / beatsPerLine - 1e-9);
+                for (int guard = 0; guard < 2048; guard++, n++)
+                {
+                    double b = gridOrigin + n * beatsPerLine;
+                    if (b >= segEnd) break;
+                    double t = TimeAtBeat(b);
+                    if (t > viewEndT) break;
+                    double frac = t / _totalTime;
+                    if (frac < _viewStart) continue;
+                    int gx = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 1)), 0, TexW - 1);
+                    var gcol = (n & 3) == 0 ? strong : faint; // every 4th measure = phrase
+                    for (int y = 0; y < texH; y++) px[y * TexW + gx] = gcol;
+                }
+                if (s == 0) continue;
+                // Detected re-anchor point: amber tick so shifted sections are visible.
+                double bt = TimeAtBeat(seg.StartBeat);
+                if (bt >= viewStartT && bt <= viewEndT)
+                {
+                    double bfrac = bt / _totalTime;
+                    int bx = Mathf.Clamp((int)((bfrac - _viewStart) * _zoom * (TexW - 1)), 0, TexW - 1);
+                    for (int y = 0; y < texH; y++) px[y * TexW + bx] = boundary;
+                }
             }
 
             for (int lane = 0; lane < laneCount; lane++)
@@ -804,6 +1031,309 @@ namespace Sapphire
 
         // ── tooltip ─────────────────────────────────────────────────────────
 
+        /* GLOBAL analysis: the base pulse at each tile = the DURATION-WEIGHTED WINDOWED
+           MODE of the angle-adjusted effective BPM (_bpmPrefix). Rationale — look at how
+           the whole passage is composed, not one tile at a time: the beats are the notes
+           whose perceived tempo recurs most (weighted by how long they sound), so the most
+           massive histogram bin over a local window is the pulse. Subdivisions (higher
+           eff, shorter → less weight), dotted offbeats and pseudos (rare) can't own the
+           bin, so the base is naturally robust — no fragile per-tile re-anchoring. Then
+           musical beats advance by dt × base/60 (keeps the grid on downbeats), and _tempo
+           segments are cut where the base curve steps (amber ticks + edge extrapolation).
+           A phase pass finds off-lattice runs (odd pauses / shifted intros). */
+        private static void RebuildTempoMap(int len)
+        {
+            _tempo.Clear();
+            double baseBpm = ClampBase(_levelBpm > 1.0 ? _levelBpm : 100.0);
+            var seg0 = new TempoSeg { StartBeat = 0.0, Anchor = 0.0, Spb = 60.0 / baseBpm };
+            _tempo.Add(seg0);
+            _baseBpmPrefix = new double[len];
+            if (len < 3 || _beatPrefix == null || _timePrefix == null || _bpmPrefix == null)
+            {
+                for (int i = 0; i < len; i++) _baseBpmPrefix[i] = baseBpm;
+                return;
+            }
+
+            // Per-tile note duration (weight for the sustain vote).
+            var dur = new double[len];
+            for (int i = 0; i < len - 1; i++) dur[i] = System.Math.Max(1e-4, _timePrefix[i + 1] - _timePrefix[i]);
+            dur[len - 1] = len >= 2 ? dur[len - 2] : 1.0;
+
+            /* MODEL: default the whole chart to the HEADER tempo; only introduce a new base
+               where the tile BPM holds a new consistent value for a sustained run. Per tile,
+               `CandidateBase` returns a VOTE (its own tile BPM) only for genuine beat tiles
+               (moderate ½×–2× ratio), and 0 = ABSTAIN for decoration (subdivisions, clean
+               multiples, magicshape scalings). The base is the DURATION-WEIGHTED WINDOWED
+               MODE of the votes — a new tempo has to persist to win, and where a stretch is
+               all decoration (no votes) it falls back to the header (baseBpm). */
+            var cand = new double[len];
+            for (int i = 0; i < len; i++) cand[i] = CandidateBase(_tileBpmPrefix != null ? _tileBpmPrefix[i] : baseBpm);
+
+            const int W = 16;                 // ± window in tiles for the sustain vote
+            const double BinLo = 30.0, BinW = 2.0; const int Bins = 400; // 30..830 bpm
+            var hist = new double[Bins];
+            var touched = new List<int>();
+            for (int i = 0; i < len; i++)
+            {
+                int lo = System.Math.Max(1, i - W), hi = System.Math.Min(len - 1, i + W);
+                touched.Clear();
+                for (int j = lo; j <= hi; j++)
+                {
+                    double e = cand[j];
+                    if (e <= 1.0) continue;
+                    int bi = (int)System.Math.Round((e - BinLo) / BinW);
+                    if (bi < 0 || bi >= Bins) continue;
+                    if (hist[bi] == 0.0) touched.Add(bi);
+                    hist[bi] += dur[j];
+                }
+                int peak = -1; double peakW = -1.0;
+                foreach (int bi in touched)
+                {
+                    double w = hist[bi] + (bi > 0 ? hist[bi - 1] : 0.0) + (bi < Bins - 1 ? hist[bi + 1] : 0.0);
+                    if (w > peakW) { peakW = w; peak = bi; }
+                }
+                double num = 0.0, den = 0.0;
+                for (int j = lo; j <= hi; j++)
+                {
+                    double e = cand[j];
+                    if (e <= 1.0) continue;
+                    int bi = (int)System.Math.Round((e - BinLo) / BinW);
+                    if (System.Math.Abs(bi - peak) <= 1) { num += e * dur[j]; den += dur[j]; }
+                }
+                _baseBpmPrefix[i] = den > 0.0 ? num / den : baseBpm;
+                foreach (int bi in touched) hist[bi] = 0.0;
+            }
+
+            // Musical beats from the per-tile base.
+            var musical = new double[len];
+            for (int i = 0; i < len - 1; i++)
+            {
+                double dt = _timePrefix[i + 1] - _timePrefix[i];
+                musical[i + 1] = musical[i] + (dt > 0.0 ? dt * _baseBpmPrefix[i] / 60.0 : 0.0);
+            }
+            System.Array.Copy(musical, _beatPrefix, len);
+            seg0.StartBeat = seg0.Anchor = len > 1 ? musical[1] : 0.0;
+            seg0.Spb = 60.0 / _baseBpmPrefix[System.Math.Min(1, len - 1)];
+            _tempo[0] = seg0;
+
+            // Cut a segment where the base curve steps >5% (amber ticks / edge extrapolation).
+            double curBase = _baseBpmPrefix[System.Math.Min(1, len - 1)];
+            for (int i = 2; i < len && _tempo.Count <= MaxTempoSegs; i++)
+            {
+                if (System.Math.Abs(_baseBpmPrefix[i] - curBase) > 0.05 * curBase)
+                {
+                    curBase = _baseBpmPrefix[i];
+                    _tempo.Add(new TempoSeg { StartBeat = musical[i], Anchor = musical[i], Spb = 60.0 / curBase });
+                }
+            }
+            if (_tempo.Count > MaxTempoSegs)
+            {
+                _tempo.Clear();
+                _tempo.Add(seg0);
+                return;
+            }
+
+            // Phase pass: walk tiles against the active segment's anchor.
+            var outSegs = new List<TempoSeg>();
+            int segIdx = 0;
+            var active = _tempo[0];
+            outSegs.Add(active);
+            int runTiles = 0;
+            double runStartBeat = 0.0, runOffset = 0.0;
+            for (int i = 1; i < len; i++)
+            {
+                double b = _beatPrefix[i];
+                while (segIdx + 1 < _tempo.Count && b >= _tempo[segIdx + 1].StartBeat - 1e-9)
+                {
+                    segIdx++;
+                    active = _tempo[segIdx];
+                    outSegs.Add(active);
+                    runTiles = 0;
+                }
+                double f = b - active.Anchor;
+                double off = f - System.Math.Round(f); // signed distance to the lattice
+                if (System.Math.Abs(off) <= PhaseTol) { runTiles = 0; continue; }
+                if (runTiles > 0 && System.Math.Abs(off - runOffset) > PhaseTol) { runTiles = 0; }
+                if (runTiles == 0) { runStartBeat = b; runOffset = off; }
+                runTiles++;
+                if (runTiles >= PhaseMinTiles && b - runStartBeat >= PhaseMinBeats)
+                {
+                    var shifted = new TempoSeg { StartBeat = runStartBeat, Anchor = runStartBeat, Spb = active.Spb };
+                    outSegs.Add(shifted);
+                    active = shifted;
+                    runTiles = 0;
+                    if (outSegs.Count > MaxTempoSegs) break;
+                }
+            }
+            if (outSegs.Count > MaxTempoSegs) return; // keep the base-step segmentation
+            outSegs.Sort((a, x) => a.StartBeat.CompareTo(x.StartBeat));
+            _tempo.Clear();
+            _tempo.AddRange(outSegs);
+        }
+
+        /* A tile's VOTE for the local base tempo, or 0 = ABSTAIN (decoration, no vote).
+           Only tiles at a genuine moderate tempo (½×–2× the header, non-integer ratio) vote
+           their own tile BPM — that's a real beat tile whether at the header or a shifted
+           tempo like 150→225. Everything else abstains: a clean ×k / ÷k of the header is a
+           subdivision or magicshape (900 = 6×150), and an EXTREME ratio is a magicshape
+           scaling — these must NOT vote, or a magicshape's 900 folding to 150 fights the
+           real 225 tiles and the base flips between the two. The vote loop takes the mode of
+           the actual votes and falls back to the header where a stretch is all decoration. */
+        private static double CandidateBase(double tileBpm)
+        {
+            double h = _levelBpm > 1.0 ? _levelBpm : 120.0;
+            if (tileBpm <= 1.0) return 0.0;
+            double r = tileBpm / h;
+            double k = System.Math.Round(r);
+            if (k >= 2.0 && System.Math.Abs(r - k) <= 0.08 * k) return 0.0;          // clean ×k → abstain
+            double kd = System.Math.Round(1.0 / r);
+            if (kd >= 2.0 && System.Math.Abs(1.0 / r - kd) <= 0.08 * kd) return 0.0; // clean /k → abstain
+            if (r >= 0.5 && r <= 2.0) return tileBpm;                                // genuine tempo → vote
+            return 0.0;                                                              // extreme → abstain
+        }
+
+        /* Fold a tile-level rate into the musical pulse range by OCTAVES. Charters subdivide
+           a beat by powers of 2 (a 220 section on 90° tiles runs tile-BPM 880 = 4×), so the
+           fold factor is 2^k: 880 → 440 → 220. (An integer-divisor clamp landed on ÷3 →
+           293/256, the wrong factor.) The pulse sits ≤ ~300; visual-speed events fold down
+           by the same octaves. Which octave is right is disambiguated by accent alignment
+           (`OctaveByAccent`) — this just bounds the range. */
+        private static double ClampBase(double b)
+        {
+            if (b <= 0.0) return _levelBpm;
+            while (b > 300.0) b *= 0.5;
+            while (b < 90.0) b *= 2.0;
+            return b;
+        }
+
+        // Detected musical BASE bpm at a tile — tracks genuine song-tempo shifts, with ×2
+        // density sections and magicshapes folded back to the base.
+        private static double BpmAtTile(int seq)
+        {
+            if (_baseBpmPrefix == null || _baseBpmPrefix.Length == 0) return _levelBpm;
+            if (seq < 0) seq = 0;
+            if (seq >= _baseBpmPrefix.Length) seq = _baseBpmPrefix.Length - 1;
+            return _baseBpmPrefix[seq];
+        }
+
+        // The game's raw effective bpm at a tile (speed × base) — for comparing against the
+        // detected base while tuning the detection.
+        private static double EffBpmAtTile(int seq)
+        {
+            if (_bpmPrefix == null || _bpmPrefix.Length == 0) return _levelBpm;
+            if (seq < 0) seq = 0;
+            if (seq >= _bpmPrefix.Length) seq = _bpmPrefix.Length - 1;
+            return _bpmPrefix[seq];
+        }
+
+        private static string BpmLine(int seq) =>
+            "base " + BpmNum(BpmAtTile(seq)) + "  ·  eff " + BpmNum(EffBpmAtTile(seq))
+            + " bpm  ·  " + _timeSigNum + "/4";
+
+        private static string BpmNum(double bpm)
+        {
+            if (bpm <= 0.0) return "—";
+            double r = System.Math.Round(bpm);
+            return System.Math.Abs(bpm - r) < 0.05 ? r.ToString("0") : bpm.ToString("0.#");
+        }
+
+        /* Best-guess measure length (the level format carries no time-signature data).
+           Builds an on-beat onset-strength signal in musical beats, then autocorrelates it
+           at candidate measure lengths — the period the tile pattern best repeats on is the
+           meter. Normalised so a longer lag can't win by overlap alone, and biased toward 4
+           (by far the most common) so only a clearly stronger period overrides it. */
+        private static void DetectTimeSignature(int len)
+        {
+            _timeSigNum = 4;
+            _timeSigPhase = 0;
+            if (_beatPrefix == null || len < 16) return;
+            double span = _beatPrefix[len - 1] - _beatPrefix[1];
+            if (span < 16.0) return;
+            int nb = (int)System.Math.Ceiling(span) + 2;
+            if (nb > 40000) return; // pathological; keep it cheap
+            var onset = new double[nb];
+            double b0 = _beatPrefix[1];
+            for (int i = 1; i < len; i++)
+            {
+                double b = _beatPrefix[i] - b0;
+                if (b < 0.0 || b >= nb) continue;
+                int bi = (int)System.Math.Round(b);
+                // On-beat tiles score highest; off-beat notes contribute little.
+                onset[bi] += System.Math.Max(0.0, 1.0 - System.Math.Abs(b - bi) * 2.0);
+            }
+            double bestScore = 0.0;
+            int bestL = 4;
+            foreach (int L in new[] { 3, 4, 5, 6, 7 })
+            {
+                double sum = 0.0, norm = 0.0;
+                for (int b = 0; b + L < nb; b++)
+                {
+                    sum += onset[b] * onset[b + L];
+                    norm += onset[b] * onset[b];
+                }
+                double score = norm > 1e-9 ? sum / norm : 0.0;
+                if (L == 4) score *= 1.15; // common-meter prior
+                if (score > bestScore) { bestScore = score; bestL = L; }
+            }
+            _timeSigNum = bestL;
+
+            /* Downbeat PHASE: the measure offset where onsets pile up most. Anchoring the
+               measure grid here (not at the first tile) lands the strong lines on the real
+               downbeats even when the intro doesn't fill whole measures before the drop. */
+            double bestPhaseW = -1.0; int bestPhi = 0;
+            for (int p = 0; p < bestL; p++)
+            {
+                double w = 0.0;
+                for (int b = p; b < nb; b += bestL) w += onset[b];
+                if (w > bestPhaseW) { bestPhaseW = w; bestPhi = p; }
+            }
+            _timeSigPhase = bestPhi;
+        }
+
+        // Piecewise-linear beat→time through the game's per-tile pairs; extrapolates with
+        // the edge tempo beyond the chart.
+        private static double TimeAtBeat(double b)
+        {
+            var bp = _beatPrefix; var tp = _timePrefix;
+            if (bp == null || bp.Length < 2) return b * _secPerBeat;
+            int hi = bp.Length - 1;
+            if (b <= bp[0]) return tp[0] - (bp[0] - b) * _secPerBeat;
+            if (b >= bp[hi])
+            {
+                double spb = _tempo.Count > 0 ? _tempo[_tempo.Count - 1].Spb : _secPerBeat;
+                return tp[hi] + (b - bp[hi]) * spb;
+            }
+            int lo = 0;
+            while (lo + 1 < hi)
+            {
+                int mid = (lo + hi) >> 1;
+                if (bp[mid] <= b) lo = mid; else hi = mid;
+            }
+            double db = bp[hi] - bp[lo];
+            return db < 1e-9 ? tp[lo] : tp[lo] + (tp[hi] - tp[lo]) * (b - bp[lo]) / db;
+        }
+
+        private static double BeatAtTime(double t)
+        {
+            var bp = _beatPrefix; var tp = _timePrefix;
+            if (bp == null || bp.Length < 2) return _secPerBeat > 0.0 ? t / _secPerBeat : 0.0;
+            int hi = bp.Length - 1;
+            if (t <= tp[0]) return bp[0] - (tp[0] - t) / _secPerBeat;
+            if (t >= tp[hi])
+            {
+                double spb = _tempo.Count > 0 ? _tempo[_tempo.Count - 1].Spb : _secPerBeat;
+                return bp[hi] + (t - tp[hi]) / (spb > 1e-9 ? spb : _secPerBeat);
+            }
+            int lo = 0;
+            while (lo + 1 < hi)
+            {
+                int mid = (lo + hi) >> 1;
+                if (tp[mid] <= t) lo = mid; else hi = mid;
+            }
+            double dt = tp[hi] - tp[lo];
+            return dt < 1e-9 ? bp[lo] : bp[lo] + (bp[hi] - bp[lo]) * (t - tp[lo]) / dt;
+        }
+
         private static string BuildTooltip(LevelEvent e, bool withFloor)
         {
             if (e == null) return null;
@@ -812,9 +1342,9 @@ namespace Sapphire
             if (withFloor)
             {
                 sb.Append("  <color=#94949E>tile ").Append(e.floor);
-                if (_timePrefix != null && e.floor >= 0 && e.floor < _timePrefix.Length && _secPerBeat > 0.0)
+                if (_beatPrefix != null && e.floor >= 0 && e.floor < _beatPrefix.Length)
                     sb.Append(" · beat ").Append(
-                        ((_timePrefix[e.floor] - _timeOffset) / _secPerBeat).ToString("0.#"));
+                        (_beatPrefix[e.floor] - _beatOffset).ToString("0.#"));
                 sb.Append("</color>");
             }
             if (!e.active) sb.Append("  <color=#C77>(off)</color>");
@@ -903,7 +1433,7 @@ namespace Sapphire
             _stripRect.anchorMax = new Vector2(1f, 0f);
             _stripRect.pivot = new Vector2(0.5f, 0f);
             _stripRect.anchoredPosition = new Vector2(0f, BottomGap);
-            _stripRect.sizeDelta = new Vector2(0f, StripPad * 2f + LaneH);
+            _stripRect.sizeDelta = new Vector2(0f, Mathf.Max(66f, StripPad * 2f + LaneH));
             var stripBg = stripGo.AddComponent<Image>();
             stripBg.color = new Color(0f, 0f, 0f, 0.55f);
             // The strip acts like a toolbar: it swallows clicks/wheel over itself so the
@@ -978,13 +1508,18 @@ namespace Sapphire
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             _chipsRow.gameObject.SetActive(false);
 
-            // Shared hover tooltip, above everything on this canvas.
+            // Shared hover tooltip. Nested canvas with override sorting so it renders
+            // above the OTHER Sapphire canvases too (event dock/chrome sit at 905-907
+            // and used to cover it).
             var tipGo = new GameObject("Tooltip", typeof(RectTransform));
             tipGo.transform.SetParent(_canvasGo.transform, false);
             _tooltipGo = tipGo;
             _tooltipRect = (RectTransform)tipGo.transform;
             _tooltipRect.anchorMin = _tooltipRect.anchorMax = new Vector2(0.5f, 0.5f);
             _tooltipRect.pivot = new Vector2(0.5f, 1f);
+            var tipCanvas = tipGo.AddComponent<Canvas>();
+            tipCanvas.overrideSorting = true;
+            tipCanvas.sortingOrder = 940;
             var tipBg = tipGo.AddComponent<RoundedRectGraphic>();
             tipBg.Radius = 8f;
             tipBg.color = new Color(0.07f, 0.07f, 0.09f, 0.95f);
@@ -1078,52 +1613,52 @@ namespace Sapphire
                 catch { }
             });
 
-            // Autoplay toggle — charters flip this constantly, so it lives on the HUD.
-            var autoGo = new GameObject("Auto", typeof(RectTransform));
-            autoGo.transform.SetParent(r, false);
-            var ar = (RectTransform)autoGo.transform;
-            ar.anchorMin = new Vector2(0f, 0.5f);
-            ar.anchorMax = new Vector2(0f, 0.5f);
-            ar.pivot = new Vector2(0f, 0.5f);
-            ar.anchoredPosition = new Vector2(76f, 0f);
-            ar.sizeDelta = new Vector2(46f, 24f);
-            _autoBg = autoGo.AddComponent<RoundedRectGraphic>();
-            _autoBg.Radius = 6f;
-            _autoBg.color = new Color(1f, 1f, 1f, 0.1f);
-            _autoBg.raycastTarget = true;
-            var autoBtn = autoGo.AddComponent<Button>();
-            autoBtn.targetGraphic = _autoBg;
-            var acolors = autoBtn.colors;
-            acolors.highlightedColor = new Color(1.4f, 1.4f, 1.4f, 1f);
-            acolors.pressedColor = new Color(1.8f, 1.8f, 1.8f, 1f);
-            autoBtn.colors = acolors;
-            autoBtn.onClick.AddListener(() => { try { RDC.auto = !RDC.auto; } catch { } });
-            _autoLabel = MakeGlyph(autoGo.transform, "AUTO", 11);
-            _autoLabel.color = new Color(0.75f, 0.75f, 0.78f, 1f);
-            _autoShown = false;
-
+            // (AUTO moved to the mode cluster, right of NO FAIL.) Clock on the top line,
+            // detected base BPM on the line below it — both top-anchored in the strip.
             var clockGo = new GameObject("Clock", typeof(RectTransform));
             clockGo.transform.SetParent(r, false);
             var cr = (RectTransform)clockGo.transform;
-            cr.anchorMin = new Vector2(0f, 0f);
+            cr.anchorMin = new Vector2(0f, 1f);
             cr.anchorMax = new Vector2(1f, 1f);
-            cr.offsetMin = new Vector2(130f, 0f);
+            cr.pivot = new Vector2(0f, 1f);
+            cr.offsetMin = new Vector2(76f, 0f);
             cr.offsetMax = new Vector2(-4f, 0f);
+            cr.anchoredPosition = new Vector2(76f, -5f);
+            cr.sizeDelta = new Vector2(cr.sizeDelta.x, 17f);
             _clockText = clockGo.AddComponent<TextMeshProUGUI>();
             _clockText.font = UI.Theme.TmpFont;
             _clockText.fontSize = 13;
             _clockText.color = new Color(0.85f, 0.85f, 0.88f, 1f);
-            _clockText.alignment = TextAlignmentOptions.Left;
+            _clockText.alignment = TextAlignmentOptions.TopLeft;
             _clockText.textWrappingMode = TextWrappingModes.NoWrap;
             _clockText.overflowMode = TextOverflowModes.Overflow;
             _clockText.raycastTarget = false;
+
+            var bpmGo = new GameObject("Bpm", typeof(RectTransform));
+            bpmGo.transform.SetParent(r, false);
+            var bpr = (RectTransform)bpmGo.transform;
+            bpr.anchorMin = new Vector2(0f, 1f);
+            bpr.anchorMax = new Vector2(1f, 1f);
+            bpr.pivot = new Vector2(0f, 1f);
+            bpr.offsetMin = new Vector2(76f, 0f);
+            bpr.offsetMax = new Vector2(-4f, 0f);
+            bpr.anchoredPosition = new Vector2(76f, -22f);
+            bpr.sizeDelta = new Vector2(bpr.sizeDelta.x, 16f);
+            _bpmText = bpmGo.AddComponent<TextMeshProUGUI>();
+            _bpmText.font = UI.Theme.TmpFont;
+            _bpmText.fontSize = 12;
+            _bpmText.color = new Color(0.6f, 0.62f, 0.68f, 1f);
+            _bpmText.alignment = TextAlignmentOptions.TopLeft;
+            _bpmText.textWrappingMode = TextWrappingModes.NoWrap;
+            _bpmText.overflowMode = TextOverflowModes.Overflow;
+            _bpmText.raycastTarget = false;
             _transportGo.SetActive(false);
         }
 
         // Quick-access state chips the charter flips constantly, parked above the strip's
-        // right end. Editor Mode toggles the Sapphire setting; difficulty cycles
-        // Lenient→Normal→Strict (GCS.difficulty); no-fail flips GCS.useNoFail (and the
-        // live controller flag mid-run).
+        // right end. Editor Mode toggles the Sapphire setting; difficulty opens a small
+        // dropdown (GCS.difficulty); no-fail flips GCS.useNoFail (and the live controller
+        // flag mid-run); AUTO flips RDC.auto.
         private static void BuildModeCluster()
         {
             var go = new GameObject("ModeCluster", typeof(RectTransform));
@@ -1131,7 +1666,7 @@ namespace Sapphire
             _modeCluster = (RectTransform)go.transform;
             _modeCluster.anchorMin = _modeCluster.anchorMax = new Vector2(1f, 0f);
             _modeCluster.pivot = new Vector2(1f, 0f);
-            _modeCluster.sizeDelta = new Vector2(64f + 78f + 64f + 12f, 24f);
+            _modeCluster.sizeDelta = new Vector2(64f + 78f + 64f + 46f + 18f, 24f);
 
             _emBg = MakeModeChip(0f, 64f, "EDITOR", out _emLabel, () =>
             {
@@ -1144,11 +1679,7 @@ namespace Sapphire
                 }
                 catch { }
             });
-            MakeModeChip(70f, 78f, "NORMAL", out _diffLabel, () =>
-            {
-                try { GCS.difficulty = (Difficulty)(((int)GCS.difficulty + 1) % 3); }
-                catch { }
-            });
+            MakeModeChip(70f, 78f, "NORMAL", out _diffLabel, ToggleDiffMenu);
             _nfBg = MakeModeChip(154f, 64f, "NO FAIL", out _nfLabel, () =>
             {
                 try
@@ -1159,7 +1690,90 @@ namespace Sapphire
                 }
                 catch { }
             });
+            _autoBg = MakeModeChip(224f, 46f, "AUTO", out _autoLabel,
+                () => { try { RDC.auto = !RDC.auto; } catch { } });
+            _autoShown = false;
             _modeCluster.gameObject.SetActive(false);
+        }
+
+        // Small dropdown above the difficulty chip; picking a row sets GCS.difficulty.
+        private static void ToggleDiffMenu()
+        {
+            if (_diffMenuGo != null) { CloseDiffMenu(); return; }
+
+            _diffMenuGo = new GameObject("DiffMenu", typeof(RectTransform));
+            _diffMenuGo.transform.SetParent(_canvasGo.transform, false);
+            var blocker = (RectTransform)_diffMenuGo.transform;
+            blocker.anchorMin = Vector2.zero; blocker.anchorMax = Vector2.one;
+            blocker.offsetMin = Vector2.zero; blocker.offsetMax = Vector2.zero;
+            var blockImg = _diffMenuGo.AddComponent<Image>();
+            blockImg.color = new Color(0f, 0f, 0f, 0.01f);
+            blockImg.raycastTarget = true;
+            UI.ClickHandler.Attach(_diffMenuGo, CloseDiffMenu);
+
+            const float rowH = 26f, width = 86f, pad = 4f;
+            var panelGo = new GameObject("Panel", typeof(RectTransform));
+            panelGo.transform.SetParent(_diffMenuGo.transform, false);
+            var panel = (RectTransform)panelGo.transform;
+            panel.anchorMin = panel.anchorMax = new Vector2(1f, 0f);
+            panel.pivot = new Vector2(0f, 0f);
+            // Above the difficulty chip (cluster x=70): cluster is right-anchored.
+            var cp = _modeCluster.anchoredPosition;
+            panel.anchoredPosition = new Vector2(cp.x - _modeCluster.sizeDelta.x + 70f - 4f,
+                cp.y + 24f + 6f);
+            panel.sizeDelta = new Vector2(width, rowH * 3f + pad * 2f);
+            var bg = panelGo.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 9f;
+            bg.color = new Color(0.07f, 0.07f, 0.09f, 0.97f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            bg.raycastTarget = true;
+
+            int current = 1;
+            try { current = (int)GCS.difficulty; } catch { }
+            var accent = UI.Theme.Accent;
+            string[] names = { "LENIENT", "NORMAL", "STRICT" };
+            for (int i = 0; i < 3; i++)
+            {
+                int idx = i;
+                var rowGo = new GameObject("Row" + i, typeof(RectTransform));
+                rowGo.transform.SetParent(panelGo.transform, false);
+                var rr = (RectTransform)rowGo.transform;
+                rr.anchorMin = new Vector2(0f, 1f);
+                rr.anchorMax = new Vector2(1f, 1f);
+                rr.pivot = new Vector2(0.5f, 1f);
+                rr.offsetMin = new Vector2(pad, 0f);
+                rr.offsetMax = new Vector2(-pad, 0f);
+                rr.anchoredPosition = new Vector2(0f, -pad - (2 - i) * rowH); // STRICT on top
+                rr.sizeDelta = new Vector2(rr.sizeDelta.x, rowH);
+                var rowBg = rowGo.AddComponent<RoundedRectGraphic>();
+                rowBg.Radius = 6f;
+                rowBg.color = i == current
+                    ? new Color(accent.r, accent.g, accent.b, 0.35f)
+                    : new Color(1f, 1f, 1f, 0f);
+                rowBg.raycastTarget = true;
+                var rowBtn = rowGo.AddComponent<Button>();
+                rowBtn.targetGraphic = rowBg;
+                var rc = rowBtn.colors;
+                rc.normalColor = Color.white;
+                rc.highlightedColor = new Color(1.5f, 1.5f, 1.5f, 1f);
+                rc.pressedColor = new Color(2f, 2f, 2f, 1f);
+                rowBtn.colors = rc;
+                rowBtn.onClick.AddListener(() =>
+                {
+                    try { GCS.difficulty = (Difficulty)idx; } catch { }
+                    CloseDiffMenu();
+                });
+                rowBtn.onClick.AddListener(Deselect);
+                var t = MakeGlyph(rowGo.transform, names[i], 11);
+                t.color = i == current ? Color.white : new Color(0.78f, 0.78f, 0.81f, 1f);
+            }
+        }
+
+        private static void CloseDiffMenu()
+        {
+            if (_diffMenuGo != null) Object.Destroy(_diffMenuGo);
+            _diffMenuGo = null;
         }
 
         private static RoundedRectGraphic MakeModeChip(float x, float w, string label,
@@ -1195,6 +1809,7 @@ namespace Sapphire
         private static void UpdateModeCluster()
         {
             if (_modeCluster == null) return;
+            if (_diffMenuGo != null && !_modeCluster.gameObject.activeInHierarchy) CloseDiffMenu();
             // Track the strip's top-right corner (lane count changes its height).
             float y = _stripRect.anchoredPosition.y + _stripRect.sizeDelta.y + 8f;
             if (!Mathf.Approximately(_modeCluster.anchoredPosition.y, y))
@@ -1221,13 +1836,31 @@ namespace Sapphire
             }
 
             bool nf = false;
-            try { nf = GCS.useNoFail; } catch { }
+            // The editor's N shortcut flips scrController.noFail directly (NOT GCS.useNoFail),
+            // so read the live controller when it exists.
+            try
+            {
+                nf = GCS.useNoFail;
+                var ctl = scrController.instance;
+                if (ctl != null) nf = ctl.noFail;
+            }
+            catch { }
             if (nf != _nfShown && _nfBg != null)
             {
                 _nfShown = nf;
                 _nfBg.color = nf ? new Color(accent.r, accent.g, accent.b, 0.45f)
                                  : new Color(0.08f, 0.08f, 0.1f, 0.85f);
                 if (_nfLabel != null) _nfLabel.color = nf ? Color.white : new Color(0.75f, 0.75f, 0.78f, 1f);
+            }
+
+            bool auto = false;
+            try { auto = RDC.auto; } catch { }
+            if (auto != _autoShown && _autoBg != null)
+            {
+                _autoShown = auto;
+                _autoBg.color = auto ? new Color(accent.r, accent.g, accent.b, 0.45f)
+                                     : new Color(0.08f, 0.08f, 0.1f, 0.85f);
+                if (_autoLabel != null) _autoLabel.color = auto ? Color.white : new Color(0.75f, 0.75f, 0.78f, 1f);
             }
         }
 
@@ -1237,10 +1870,10 @@ namespace Sapphire
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var r = (RectTransform)go.transform;
-            r.anchorMin = new Vector2(0f, 0.5f);
-            r.anchorMax = new Vector2(0f, 0.5f);
-            r.pivot = new Vector2(0f, 0.5f);
-            r.anchoredPosition = new Vector2(x, 0f);
+            r.anchorMin = new Vector2(0f, 1f); // top-anchored, aligned with the clock line
+            r.anchorMax = new Vector2(0f, 1f);
+            r.pivot = new Vector2(0f, 1f);
+            r.anchoredPosition = new Vector2(x, -3f);
             r.sizeDelta = new Vector2(size, size);
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 6f;
@@ -1311,20 +1944,8 @@ namespace Sapphire
                 if (_pauseBars != null) _pauseBars.SetActive(showPause);
             }
 
-            bool auto = false;
-            try { auto = RDC.auto; } catch { }
-            if (auto != _autoShown && _autoBg != null)
-            {
-                _autoShown = auto;
-                var accent = UI.Theme.Accent;
-                _autoBg.color = auto
-                    ? new Color(accent.r, accent.g, accent.b, 0.45f)
-                    : new Color(1f, 1f, 1f, 0.1f);
-                if (_autoLabel != null)
-                    _autoLabel.color = auto ? Color.white : new Color(0.75f, 0.75f, 0.78f, 1f);
-            }
             if (_clockText == null) return;
-            string txt;
+            string txt, bpm = "";
             if (playing)
             {
                 double elapsed = 0.0;
@@ -1339,17 +1960,23 @@ namespace Sapphire
                     }
                 }
                 catch { }
-                double beat = _secPerBeat > 0.0 ? (elapsed - _timeOffset) / _secPerBeat : 0.0;
+                // The conductor keeps advancing after the last tile — freeze the readout
+                // at the level's end instead of counting into the outro.
+                if (_totalTime > 0.0 && elapsed > _totalTime) elapsed = _totalTime;
+                double beat = BeatAtTime(elapsed) - _beatOffset;
                 txt = FormatClock(elapsed / pitch) + " / " + FormatClock(_totalTime / pitch)
                     + "  ·  beat " + (beat < 0 ? 0 : (int)beat);
+                bpm = BpmLine(selSeq);
             }
-            else if (selSeq >= 0 && _timePrefix != null && selSeq < _timePrefix.Length && _secPerBeat > 0.0)
+            else if (selSeq >= 0 && _beatPrefix != null && selSeq < _beatPrefix.Length)
             {
-                double beat = (_timePrefix[selSeq] - _timeOffset) / _secPerBeat;
+                double beat = _beatPrefix[selSeq] - _beatOffset;
                 txt = "tile " + selSeq + "  ·  beat " + beat.ToString("0.#");
+                bpm = BpmLine(selSeq);
             }
             else txt = "";
             if (_clockText.text != txt) _clockText.text = txt;
+            if (_bpmText != null && _bpmText.text != bpm) _bpmText.text = bpm;
         }
 
         // While our transport is up, fade the game's bottom-left play cluster (parent of

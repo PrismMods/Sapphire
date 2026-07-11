@@ -84,6 +84,16 @@ namespace Sapphire.UI.Pages
                 v => { s.EditorPanelRail = v; notify?.Invoke(); }, null);
             UIBuilder.Collapsible(content, "Sapphire event palette", s.EditorEventDock,
                 v => { s.EditorEventDock = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Sapphire event tabs", s.EditorEventInspector,
+                v => { s.EditorEventInspector = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Sapphire popups", s.EditorPopupBox,
+                v => { s.EditorPopupBox = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Top tool toolbar", s.EditorTopToolbar,
+                v => { s.EditorTopToolbar = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Right-click tile menu + free angle (right-Alt)", s.EditorTileActions,
+                v => { s.EditorTileActions = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Pitch modifier overlay", s.EditorPitchOverlay,
+                v => { s.EditorPitchOverlay = v; notify?.Invoke(); }, null);
             UIBuilder.Button(content, "Edit editor UI on screen", EditorUiEditor.Open);
             UIBuilder.DangerButton(content, "Reset editor layout to Sapphire defaults", () =>
             {

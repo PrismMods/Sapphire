@@ -30,6 +30,101 @@ namespace Sapphire
         private static bool _cornersFaded;
         private static int _cornerCooldown;
 
+        // Bismuth interop: Bismuth's overlays/key viewer honor Editor Mode through a
+        // static hook (`Bismuth.Settings.ExternalEditorSuppress`, Bismuth ≥1.4.0), set via
+        // reflection so the dependency stays soft — no-op when Bismuth isn't installed.
+        private static System.Reflection.FieldInfo _bismuthSuppress;
+        private static bool _bismuthLookedUp;
+        private static bool _bismuthSent;
+
+        private static void SetBismuthSuppress(bool on)
+        {
+            if (on == _bismuthSent) return;
+            try
+            {
+                if (!_bismuthLookedUp)
+                {
+                    _bismuthLookedUp = true;
+                    foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        if (asm.GetName().Name != "Bismuth") continue;
+                        _bismuthSuppress = asm.GetType("Bismuth.Settings")?.GetField(
+                            "ExternalEditorSuppress",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                        break;
+                    }
+                }
+                if (_bismuthSuppress != null) _bismuthSuppress.SetValue(null, on);
+                _bismuthSent = on;
+            }
+            catch { _bismuthSent = on; }
+        }
+
+        // StopMod: never leave Bismuth's overlays suppressed by a mod that's gone.
+        internal static void ReleaseBismuthSuppress() => SetBismuthSuppress(false);
+
+        // WASD pans the editor camera — only with NO tile selected (the editor uses WASD to place
+        // tiles when one is), nothing being typed, and no ctrl/cmd chords (save/select-all).
+        // True while A means PAN (pan-eligible + A held): a Harmony prefix swallows the
+        // editor's ToggleAuto for the duration (see Patches.PanAutoGuardPatch).
+        internal static bool SuppressAutoToggle
+        {
+            get
+            {
+                try { return PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A); }
+                catch { return false; }
+            }
+        }
+
+        private static bool PanEligible(scnEditor ed)
+        {
+            if (ed == null || !MainClass.EditorSuiteOn) return false;
+            try
+            {
+                if (ed.playMode) return false;
+                if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return false;
+                if (ed.userIsEditingAnInputField) return false;
+                if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                    || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)) return false;
+            }
+            catch { return false; }
+            return true;
+        }
+
+        internal static void TickWasdPan()
+        {
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            if (!PanEligible(ed)) return;
+            try
+            {
+                Vector2 dir = Vector2.zero;
+                if (Input.GetKey(KeyCode.W)) dir.y += 1f;
+                if (Input.GetKey(KeyCode.S)) dir.y -= 1f;
+                if (Input.GetKey(KeyCode.A)) dir.x -= 1f;
+                if (Input.GetKey(KeyCode.D)) dir.x += 1f;
+                if (dir == Vector2.zero) return;
+                var cam = ed.camera;
+                if (cam == null) return;
+                // zoom-proportional speed so panning feels the same at any zoom
+                float speed = cam.orthographicSize * 1.6f;
+                cam.transform.position += (Vector3)(dir.normalized * speed * Time.unscaledDeltaTime);
+            }
+            catch { }
+        }
+
+        // StopMod: un-fade the game's corner HUD (difficulty/speed/no-fail/autoplay/error meter) —
+        // Editor Mode fades them per-frame, so a disable mid-fade would otherwise leave them at
+        // alpha 0 and break the vanilla UI (and other mods) until a scene reload.
+        internal static void DisposeEditorMode()
+        {
+            _cornersFaded = false;
+            _cornerCooldown = 0;
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            try { FadeCorners(ed, false); } catch { }
+        }
+
         internal static void TickEditorMode()
         {
             bool playing = false;
@@ -40,12 +135,13 @@ namespace Sapphire
                 ed = scnEditor.instance;
                 playing = ed != null && ed.playMode;
                 var s = MainClass.Settings;
-                active = ed != null && s != null && s.EditorModeActive;
+                active = ed != null && s != null && MainClass.EditorSuiteOn && s.EditorModeActive;
                 if (playing && !_wasEditorPlay && active)
                     RDC.auto = true;
             }
             catch { }
             _wasEditorPlay = playing;
+            SetBismuthSuppress(active);
 
             if (active)
             {
@@ -72,6 +168,10 @@ namespace Sapphire
                 try { FadeCorner(ed.editorDifficultySelector, fade); } catch { }
                 try { FadeCorner(ed.speedIndicator, fade); } catch { }
                 try { FadeCorner(ed.buttonNoFail, fade); } catch { }
+                // The autoplay icon has no corner container of its own — the game drives
+                // the Image directly, so flip component .enabled (Bismuth's proven way).
+                try { if (ed.autoImage != null) ed.autoImage.enabled = !fade; } catch { }
+                try { if (ed.buttonAuto != null) ed.buttonAuto.enabled = !fade; } catch { }
             }
             // Play-test HUD: difficulty/no-fail/autoplay icon containers + hit error meter.
             try
@@ -119,7 +219,7 @@ namespace Sapphire
             bool want = false;
             try
             {
-                if (s != null && s.EditorTileAngle)
+                if (s != null && MainClass.EditorSuiteOn && s.EditorTileAngle)
                 {
                     ed = scnEditor.instance;
                     want = ed != null && !ed.playMode

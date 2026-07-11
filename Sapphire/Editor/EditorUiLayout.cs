@@ -102,9 +102,18 @@ namespace Sapphire
         {
             if (--_tickCooldown > 0) return;
             _tickCooldown = 60;
+            // Master switch off → put the game chrome back where it belongs.
+            if (!MainClass.EditorSuiteOn)
+            {
+                if (_masterApplied) { _masterApplied = false; try { RestoreAll(); } catch { } }
+                return;
+            }
+            _masterApplied = true;
             if (Ed == null || !HasAnyOverride) return;
             try { Reapply(); } catch (Exception e) { SapphireLog.Debug("EditorUiLayout: " + e.Message); }
         }
+
+        private static bool _masterApplied = true;
 
         internal static void Reapply()
         {

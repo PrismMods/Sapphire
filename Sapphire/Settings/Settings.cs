@@ -123,6 +123,9 @@ namespace Sapphire
         // Furthest progress reached during full (from-0%) attempts; renders in the
         // attempts block and persists per level alongside the attempt counts.
         public bool ShowBestProgress = true;
+        // Master switch for the whole editor suite — the top-right corner button flips it, so
+        // everything can be killed/restored in-game without the Ctrl+E panel.
+        public bool EditorSuiteOn = true;
         // Tweaks tab → Editor: on-screen angle readout for the selected editor tile.
         public bool EditorTileAngle = false;
         // Tweaks tab → Editor: chips listing the selected tile's events (hover = details).
@@ -139,6 +142,17 @@ namespace Sapphire
         public bool EditorPanelRail = false;
         // Editor tab → Editor UI: Sapphire event palette replacing the game's bottom bar.
         public bool EditorEventDock = false;
+        // Editor tab → Editor UI: Sapphire rail replacing the event inspector's tab column.
+        public bool EditorEventInspector = false;
+        // Editor tab → Editor UI: Sapphire messagebox replacing the editor's popups.
+        public bool EditorPopupBox = false;
+        // Editor tab → Editor UI: top tool toolbar (circular-path generator, free angle).
+        public bool EditorTopToolbar = false;
+        // Editor tab → Editor UI: right-click tile menu + free-angle rebind (hold right-Alt
+        // instead of right-mouse, freeing right-click for the menu). Off = vanilla right-drag.
+        public bool EditorTileActions = false;
+        // Editor tab → Editor UI: pitch modifier overlay (bottom-left, above the timeline).
+        public bool EditorPitchOverlay = false;
         // Editor tab: clean-screen charting mode — while in the editor, Sapphire overlays
         // and the key viewer stand down, and the game's difficulty/no-fail/autoplay
         // icons, autoplay text and hit error meter hide (see EditorModeActive / the OR'd
@@ -585,15 +599,22 @@ namespace Sapphire
         public bool UiAccentCustom = false;
         // Soft-red preset out of the box (the "Default" profile = these class defaults);
         // the "Azure" built-in profile restores the classic periwinkle.
-        public float UiAccentR = 0.886f;
-        public float UiAccentG = 0.404f;
-        public float UiAccentB = 0.427f;
+        public float UiAccentR = 0.231f;   // sapphire blue (the mod's namesake)
+        public float UiAccentG = 0.451f;
+        public float UiAccentB = 0.949f;
         // Panel dimensions are saved across sessions; position is not (always re-centered).
         public float UiPanelWidth = 840f;
         public float UiPanelHeight = 540f;
 
         public void EnsureDefaults()
         {
+            // July 11: Sapphire's accent is blue now — migrate settings still on the old
+            // Bismuth-red default.
+            if (System.Math.Abs(UiAccentR - 0.886f) < 0.005f
+                && System.Math.Abs(UiAccentG - 0.404f) < 0.005f
+                && System.Math.Abs(UiAccentB - 0.427f) < 0.005f)
+            { UiAccentR = 0.231f; UiAccentG = 0.451f; UiAccentB = 0.949f; }
+
             if (ProgressGradient == null || ProgressGradient.Stops.Count == 0)
                 ProgressGradient = MakeProgressDefault();
             if (AccGradient == null || AccGradient.Stops.Count == 0)

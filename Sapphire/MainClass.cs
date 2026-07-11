@@ -14,6 +14,8 @@ namespace Sapphire
     {
         public static bool IsEnabled { get; private set; }
         public static Settings Settings { get; private set; }
+        // Editor-suite master switch (the corner button) — every editor feature gates on this.
+        internal static bool EditorSuiteOn => Settings == null || Settings.EditorSuiteOn;
         public static UnityModManager.ModEntry.ModLogger Logger { get; private set; }
         public static string ModPath { get; private set; }
 
@@ -123,14 +125,32 @@ namespace Sapphire
 
         private class SapphireTicker : MonoBehaviour
         {
+            private int _esFrame;
+
             private void Update()
             {
+                // Keep exactly one EventSystem alive (a stray DDOL one breaks carets/typing).
+                if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); }
+
                 Tweaks.TickTileAngle();
                 Tweaks.TickEditorMode();
+                Tweaks.TickWasdPan();
                 EditorEvents.Tick();
                 EditorSkin.Tick();
                 EditorUiLayout.Tick();
                 EditorChrome.Tick();
+                EditorInspector.Tick();
+                EditorPopups.Tick();
+                EditorToolbar.Tick();
+                EditorTileMenu.Tick();
+                EditorCopyPanel.Tick();
+                EditorCameraPath.Tick();
+                EditorPitch.Tick();
+                EditorLevelMenu.Tick();
+                EditorGameSettings.Tick();
+                EditorVfxPreview.Tick();
+                EditorHelp.Tick();
+                EditorMasterSwitch.Tick();
             }
         }
 
@@ -172,11 +192,25 @@ namespace Sapphire
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _deferredApplyPending = false;
+            Tweaks.ReleaseBismuthSuppress();
+            Tweaks.DisposeEditorMode();
             Tweaks.DisposeTileAngle();
             EditorEvents.Dispose();
             EditorSkin.Dispose();
             EditorUiLayout.RestoreAll();
             EditorChrome.Dispose();
+            EditorInspector.Dispose();
+            EditorPopups.Dispose();
+            EditorToolbar.Dispose();
+            EditorTileMenu.Dispose();
+            EditorCopyPanel.Dispose();
+            EditorCameraPath.Dispose();
+            EditorPitch.Dispose();
+            EditorLevelMenu.Dispose();
+            EditorGameSettings.Dispose();
+            EditorVfxPreview.Dispose();
+            EditorHelp.Dispose();
+            EditorMasterSwitch.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
             if (_tickerGo != null)

@@ -85,8 +85,8 @@
         <Compile Include="UI\Theme.cs" />
         <Compile Include="UI\DragHandle.cs" />
         <Compile Include="UI\ResizeHandle.cs" />
-        <Compile Include="UI\EditorHandles.cs" />
-        <Compile Include="UI\EditorUiEditor.cs" />
+        <Compile Include="Editor\EditorHandles.cs" />
+        <Compile Include="Editor\EditorUiEditor.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\Pages\PageEditor.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
@@ -95,10 +95,22 @@
         <Compile Include="Util\TmpShadow.cs" />
         <Compile Include="Util\KeyListener.cs" />
         <Compile Include="Util\Tweaks.cs" />
-        <Compile Include="Util\EditorEvents.cs" />
-        <Compile Include="Util\EditorSkin.cs" />
-        <Compile Include="Util\EditorChrome.cs" />
-        <Compile Include="Util\EditorUiLayout.cs" />
+        <Compile Include="Editor\EditorEvents.cs" />
+        <Compile Include="Editor\EditorSkin.cs" />
+        <Compile Include="Editor\EditorChrome.cs" />
+        <Compile Include="Editor\EditorInspector.cs" />
+        <Compile Include="Editor\EditorPopups.cs" />
+        <Compile Include="Editor\EditorToolbar.cs" />
+        <Compile Include="Editor\EditorTileMenu.cs" />
+        <Compile Include="Editor\EditorCopyPanel.cs" />
+        <Compile Include="Editor\EditorCameraPath.cs" />
+        <Compile Include="Editor\EditorMasterSwitch.cs" />
+        <Compile Include="Editor\EditorGameSettings.cs" />
+        <Compile Include="Editor\EditorVfxPreview.cs" />
+        <Compile Include="Editor\EditorHelp.cs" />
+        <Compile Include="Editor\EditorPitch.cs" />
+        <Compile Include="Editor\EditorLevelMenu.cs" />
+        <Compile Include="Editor\EditorUiLayout.cs" />
         <Compile Include="Patches\Patches.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

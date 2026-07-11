@@ -92,7 +92,7 @@ namespace Sapphire.UI
 
     internal static class UICore
     {
-        private const string ToggleHint = "Ctrl + B";
+        private const string ToggleHint = "Ctrl + E";
         private static readonly Vector2 ReferenceResolution = new Vector2(1920, 1080);
 
         private static GameObject _canvasGo;
@@ -246,13 +246,38 @@ namespace Sapphire.UI
 
             _canvasGo.AddComponent<GraphicRaycaster>();
 
-            // Sapphire runs alongside UMM's own EventSystem. Only add one if none exists.
+            // Sapphire runs alongside the game's own EventSystem. Only add one if none exists;
+            // parent it OUTSIDE our DDOL canvas so it isn't force-kept once the game supplies one.
             if (UnityEngine.Object.FindAnyObjectByType<EventSystem>() == null)
             {
                 var esGo = new GameObject("SapphireEventSystem");
-                esGo.transform.SetParent(_canvasGo.transform, false);
+                UnityEngine.Object.DontDestroyOnLoad(esGo);
                 esGo.AddComponent<EventSystem>();
                 esGo.AddComponent<StandaloneInputModule>();
+            }
+        }
+
+        // Two EventSystems in one scene (ours, DDOL, + the game's editor one) makes Unity flake
+        // between them — dead TMP carets, lost typing. When the game provides one, drop ours.
+        internal static void DedupEventSystem()
+        {
+            EventSystem[] all;
+            try { all = UnityEngine.Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None); }
+            catch { return; }
+            if (all == null || all.Length < 2) return;
+
+            bool hasGameOwned = false;
+            foreach (var e in all)
+                if (e != null && e.gameObject.name != "SapphireEventSystem") { hasGameOwned = true; break; }
+            if (!hasGameOwned) return;
+
+            foreach (var e in all)
+            {
+                if (e != null && e.gameObject.name == "SapphireEventSystem")
+                {
+                    SapphireLog.Log("Dropping redundant SapphireEventSystem (game supplies one)");
+                    UnityEngine.Object.Destroy(e.gameObject);
+                }
             }
         }
 

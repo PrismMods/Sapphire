@@ -36,6 +36,8 @@ namespace Sapphire
         private static int _railSig;
         private static int _railCooldown;
         private static int _railSelected = -2;
+        private static Canvas _railGameCanvas;
+        private static readonly Vector3[] _railCorners = new Vector3[4];
 
         // ── event dock state ──
         private static GameObject _dockGo;
@@ -45,6 +47,10 @@ namespace Sapphire
         private static int _dockSelected = -2;
         private static readonly List<RoundedRectGraphic> _dockCatBgs = new List<RoundedRectGraphic>();
         private static readonly List<Color> _dockCatColors = new List<Color>();
+        // Event cells become persistent tools (like the pseudo tool) instead of one-shot inserts.
+        private static readonly List<RoundedRectGraphic> _dockEvtBgs = new List<RoundedRectGraphic>();
+        private static readonly List<int> _dockEvtTypes = new List<int>();
+        private static int _dockEvtSelected = int.MinValue;
 
         internal static void Tick()
         {
@@ -55,9 +61,10 @@ namespace Sapphire
             {
                 ed = scnEditor.instance;
                 bool inEd = ed != null && !ed.playMode;
-                chipWant = inEd && s != null && s.EditorFileChip;
-                railWant = inEd && s != null && s.EditorPanelRail;
-                dockWant = inEd && s != null && s.EditorEventDock;
+                bool master = MainClass.EditorSuiteOn;
+                chipWant = inEd && master && s != null && s.EditorFileChip;
+                railWant = inEd && master && s != null && s.EditorPanelRail;
+                dockWant = inEd && master && s != null && s.EditorEventDock;
             }
             catch { }
             if (!chipWant && !railWant && !dockWant)
@@ -79,7 +86,11 @@ namespace Sapphire
             if (chipWant)
             {
                 if (_chipGo != null && !_chipGo.activeSelf) _chipGo.SetActive(true);
-                FadeGameBar(ed); // unthrottled: cheap once faded, prevents re-show flashes
+                // The game's preferences panel hangs off the faded top bar — un-fade while it's
+                // open (it was opening invisibly at alpha 0 = "settings button does nothing").
+                if (PrefsOpen(ed)) RestoreBar();
+                else FadeGameBar(ed); // unthrottled: cheap once faded, prevents re-show flashes
+                CloseGhostFileActions(ed);
                 if (--_cooldown <= 0)
                 {
                     _cooldown = 15;
@@ -92,7 +103,10 @@ namespace Sapphire
                 RestoreBar();
             }
 
-            if (railWant) TickRail(ed);
+            // The settings panel now lives in the Level-settings popup (EditorLevelMenu hides it in
+            // place), so its edge rail has nothing to ride — suppress it and let the popup show the
+            // game's own tabs.
+            if (railWant && !EditorLevelMenu.ManagesPanel) TickRail(ed);
             else
             {
                 if (_railGo != null && _railGo.activeSelf) _railGo.SetActive(false);
@@ -115,12 +129,38 @@ namespace Sapphire
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _canvasRect = null; _chipGo = null; _chipRect = null;
             _chipLabel = null; _dot = null; _menuGo = null; _railGo = null; _dockGo = null;
-            _railBgs.Clear(); _railSig = 0; _railSelected = -2; _dockSig = 0;
+            _railBgs.Clear(); _railSig = 0; _railSelected = -2; _railGameCanvas = null; _dockSig = 0;
             _dockCatBgs.Clear(); _dockCatColors.Clear(); _dockSelected = -2;
+            _dockEvtBgs.Clear(); _dockEvtTypes.Clear(); _dockEvtSelected = int.MinValue;
+            try { EditorToolbar.ClearEventTool(); } catch { }
             _shownName = null; _shownUnsaved = true;
         }
 
         // ── game bar fade ───────────────────────────────────────────────────
+
+        // The game's ESC toggles its file-actions panel, which is faded to nothing while the
+        // chip replaces it — an ESC press would open INVISIBLE UI (and eat the next ESC to
+        // close it). Shut it the moment it shows.
+        private static System.Reflection.FieldInfo _showingFileActionsFi;
+
+        private static void CloseGhostFileActions(scnEditor ed)
+        {
+            try
+            {
+                if (_showingFileActionsFi == null)
+                    _showingFileActionsFi = typeof(scnEditor).GetField("showingFileActions",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (_showingFileActionsFi != null && (bool)_showingFileActionsFi.GetValue(ed))
+                    ed.ShowFileActionsPanel(false);
+            }
+            catch { }
+        }
+
+        private static bool PrefsOpen(scnEditor ed)
+        {
+            try { return ed.prefsContainer != null && ed.prefsContainer.gameObject.activeInHierarchy; }
+            catch { return false; }
+        }
 
         private static void FadeGameBar(scnEditor ed)
         {
@@ -206,6 +246,10 @@ namespace Sapphire
             catch { }
             // Fade before the cooldown gate so the game strip can't flash on re-shows.
             if (tabsGo != null) FadeTabs(tabsGo);
+            // Track every frame: the strip hangs off the settings panel's edge and slides
+            // with it, so the rail rides the panel open/closed instead of covering it.
+            if (_railGo != null && _railGo.activeSelf && tabsGo != null)
+                TrackRailPosition((RectTransform)tabsGo.transform);
             if (--_railCooldown > 0) return;
             _railCooldown = 10;
             if (tabsGo == null)
@@ -253,10 +297,11 @@ namespace Sapphire
             _railGo = new GameObject("PanelRail", typeof(RectTransform));
             _railGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_railGo.transform;
-            r.anchorMin = r.anchorMax = new Vector2(0f, 0.5f);
-            r.pivot = new Vector2(0f, 0.5f);
-            r.anchoredPosition = new Vector2(10f, 0f);
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0f, 1f); // top-left pinned to the game strip's top-left
             r.sizeDelta = new Vector2(btnSize + pad * 2f, tabRoots.Count * (btnSize + gap) - gap + pad * 2f);
+            try { _railGameCanvas = tabRoots[0].GetComponentInParent<Canvas>()?.rootCanvas; }
+            catch { _railGameCanvas = null; }
             var bg = _railGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 12f;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.9f);
@@ -363,13 +408,14 @@ namespace Sapphire
         /* Simulate a real pointer click instead of onClick.Invoke: several game controls
            (the event-category tabs, notably) do their work in pointer handlers with an
            empty persistent onClick, and this path drives Buttons identically anyway. */
-        private static void ProxyClick(GameObject go)
+        internal static void ProxyClick(GameObject go,
+            PointerEventData.InputButton button = PointerEventData.InputButton.Left)
         {
             try
             {
                 var ev = new PointerEventData(EventSystem.current)
                 {
-                    button = PointerEventData.InputButton.Left
+                    button = button
                 };
                 ExecuteEvents.Execute(go, ev, ExecuteEvents.pointerDownHandler);
                 ExecuteEvents.Execute(go, ev, ExecuteEvents.pointerUpHandler);
@@ -404,6 +450,24 @@ namespace Sapphire
             }
         }
 
+        // Pin the rail's top-left to the (faded) game strip's top-left, converting through
+        // the game's canvas camera. Per frame: this is what makes it ride the slide tween.
+        private static void TrackRailPosition(RectTransform tabsRt)
+        {
+            try
+            {
+                tabsRt.GetWorldCorners(_railCorners);
+                Camera cam = null;
+                if (_railGameCanvas != null && _railGameCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                    cam = _railGameCanvas.worldCamera;
+                Vector2 screen = RectTransformUtility.WorldToScreenPoint(cam, _railCorners[1]);
+                Vector2 local;
+                if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRect, screen, null, out local))
+                    ((RectTransform)_railGo.transform).anchoredPosition = local;
+            }
+            catch { }
+        }
+
         private static void FadeTabs(GameObject tabsGo)
         {
             try
@@ -436,6 +500,9 @@ namespace Sapphire
             try { bar = ed.levelEventsBar; } catch { }
             // Fade before the cooldown gate so the game bar can't flash on re-shows.
             if (bar != null) FadeEventsBar(bar.gameObject);
+            // Keyboard flow runs EVERY frame (GetKeyDown is missed behind the rebuild cooldown):
+            // digits pick the nth event of the current category; Enter stamps the selected tile.
+            TickDockKeys(ed);
             if (--_dockCooldown > 0) return;
             _dockCooldown = 10;
             // No selection → the game hides its palette; match it.
@@ -491,11 +558,49 @@ namespace Sapphire
                 }
             }
 
-            // Stack just above the timeline strip (or hug the bottom edge without it).
+            // Selected event TOOL: fill the picked event cell (mirrors EditorToolbar's active tool).
+            int evtSel = -1;
+            try { evtSel = EditorToolbar.EventTool; } catch { }
+            if (evtSel != _dockEvtSelected)
+            {
+                _dockEvtSelected = evtSel;
+                for (int i = 0; i < _dockEvtBgs.Count; i++)
+                {
+                    if (_dockEvtBgs[i] == null) continue;
+                    bool on = _dockEvtTypes[i] == evtSel && evtSel >= 0;
+                    _dockEvtBgs[i].color = on
+                        ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.5f)
+                        : new Color(1f, 1f, 1f, 0.05f);
+                }
+            }
+
+            // Photoshop-style: left edge, top-aligned below the file chip row.
             var r = (RectTransform)_dockGo.transform;
-            float y = 10f;
-            try { float top = EditorEvents.BottomStripTop; if (top > 0f) y = top + 8f; } catch { }
-            if (!Mathf.Approximately(r.anchoredPosition.y, y)) r.anchoredPosition = new Vector2(0f, y);
+            var pos = new Vector2(10f, -56f);
+            if (r.anchoredPosition != pos) r.anchoredPosition = pos;
+        }
+
+        private static void TickDockKeys(scnEditor ed)
+        {
+            try
+            {
+                if (EditorToolbar.PseudoToolOn) return;         // pseudo owns the digits
+                if (ed.userIsEditingAnInputField) return;
+                if (ed.selectedFloors == null || ed.selectedFloors.Count == 0) return;
+            }
+            catch { return; }
+            for (int d = 0; d < 9 && d < _dockEvtTypes.Count; d++)
+            {
+                if (!Input.GetKeyDown(KeyCode.Alpha1 + d)) continue;
+                int type = _dockEvtTypes[d];
+                if (type < 0) continue;
+                string name;
+                try { name = ((ADOFAI.LevelEventType)type).ToString(); } catch { name = "event " + type; }
+                EditorToolbar.SelectEventTool(type, name);
+                break;
+            }
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                EditorToolbar.StampOnSelectedTile();
         }
 
         private static List<Button> ActiveButtons(Transform root)
@@ -512,20 +617,23 @@ namespace Sapphire
             if (_dockGo != null) UnityEngine.Object.Destroy(_dockGo);
             _dockCatBgs.Clear();
             _dockCatColors.Clear();
+            _dockEvtBgs.Clear();
+            _dockEvtTypes.Clear();
             _dockSelected = -2;
+            _dockEvtSelected = int.MinValue;
 
-            const float catSize = 26f, catGap = 5f, evtSize = 36f, evtGap = 6f, pad = 8f;
-            float catRowW = cats.Count * (catSize + catGap) - catGap;
-            float evtRowW = evts != null && evts.Count > 0 ? evts.Count * (evtSize + evtGap) - evtGap : 0f;
-            float width = Mathf.Max(catRowW, evtRowW) + pad * 2f;
-            bool hasEvents = evtRowW > 0f;
-            float height = pad * 2f + catSize + (hasEvents ? evtSize + 6f : 0f);
+            const float catSize = 34f, catGap = 6f, evtSize = 34f, evtGap = 6f, pad = 8f, colGap = 8f;
+            int nEvt = evts != null ? evts.Count : 0;
+            float catColH = cats.Count > 0 ? cats.Count * (catSize + catGap) - catGap : 0f;
+            float evtColH = nEvt > 0 ? nEvt * (evtSize + evtGap) - evtGap : 0f;
+            float height = Mathf.Max(catColH, evtColH) + pad * 2f;
+            float width = pad * 2f + catSize + (nEvt > 0 ? colGap + evtSize : 0f);
 
             _dockGo = new GameObject("EventDock", typeof(RectTransform));
             _dockGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_dockGo.transform;
-            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0f);
-            r.pivot = new Vector2(0.5f, 0f);
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f); // left edge, TOP-aligned (Adobe palette)
+            r.pivot = new Vector2(0f, 1f);
             r.sizeDelta = new Vector2(width, height);
             var bg = _dockGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 12f;
@@ -534,30 +642,56 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
             bg.raycastTarget = true; // toolbar: swallow clicks under it
 
-            // Category chips along the top, tinted by the timeline's category palette
-            // (the game's order matches the LevelEventCategory enum).
+            // Category column down the left, tinted by the timeline's category palette
+            // (the game's order matches the LevelEventCategory enum); its column is centred
+            // against the taller of the two columns.
+            float catTop = -pad; // top-aligned (Adobe palette)
             for (int i = 0; i < cats.Count; i++)
             {
                 var cat = EditorEvents.CategoryColor((ADOFAI.LevelEventCategory)i);
                 var bg2 = MakeDockCell(cats[i], catSize,
-                    new Vector2(-catRowW * 0.5f + i * (catSize + catGap), -pad),
+                    new Vector2(pad, catTop - i * (catSize + catGap)),
                     new Color(cat.r, cat.g, cat.b, 0.85f));
                 _dockCatBgs.Add(bg2);
                 _dockCatColors.Add(cat);
             }
-            if (evts != null)
-                for (int i = 0; i < evts.Count; i++)
-                    MakeDockCell(evts[i], evtSize,
-                        new Vector2(-evtRowW * 0.5f + i * (evtSize + evtGap), -pad - catSize - 6f),
-                        new Color(1f, 1f, 1f, 0.1f));
+            // Current category's events in a column to the right of the categories. Each event is a
+            // persistent TOOL (pick it, then click tiles to keep inserting) rather than a one-shot.
+            scnEditor edNow = null; try { edNow = scnEditor.instance; } catch { }
+            float evtTop = -pad; // top-aligned
+            float evtX = pad + catSize + colGap;
+            for (int i = 0; i < nEvt; i++)
+            {
+                int type = ResolveEventType(edNow, evts[i]);
+                var evtBg = MakeDockCell(evts[i], evtSize,
+                    new Vector2(evtX, evtTop - i * (evtSize + evtGap)),
+                    new Color(1f, 1f, 1f, 0.1f), type);
+                _dockEvtBgs.Add(evtBg);
+                _dockEvtTypes.Add(type);
+            }
         }
 
-        private static RoundedRectGraphic MakeDockCell(Button gameBtn, float size, Vector2 topLeft, Color border)
+        // Map a dock event cell (a game Button) back to its LevelEventType via the game's own
+        // eventButtons registry (LevelEventButton.button/.type are public). −1 if unknown.
+        private static int ResolveEventType(scnEditor ed, Button gameBtn)
+        {
+            try
+            {
+                if (ed == null || ed.eventButtons == null) return -1;
+                foreach (var kv in ed.eventButtons)
+                    foreach (var leb in kv.Value)
+                        if (leb != null && leb.button == gameBtn) return (int)leb.type;
+            }
+            catch { }
+            return -1;
+        }
+
+        private static RoundedRectGraphic MakeDockCell(Button gameBtn, float size, Vector2 topLeft, Color border, int eventType = -2)
         {
             var cellGo = new GameObject("Cell", typeof(RectTransform));
             cellGo.transform.SetParent(_dockGo.transform, false);
             var cr = (RectTransform)cellGo.transform;
-            cr.anchorMin = cr.anchorMax = new Vector2(0.5f, 1f);
+            cr.anchorMin = cr.anchorMax = new Vector2(0f, 1f); // panel top-left origin
             cr.pivot = new Vector2(0f, 1f);
             cr.anchoredPosition = topLeft;
             cr.sizeDelta = new Vector2(size, size);
@@ -583,7 +717,17 @@ namespace Sapphire
                 img.raycastTarget = false;
             }
 
-            UI.ClickHandler.Attach(cellGo, () => ProxyClick(gameBtn.gameObject));
+            if (eventType >= 0)
+            {
+                int t = eventType;
+                string name = ((ADOFAI.LevelEventType)t).ToString();
+                UI.ClickHandler.Attach(cellGo, () => EditorToolbar.SelectEventTool(t, name));
+            }
+            else
+            {
+                // Category chips (and events whose type couldn't be resolved) keep the one-shot proxy.
+                UI.ClickHandler.Attach(cellGo, () => ProxyClick(gameBtn.gameObject));
+            }
             return cellBg;
         }
 
@@ -651,7 +795,8 @@ namespace Sapphire
             }
             catch { }
 
-            // (game button, fallback label)
+            // (game button, fallback label) — settings and exit live as chips beside the
+            // file chip instead of menu rows.
             var entries = new List<KeyValuePair<Button, string>>
             {
                 new KeyValuePair<Button, string>(ed.buttonNew,        "New Level"),
@@ -660,9 +805,7 @@ namespace Sapphire
                 new KeyValuePair<Button, string>(ed.buttonOpenURL,    "Open from URL…"),
                 new KeyValuePair<Button, string>(ed.buttonSave,       "Save"),
                 new KeyValuePair<Button, string>(ed.buttonSaveAs,     "Save As…"),
-                new KeyValuePair<Button, string>(ed.buttonPreferences,"Editor Settings"),
                 new KeyValuePair<Button, string>(ed.buttonHelp,       "Help"),
-                new KeyValuePair<Button, string>(ed.buttonExit,       "Exit Editor"),
             };
 
             const float rowH = 32f, padY = 8f, width = 280f;
@@ -815,6 +958,190 @@ namespace Sapphire
             chev.alignment = TextAlignmentOptions.Center;
             chev.raycastTarget = false;
             chev.text = "›";
+
+            /* Settings + leave chips beside the file chip. Children of the chip anchored
+               to its RIGHT edge, so they follow filename width changes and hide with it.
+               Settings drives the public ShowPreferences() (the game wires
+               buttonPreferences to it, but the button reference can be flaky — the menu
+               row used to vanish); leave proxies the game's exit button. */
+            var settingsGo = MakeSideChip("SettingsChip", 6f);
+            for (int i = 0; i < 3; i++) // no ⚙ in the user fonts — procedural slider bars
+            {
+                var barGo = new GameObject("Bar", typeof(RectTransform));
+                barGo.transform.SetParent(settingsGo.transform, false);
+                var br = (RectTransform)barGo.transform;
+                br.anchorMin = br.anchorMax = new Vector2(0.5f, 0.5f);
+                br.pivot = new Vector2(0.5f, 0.5f);
+                br.anchoredPosition = new Vector2(i == 1 ? 2f : -1f, 5f - i * 5f);
+                br.sizeDelta = new Vector2(i == 1 ? 10f : 14f, 2.5f);
+                var bar = barGo.AddComponent<RoundedRectGraphic>();
+                bar.Radius = 1.25f;
+                bar.color = new Color(0.8f, 0.8f, 0.84f, 1f);
+                bar.raycastTarget = false;
+            }
+            UI.ClickHandler.Attach(settingsGo, () =>
+            {
+                CloseMenu();
+                try
+                {
+                    var ed = scnEditor.instance;
+                    if (ed == null) return;
+                    if (ed.buttonPreferences != null) ed.buttonPreferences.onClick.Invoke();
+                    else ed.ShowPreferences();
+                }
+                catch (Exception ex) { SapphireLog.Log("EditorChrome: settings failed: " + ex.Message); }
+            });
+
+            // Level settings — toggles the game's song/level settings inspector
+            // (scnEditor.buttonSettings), reskinned by the dark theme + panel rail.
+            var levelSetGo = MakeSideChip("LevelSettingsChip", 42f);
+            var docGo = new GameObject("Doc", typeof(RectTransform));
+            docGo.transform.SetParent(levelSetGo.transform, false);
+            var docR = (RectTransform)docGo.transform;
+            docR.anchorMin = docR.anchorMax = new Vector2(0.5f, 0.5f);
+            docR.pivot = new Vector2(0.5f, 0.5f);
+            docR.sizeDelta = new Vector2(12f, 15f);
+            var doc = docGo.AddComponent<RoundedRectGraphic>();
+            doc.Radius = 2.5f; // card outline = the settings panel
+            doc.color = new Color(0f, 0f, 0f, 0f);
+            doc.BorderWidth = 1.6f;
+            doc.BorderColor = new Color(0.8f, 0.8f, 0.84f, 1f);
+            doc.raycastTarget = false;
+            for (int i = 0; i < 2; i++) // two title lines inside the card
+            {
+                var lineGo = new GameObject("Line", typeof(RectTransform));
+                lineGo.transform.SetParent(levelSetGo.transform, false);
+                var lnR = (RectTransform)lineGo.transform;
+                lnR.anchorMin = lnR.anchorMax = new Vector2(0.5f, 0.5f);
+                lnR.pivot = new Vector2(0.5f, 0.5f);
+                lnR.anchoredPosition = new Vector2(0f, 2f - i * 4f);
+                lnR.sizeDelta = new Vector2(6f, 1.6f);
+                var ln = lineGo.AddComponent<RoundedRectGraphic>();
+                ln.Radius = 0.8f;
+                ln.color = new Color(0.8f, 0.8f, 0.84f, 1f);
+                ln.raycastTarget = false;
+            }
+            UI.ClickHandler.Attach(levelSetGo, () =>
+            {
+                CloseMenu();
+                try { EditorLevelMenu.Toggle(); } // hosts the game panel in a Sapphire popup
+                catch (Exception ex) { SapphireLog.Log("EditorChrome: level settings failed: " + ex.Message); }
+            });
+
+            // Game settings (the shared SettingsMenu the pause menu drives; public Show()).
+            var gameSetGo = MakeSideChip("GameSettingsChip", 78f);
+            // Procedural gear (no ⚙ in the user fonts): a ring with 8 rim teeth.
+            var iconCol = new Color(0.8f, 0.8f, 0.84f, 1f);
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * 45f * Mathf.Deg2Rad;
+                var toothGo = new GameObject("Tooth", typeof(RectTransform));
+                toothGo.transform.SetParent(gameSetGo.transform, false);
+                var tr = (RectTransform)toothGo.transform;
+                tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 0.5f);
+                tr.pivot = new Vector2(0.5f, 0.5f);
+                tr.anchoredPosition = new Vector2(Mathf.Sin(a) * 6.5f, Mathf.Cos(a) * 6.5f);
+                tr.sizeDelta = new Vector2(3f, 4.5f);
+                tr.localRotation = Quaternion.Euler(0f, 0f, -i * 45f);
+                var tooth = toothGo.AddComponent<RoundedRectGraphic>();
+                tooth.Radius = 1.2f;
+                tooth.color = iconCol;
+                tooth.raycastTarget = false;
+            }
+            var ringGo = new GameObject("Ring", typeof(RectTransform));
+            ringGo.transform.SetParent(gameSetGo.transform, false);
+            var rr = (RectTransform)ringGo.transform;
+            rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 0.5f);
+            rr.pivot = new Vector2(0.5f, 0.5f);
+            rr.anchoredPosition = Vector2.zero;
+            rr.sizeDelta = new Vector2(11f, 11f);
+            var ring = ringGo.AddComponent<RoundedRectGraphic>();
+            ring.Radius = 5.5f;
+            ring.color = new Color(0f, 0f, 0f, 0f);
+            ring.BorderWidth = 2.4f;
+            ring.BorderColor = iconCol;
+            ring.raycastTarget = false;
+            UI.ClickHandler.Attach(gameSetGo, () =>
+            {
+                CloseMenu();
+                // The scene's SettingsMenu lives under the inactive PauseMenu(Clone) and can't
+                // show there — EditorGameSettings initializes it and hosts it in a popup.
+                try { EditorGameSettings.Toggle(); }
+                catch (Exception ex) { SapphireLog.Log("EditorChrome: game settings failed: " + ex.Message); }
+            });
+
+            // Help — interactive help mode (hover-highlight + click-for-docs).
+            var helpGo = MakeSideChip("HelpChip", 150f);
+            var hGlyphGo = new GameObject("Glyph", typeof(RectTransform));
+            hGlyphGo.transform.SetParent(helpGo.transform, false);
+            var hgr = (RectTransform)hGlyphGo.transform;
+            hgr.anchorMin = Vector2.zero; hgr.anchorMax = Vector2.one;
+            hgr.offsetMin = Vector2.zero; hgr.offsetMax = Vector2.zero;
+            var hGlyph = hGlyphGo.AddComponent<TextMeshProUGUI>();
+            hGlyph.font = UI.Theme.TmpFont;
+            hGlyph.fontSize = 15f;
+            hGlyph.color = new Color(0.8f, 0.8f, 0.84f, 1f);
+            hGlyph.alignment = TMPro.TextAlignmentOptions.Center;
+            hGlyph.raycastTarget = false;
+            hGlyph.text = "?";
+            UI.ClickHandler.Attach(helpGo, () => { CloseMenu(); EditorHelp.Toggle(); });
+
+            var leaveGo = MakeSideChip("LeaveChip", 114f);
+            var xGo = new GameObject("Glyph", typeof(RectTransform));
+            xGo.transform.SetParent(leaveGo.transform, false);
+            var xr = (RectTransform)xGo.transform;
+            xr.anchorMin = Vector2.zero; xr.anchorMax = Vector2.one;
+            xr.offsetMin = Vector2.zero; xr.offsetMax = Vector2.zero;
+            var x = xGo.AddComponent<TextMeshProUGUI>();
+            x.font = UI.Theme.TmpFont;
+            x.fontSize = 16;
+            x.color = new Color(0.85f, 0.6f, 0.62f, 1f);
+            x.alignment = TextAlignmentOptions.Center;
+            x.raycastTarget = false;
+            x.text = "×";
+            UI.ClickHandler.Attach(leaveGo, () =>
+            {
+                CloseMenu();
+                try
+                {
+                    var ed = scnEditor.instance;
+                    if (ed != null && ed.buttonExit != null) ed.buttonExit.onClick.Invoke();
+                }
+                catch (Exception ex) { SapphireLog.Log("EditorChrome: exit failed: " + ex.Message); }
+            });
+        }
+
+        private static GameObject MakeSideChip(string name, float xOffset)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(_chipGo.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.anchoredPosition = new Vector2(xOffset, 0f);
+            r.sizeDelta = new Vector2(30f, 30f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 9f;
+            bg.color = new Color(0.08f, 0.08f, 0.1f, 0.85f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            bg.raycastTarget = true;
+            var hover = go.AddComponent<ChipHover>();
+            hover.Bg = bg;
+            hover.Base = bg.color;
+            return go;
+        }
+
+        // MenuRowHover resets to transparent on exit (menu rows have no fill); chips need
+        // their dark base back instead.
+        private class ChipHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+        {
+            public RoundedRectGraphic Bg;
+            public Color Base;
+            public void OnPointerEnter(PointerEventData e)
+            { if (Bg != null) Bg.color = new Color(0.17f, 0.17f, 0.2f, 0.95f); }
+            public void OnPointerExit(PointerEventData e)
+            { if (Bg != null) Bg.color = Base; }
         }
     }
 }
