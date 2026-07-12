@@ -1020,6 +1020,16 @@ namespace Sapphire
         internal static bool PseudoToolOn => _pseudoTool || _zipTool;   // their digits set the key count
         internal static int InspectorVersion => _inspVersion;
 
+        // The presets menu reads/loads the capture buffer directly.
+        internal static System.Collections.Generic.List<ADOFAI.LevelEvent> InspectorBuffer => _inspEvents;
+
+        internal static void LoadInspectorBuffer(System.Collections.Generic.List<ADOFAI.LevelEvent> evs)
+        {
+            _inspEvents.Clear();
+            if (evs != null) foreach (var e in evs) if (e != null) _inspEvents.Add(e);
+            _inspVersion++;
+        }
+
         internal static System.Collections.Generic.List<int> InspectorTypes()
         {
             var set = new System.Collections.Generic.SortedSet<int>();

@@ -109,6 +109,10 @@
         <Compile Include="Editor\EditorGameSettings.cs" />
         <Compile Include="Editor\EditorVfxPreview.cs" />
         <Compile Include="Editor\EditorHelp.cs" />
+        <Compile Include="Editor\EditorPresets.cs" />
+        <Compile Include="Editor\EditorEasePicker.cs" />
+        <Compile Include="Editor\EditorBezier.cs" />
+        <Compile Include="Editor\EditorGraph.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />

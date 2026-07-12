@@ -69,6 +69,10 @@ namespace Sapphire.UI
             input.customCaretColor = true;
             input.caretColor = Theme.Text;
             input.selectionColor = new Color(Theme.ToggleOn.r, Theme.ToggleOn.g, Theme.ToggleOn.b, 0.45f);
+            // AddComponent runs OnEnable BEFORE textComponent is assigned, so on an active
+            // canvas the caret object is never created — a re-enable builds it properly.
+            input.enabled = false;
+            input.enabled = true;
             return input;
         }
 

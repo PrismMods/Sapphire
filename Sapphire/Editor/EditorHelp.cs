@@ -389,9 +389,9 @@ namespace Sapphire
 "<b>기능</b>\nSapphire 도구 모음과 서브메뉴입니다. 개별 도구 아이콘을 클릭하면 상세 설명이 표시됩니다.\n\n<b>단축키</b>\n타일 미선택 시 숫자 1–7로 도구 선택.");
 
             Add(d, "SapphireEditorEvents", "Timeline",
-"<b>What it does</b>\nEvent timeline on real song time: markers by category, playhead, zoom, transport (play/rewind · clock · BPM), mode cluster (EDITOR / difficulty / NO FAIL / AUTO).\n\n<b>How to use</b>\nClick a marker — jumps to its tile and opens that exact event. Click empty strip — moves the playhead (drag to scrub). Wheel pans when zoomed.\n\n<b>Keys</b>\nThe centre-bottom arrow folds/expands the strip.",
+"<b>What it does</b>\nEvent timeline on real song time: markers by category, playhead, zoom, transport (play/rewind · clock · BPM), mode cluster (EDITOR / difficulty / NO FAIL / AUTO).\n\n<b>How to use</b>\nClick a marker — jumps to its tile and opens that exact event. Click empty strip — moves the playhead (drag to scrub). Wheel pans when zoomed.\n\n<b>Modes</b>\nThe mode button under the zoom controls switches between NORMAL / CAM / DECO / FILTER — the CDF workspaces. In help mode, click that button for details; the CAM workspace guide covers keyframe editing.\n\n<b>Keys</b>\nThe centre-bottom arrow folds/expands the strip.",
 "타임라인",
-"<b>기능</b>\n실제 곡 시간 기준의 이벤트 타임라인: 카테고리별 마커, 재생 헤드, 줌, 트랜스포트(재생/되감기 · 시계 · BPM), 모드 클러스터(EDITOR / 난이도 / NO FAIL / AUTO).\n\n<b>사용법</b>\n마커 클릭 — 해당 타일로 이동하며 그 이벤트를 바로 엽니다. 빈 곳 클릭 — 재생 헤드 이동 (드래그로 스크럽). 줌 상태에서 휠 = 이동.\n\n<b>단축키</b>\n하단 중앙 화살표로 접기/펼치기.");
+"<b>기능</b>\n실제 곡 시간 기준의 이벤트 타임라인: 카테고리별 마커, 재생 헤드, 줌, 트랜스포트(재생/되감기 · 시계 · BPM), 모드 클러스터(EDITOR / 난이도 / NO FAIL / AUTO).\n\n<b>사용법</b>\n마커 클릭 — 해당 타일로 이동하며 그 이벤트를 바로 엽니다. 빈 곳 클릭 — 재생 헤드 이동 (드래그로 스크럽). 줌 상태에서 휠 = 이동.\n\n<b>모드</b>\n줌 버튼 아래 모드 버튼으로 NORMAL / CAM / DECO / FILTER — CDF 작업 공간을 전환합니다. 도움말 모드에서 그 버튼을 클릭하면 상세 설명을, CAM 가이드에서 키프레임 편집을 볼 수 있습니다.\n\n<b>단축키</b>\n하단 중앙 화살표로 접기/펼치기.");
 
             Add(d, "SapphireTimelineFold", "Timeline fold",
 "<b>What it does</b>\nFolds the timeline away / brings it back. Points down when open, up when folded.",
@@ -432,6 +432,46 @@ namespace Sapphire
 "<b>What it does</b>\nRight-click a tile: Copy / Cut / Paste / Delete / Rotate.\n\n<b>Note</b>\nWhile an event or Inspector tool is active, right-click belongs to that tool instead.",
 "타일 메뉴",
 "<b>기능</b>\n타일 우클릭: 복사 / 잘라내기 / 붙여넣기 / 삭제 / 회전.\n\n<b>참고</b>\n이벤트 도구나 인스펙터가 활성화된 동안에는 우클릭이 해당 도구에 사용됩니다.");
+
+            Add(d, "SapphirePresets", "Event presets",
+"<b>What it does</b>\nNamed bundles of events, applied per tile via the Inspector tool.\n\n<b>How to use</b>\nCapture a tile (Inspector), then + Save capture. Click a preset to load it as the capture — stamp tiles as usual. Right-click a row to rename, × deletes.\n\n<b>Note</b>\nPresets persist across sessions.",
+"이벤트 프리셋",
+"<b>기능</b>\n이름을 붙인 이벤트 묶음을 인스펙터 도구로 타일에 적용합니다.\n\n<b>사용법</b>\n타일을 캡처(인스펙터)한 뒤 '+ 캡처 저장'. 프리셋을 클릭하면 캡처로 불러와 평소처럼 타일에 배치할 수 있습니다. 행 우클릭 = 이름 변경, × = 삭제.\n\n<b>참고</b>\n프리셋은 게임을 껐다 켜도 유지됩니다.");
+
+            Add(d, "SapphireEasePicker", "Ease picker",
+"<b>What it does</b>\nPicks an ease with VISUAL curve previews — every curve is plotted from the game's own runtime easing, overshoots included.\n\n<b>How to use</b>\nRight-click a keyframe in the timeline's CAM mode. The current ease is highlighted; click a cell to apply (undo works). The Custom cell opens the bezier editor. ESC or clicking outside closes.",
+"이징 선택기",
+"<b>기능</b>\n곡선 미리보기를 보면서 이징을 고릅니다 — 모든 곡선은 게임의 실제 런타임 이징으로 그려집니다 (오버슈트 포함).\n\n<b>사용법</b>\n타임라인 CAM 모드에서 키프레임을 우클릭하세요. 현재 이징이 강조 표시되며, 셀을 클릭하면 적용됩니다 (실행 취소 가능). Custom 셀은 베지어 편집기를 엽니다. ESC 또는 바깥 클릭으로 닫기.");
+
+            Add(d, "CamMode", "Timeline mode menu",
+"<b>What it does</b>\nSwitches the strip between the CDF workspaces: NORMAL (all events by category), CAM (camera keyframes), DECO (decoration events, lanes = the tags visible in the current view, top 8 by use), FILTER (SetFilter events, lanes per filter).\n\n<b>Deco / Filter</b>\nSame bar view as CAM: tweens as duration bars, whole bar clickable, right-click = ease picker. Lanes follow the view — pan to see other tags.",
+"타임라인 모드 메뉴",
+"<b>기능</b>\n스트립을 CDF 작업 공간으로 전환합니다: NORMAL(카테고리별 전체 이벤트), CAM(카메라 키프레임), DECO(장식 이벤트 — 레인은 현재 보기에 나타나는 태그 상위 8개), FILTER(SetFilter 이벤트 — 필터별 레인).\n\n<b>데코 / 필터</b>\nCAM과 같은 막대 뷰입니다: 트윈은 길이 막대, 막대 전체 클릭 가능, 우클릭 = 이징 선택기. 레인은 보기 범위를 따라갑니다 — 이동하면 다른 태그가 나타납니다.");
+
+            Add(d, "Lane", "CAM mode — camera keyframe workspace",
+"<b>Layout</b>\nOne layer per property: Position / Rotation / Zoom. Tweens draw as duration bars (head, body to the end beat, cap); duration-0 SET keyframes are thin ticks. A set tick and a tween starting together are a pair.\n\n<b>Selecting</b>\nClick anywhere on a bar (whole body counts) — the keyframe turns white, its tile is selected, and an inline row of editable fields opens at the top of the strip.\n\n<b>Retiming</b>\nClick a LANE LABEL (e.g. Zoom) to expand its diamond sub-row — dragging happens only there. Pairs fan apart so each diamond stays clickable; a ghost diamond follows the cursor. Retiming one property of an event that carries several SPLITS it into its own event (one undo).\n\n<b>Creating</b>\nRIGHT-click EMPTY lane space = new set keyframe for that property at that tile, carrying the current value.\n\n<b>More</b>\nRIGHT-click a keyframe = visual ease picker. GRAPH button (or the row's Graph button) = AE-style graph editor. ESC deselects.",
+"CAM 모드 — 카메라 키프레임 작업 공간",
+"<b>구성</b>\n속성별 레이어: 위치 / 회전 / 줌. 트윈은 길이 막대(머리·몸통·끝)로, duration 0 설정 키프레임은 얇은 틱으로 표시됩니다. 같은 지점에서 시작하는 틱+막대가 한 쌍입니다.\n\n<b>선택</b>\n막대의 아무 곳이나 클릭하면(몸통 전체 클릭 가능) 키프레임이 흰색으로 강조되고, 타일이 선택되며, 스트립 상단에 인라인 편집 행이 열립니다.\n\n<b>시간 이동</b>\n레인 라벨(예: 줌)을 클릭하면 다이아몬드 서브 행이 펼쳐지고, 드래그는 거기서만 가능합니다. 쌍은 옆으로 펼쳐져 각각 클릭할 수 있고, 커서를 따라 고스트 다이아몬드가 표시됩니다. 여러 속성을 가진 이벤트의 한 속성만 옮기면 이벤트가 분리됩니다 (실행 취소 1회).\n\n<b>생성</b>\n빈 레인 공간을 우클릭하면 그 타일에 해당 속성의 설정 키프레임이 생성됩니다 (현재 값 유지).\n\n<b>기타</b>\n키프레임 우클릭 = 이징 선택기. GRAPH 버튼(또는 인라인 행의 그래프 버튼) = AE 스타일 그래프 편집기. ESC = 선택 해제.");
+
+            Add(d, "CamInspector", "Inline keyframe fields",
+"<b>What it does</b>\nEditable fields for the selected keyframe: duration (beats), position X/Y, rotation, zoom — plus Ease and Graph buttons.\n\n<b>How to use</b>\nType a value to set AND enable that property; CLEAR a field to disable it (the panel's on/off toggle equivalent). Every commit is one undo step.",
+"인라인 키프레임 필드",
+"<b>기능</b>\n선택된 키프레임의 편집 필드: 길이(박자), 위치 X/Y, 회전, 줌 — 그리고 이징·그래프 버튼.\n\n<b>사용법</b>\n값을 입력하면 해당 속성이 설정되고 켜집니다. 필드를 비우면 속성이 꺼집니다 (패널의 켜기/끄기 토글과 동일). 모든 변경은 실행 취소 1회 단위입니다.");
+
+            Add(d, "GraphBtn", "GRAPH button",
+"<b>What it does</b>\nOpens the AE-style graph editor on the current view — no selection needed. With a keyframe selected it focuses on that tween instead.",
+"GRAPH 버튼",
+"<b>기능</b>\n현재 보기 범위로 AE 스타일 그래프 편집기를 엽니다 — 선택 없이도 사용 가능합니다. 키프레임이 선택되어 있으면 해당 트윈에 포커스됩니다.");
+
+            Add(d, "SapphireGraph", "Graph editor",
+"<b>What it does</b>\nAn After-Effects-style value graph for camera properties: the property's value over song time, drawn through each tween's REAL runtime easing, keyframes as diamonds.\n\n<b>How to use</b>\nOpen from the GRAPH button under the timeline's zoom controls (whole level view) or from a keyframe's inline row (focused on that keyframe). Tabs: Position (X and Y overlaid), X, Y, Rotation, Zoom; axes show values with units and beats. WHEEL over the plot zooms time; over the LEFT margin it zooms the value axis. Dragging empty plot pans in BOTH directions (vertical pan switches the value axis to manual scale). In the Position tab the X·Y button links the coordinate pair: linked (default) retimes both together on one event; unlinked, components split into their own events when retimed. Click a diamond to select (the view focuses on it), DRAG vertically to change the value, horizontally to retime — one undo per drag. Right-click a diamond for the ease picker.\n\n<b>Keys</b>\nESC or × closes.",
+"그래프 편집기",
+"<b>기능</b>\nAfter Effects 스타일의 카메라 속성 값 그래프: 곡 시간에 따른 속성 값을 각 트윈의 실제 이징으로 그리고, 키프레임은 다이아몬드로 표시합니다.\n\n<b>사용법</b>\n타임라인 줌 버튼 아래 GRAPH 버튼(전체 보기) 또는 키프레임 인라인 행(해당 키프레임에 포커스)으로 엽니다. 탭: 위치(X·Y 겹쳐 보기), X, Y, 회전, 줌. 축에는 단위가 표시되고 가로축은 박자입니다. 플롯 위 휠 = 시간 줌, 왼쪽 여백 위 휠 = 값 축 줌. 빈 곳 드래그 = 가로·세로 이동 (세로 이동 시 값 축이 수동 스케일로 전환). 위치 탭의 X·Y 버튼은 좌표 쌍 연결 여부입니다: 연결(기본)이면 함께 이동해 이벤트가 유지되고, 해제하면 성분별로 분리되어 새 이벤트가 생깁니다. 다이아몬드 클릭 = 선택 (뷰가 포커스됨), 세로 드래그 = 값 변경, 가로 드래그 = 타일 이동 — 드래그당 실행 취소 1회. 우클릭 = 이징 선택기.\n\n<b>단축키</b>\nESC 또는 ×로 닫기.");
+
+            Add(d, "SapphireBezier", "Custom bezier",
+"<b>What it does</b>\nA fully custom easing curve for a camera tween. The game can't play one natively, so Apply DECOMPOSES the tween into short Linear segments (default 10) sampling your curve — one undo reverts it.\n\n<b>How to use</b>\nDrag the two control points; baselines mark 0 and 1 (overshoot allowed). Needs an EARLIER keyframe of the same property to read the start value from — the duration-0 set partner of a pair works.",
+"커스텀 베지어",
+"<b>기능</b>\n카메라 트윈에 완전한 커스텀 이징 곡선을 적용합니다. 게임이 직접 재생할 수 없으므로, 적용 시 곡선을 샘플링한 짧은 Linear 구간들(기본 10개)로 분해합니다 — 실행 취소 1회로 되돌립니다.\n\n<b>사용법</b>\n두 컨트롤 포인트를 드래그하세요. 기준선은 0과 1입니다 (오버슈트 가능). 시작 값을 읽기 위해 같은 속성의 이전 키프레임이 필요합니다 — 쌍의 duration 0 설정 키프레임이면 충분합니다.");
 
             Add(d, "SapphirePopup", "Message box",
 "<b>What it does</b>\nSapphire-styled version of the editor's popups; buttons proxy the game's own.",

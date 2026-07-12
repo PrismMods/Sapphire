@@ -109,8 +109,26 @@ namespace Sapphire
         public bool Hidden = false;
     }
 
+    // One event inside a saved preset: the LevelEventType id + type-tagged "key\u001Fvalue"
+    // pairs (i:int f:float b:bool s:string v:x|y vector e:enum-name) — decoded against a fresh
+    // default event of the same type, so unknown keys/newer game versions degrade gracefully.
+    public class PresetEvent
+    {
+        public int Type;
+        public List<string> Pairs = new List<string>();
+    }
+
+    public class EventPreset
+    {
+        public string Name = "Preset";
+        public List<PresetEvent> Events = new List<PresetEvent>();
+    }
+
     public class Settings : UnityModManager.ModSettings
     {
+        // Inspector-tool event presets (user-named bundles of events applied per tile).
+        public List<EventPreset> EventPresets = new List<EventPreset>();
+
         public bool ShowProgress = true;
         public bool ShowAcc = false;
         public bool ShowXAcc = true;
@@ -610,6 +628,8 @@ namespace Sapphire
 
         public void EnsureDefaults()
         {
+            if (EventPresets == null) EventPresets = new List<EventPreset>();
+
             // July 11: per-feature toggles removed from the panel — the master switch is the
             // only gate now, so every suite feature is forced on (stale saved falses migrate).
             EditorTileAngle = EditorShowEvents = EditorTimeline = EditorDarkTheme = true;

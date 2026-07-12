@@ -39,6 +39,10 @@ namespace Sapphire
             // An active event-palette tool claims right-click to stamp its event; yield the menu.
             if (EditorToolbar.EventTool >= 0) { if (_menuGo != null) CloseMenu(); return; }
 
+            // The timeline owns right-clicks over itself (keyframe creation / ease picker)
+            // even when a tile sits behind the strip.
+            if (EditorEvents.TimelineHovered) return;
+
             if (Input.GetMouseButtonDown(1))
             {
                 CloseMenu(); // a fresh right-click reopens at the new spot

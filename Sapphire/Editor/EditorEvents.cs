@@ -45,7 +45,15 @@ namespace Sapphire
         private static RectTransform _playhead;
         private static RectTransform _laneLabelHost;
         private const float HeaderW = 96f;   // lane-label column
-        private const float LaneH = 20f;     // canvas units per lane
+        private const float LaneH = 20f;     // canvas units per lane (category view)
+        private const float CamInspH = 46f;  // inline keyframe-inspector row (cam mode)
+        // Cam mode is a WORKSPACE, not a readout — people park here for whole sessions,
+        // so lanes and text get room (the strip covers gameplay, which doesn't matter here).
+        private static float LaneHEff => KeyframeMode ? 44f : LaneH;
+        private static int TexLaneHEff => KeyframeMode ? 44 : TexLaneH;
+        private const float TransBandH = 44f; // keyframe modes park the transport up top
+        private const float SubRowH = 32f;   // expanded keyframe sub-row (label click)
+        internal static int _expandedLane = -1;
         private const float StripPad = 7f;
         private const float ZoomW = 60f;     // zoom-button column on the right
         private const int TexW = 1792;
@@ -142,6 +150,31 @@ namespace Sapphire
 
         private static FieldInfo _dataField; // LevelEvent.data is protected
 
+        /* Camera keyframe mode (the "filtered view"): the strip shows only MoveCamera
+           events, split into one LAYER per animated property. Duration renders as a bar
+           (start → start + duration beats at the tile's pulse); duration-0 "set" keyframes
+           render as thin ticks — the AWC set+tween pair pattern reads as tick-then-bar. */
+        internal static int TlMode;                       // 0 normal · 1 cam · 2 deco · 3 filter
+        internal static bool CamMode => TlMode == 1;
+        internal static bool KeyframeMode => TlMode >= 1; // bar rendering + span hit + tall lanes
+        private static readonly string[] TlModeNames = { "NORMAL", "CAM", "DECO", "FILTER" };
+        private static GameObject _modeMenuGo;
+        private static TextMeshProUGUI _modeBtnLabel;
+        // string-keyed lanes for deco (tags) / filter (filter names)
+        private static readonly List<string> _strLanes = new List<string>();
+        // Shared with EditorGraph (same view window + tempo mapping).
+        internal static float GraphViewStart => _viewStart;
+        internal static float GraphViewZoom => _zoom;
+        internal static float GraphFracOfFloor(int floor) => FracOfFloor(floor);
+        internal static int GraphFloorAtFrac(float frac) => FloorAtFrac(frac);
+        internal static float GraphFracEnd(LevelEvent e, float startFrac) => CamDurationFracEnd(e, startFrac);
+        internal static float GraphStripTop => BottomStripTop;
+        internal static double GraphBeatAtFrac(float frac) => BeatAtTime(frac * _totalTime) - _beatOffset;
+        private static RoundedRectGraphic _camBtnBg;
+        private static GameObject _graphBtnGo;
+        private static RectTransform _camInspHost;
+        private const int CamLanePos = -2, CamLaneRot = -3, CamLaneZoom = -4;
+
         // Fixed lane order; "Other" (grey) catches events with no usable category.
         private static readonly LevelEventCategory[] LaneOrder =
         {
@@ -162,6 +195,9 @@ namespace Sapphire
                 case LevelEventCategory.FxModifiers:  return new Color(0.39f, 0.89f, 0.65f);
                 case LevelEventCategory.Conveniences: return new Color(0.97f, 0.92f, 0.35f);
                 case LevelEventCategory.Jank:         return new Color(1f, 0.48f, 0.85f);
+                case (LevelEventCategory)CamLanePos:  return new Color(0.35f, 0.76f, 1f);
+                case (LevelEventCategory)CamLaneRot:  return new Color(1f, 0.71f, 0.28f);
+                case (LevelEventCategory)CamLaneZoom: return new Color(0.39f, 0.89f, 0.65f);
                 default:                              return new Color(0.62f, 0.62f, 0.66f);
             }
         }
@@ -177,6 +213,9 @@ namespace Sapphire
                 case LevelEventCategory.FxModifiers:  return "Modifiers";
                 case LevelEventCategory.Conveniences: return "Convenience";
                 case LevelEventCategory.Jank:         return "DLC";
+                case (LevelEventCategory)CamLanePos:  return Loc.T("Position");
+                case (LevelEventCategory)CamLaneRot:  return Loc.T("Rotation");
+                case (LevelEventCategory)CamLaneZoom: return Loc.T("Zoom");
                 default:                              return "Other";
             }
         }
@@ -374,7 +413,7 @@ namespace Sapphire
             _foldCanvasGo = null; _foldRect = null; _foldGlyph = null;
             if (_markerTex != null) Object.Destroy(_markerTex);
             _canvasGo = null; _canvasRect = null; _canvas = null; _chipsRow = null;
-            _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null;
+            _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null; _graphBtnGo = null; _dragGhostGo = null; _modeMenuGo = null; _modeBtnLabel = null;
             _playhead = null; _laneLabelHost = null;
             _tooltipGo = null; _tooltipRect = null; _tooltipText = null;
             _chipRects.Clear(); _chipEvents.Clear(); _lanes.Clear(); _laneEvents = null;
@@ -545,6 +584,8 @@ namespace Sapphire
                         sig = sig * 31 + (int)(floors[i].angleLength * 1000.0) * 17
                             + (int)(floors[i].speed * 1000f) * 7
                             + (int)(floors[i].extraBeats * 100f);
+                if (TlMode >= 2)
+                    sig = sig * 31 + (int)(_viewStart * _zoom * 4f) * 13 + (int)(Mathf.Log(Mathf.Max(1f, _zoom), 1.5f));
                 if (sig != _tlSig)
                 {
                     _tlSig = sig;
@@ -603,6 +644,7 @@ namespace Sapphire
             }
 
             if (_transportOn) UpdateTransport(ed, playing, selSeq);
+            TickCamInspector(ed);
 
             // While play-testing with the game's hide-cursor-while-playing option on,
             // hovering the strip re-shows the cursor so it stays usable; leaving the
@@ -680,17 +722,46 @@ namespace Sapphire
             if (_playhead.gameObject.activeSelf != showHead) _playhead.gameObject.SetActive(showHead);
             if (showHead) _playhead.anchoredPosition = new Vector2(px, 0f);
 
+            TickCamDrag(ed, floors, mouse);
+
             // Hover: nearest marker in the lane under the mouse (not while scrubbing).
             if (tip != null || _laneEvents == null || _draggingHead) return;
+            if (_dragEvt != null && _dragMoved) return; // dragging a keyframe, not hovering
             if (!RectTransformUtility.RectangleContainsScreenPoint(_markerArea, mouse, null)) return;
             Vector2 local;
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_markerArea, mouse, null, out local)) return;
             var rect = _markerArea.rect;
             float frac = _viewStart + Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width)) / _zoom;
-            int lane = Mathf.FloorToInt((rect.yMax - local.y) / LaneH);
+            float yFromTop = rect.yMax - local.y;
+            bool inSubRow = false;
+            int lane;
+            if (CamMode && _expandedLane >= 0)
+            {
+                float subTop = (_expandedLane + 1) * LaneHEff;
+                if (yFromTop < subTop) lane = Mathf.FloorToInt(yFromTop / LaneHEff);
+                else if (yFromTop < subTop + SubRowH) { lane = _expandedLane; inSubRow = true; }
+                else lane = Mathf.FloorToInt((yFromTop - SubRowH) / LaneHEff);
+            }
+            else lane = Mathf.FloorToInt(yFromTop / LaneHEff);
             LevelEvent hit = null;
-            if (lane >= 0 && lane < _laneEvents.Length)
-                hit = NearestInLane(_laneEvents[lane], frac, 6f / (Mathf.Max(1f, rect.width) * _zoom));
+            if (inSubRow)
+            {
+                // diamonds live at fanned texture positions — hit-test in that space
+                float texX = Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width)) * TexW;
+                float best = 10f;
+                foreach (var kf in _subKf)
+                {
+                    float d = Mathf.Abs(kf.Key - texX);
+                    if (d < best) { best = d; hit = kf.Value; }
+                }
+            }
+            else if (lane >= 0 && lane < _laneEvents.Length)
+            {
+                float tol = 6f / (Mathf.Max(1f, rect.width) * _zoom);
+                hit = KeyframeMode
+                    ? CamSpanHit(_laneEvents[lane], frac, tol)   // whole bar body is clickable
+                    : NearestInLane(_laneEvents[lane], frac, tol);
+            }
             if (hit != null)
             {
                 tip = BuildTooltip(hit, true);
@@ -698,14 +769,52 @@ namespace Sapphire
             }
             // Click a marker to select its tile; click empty strip to move the playhead
             // to that spot (and keep scrubbing while held). Both ride the camera jump.
+            // Keyframe modes: right-click a keyframe → visual ease picker for that event.
+            if (!playing && KeyframeMode && hit != null && Input.GetMouseButtonDown(1))
+            {
+                EditorEasePicker.Open(hit, mouse);
+                return;
+            }
+            // Cam mode: right-click EMPTY lane space → new set keyframe for that lane's
+            // property at that tile, carrying the current value (camera doesn't jump).
+            if (!playing && CamMode && hit == null && !inSubRow && Input.GetMouseButtonDown(1)
+                && lane >= 0 && lane < _laneEvents.Length)
+            {
+                CreateCamKeyframe(ed, floors, lane, frac);
+                return;
+            }
             if (!playing && Input.GetMouseButtonDown(0))
             {
-                int target = hit != null ? hit.floor : FloorAtFrac(frac);
-                if (target >= 0 && target < floors.Count)
-                    try { ed.SelectFloor(floors[target], true); } catch { }
-                if (hit == null) _draggingHead = true;
-                else { _showEvt = hit; _showDelay = 3; } // then open THAT event (deferred: the
-                                                          // selection change rebuilds the inspector)
+                if (CamMode && hit != null)
+                {
+                    if (inSubRow)
+                    {
+                        // retiming lives HERE: hold-and-move drags the diamond to a new
+                        // tile; a plain click just selects.
+                        _dragEvt = hit; _dragStartX = local.x; _dragMoved = false; _dragLane = lane;
+                    }
+                    else
+                    {
+                        // main view: selection + inline inspector only, never dragging
+                        if (hit.floor >= 0 && hit.floor < floors.Count)
+                            try { ed.SelectFloor(floors[hit.floor], true); } catch { }
+                        _camSel = hit; _camSelDirty = true; _camSelLane = lane;
+                        _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                    }
+                }
+                else
+                {
+                    int target = hit != null ? hit.floor : FloorAtFrac(frac);
+                    if (target >= 0 && target < floors.Count)
+                        try { ed.SelectFloor(floors[target], true); } catch { }
+                    if (hit == null)
+                    {
+                        _draggingHead = true;
+                        if (CamMode && _camSel != null) { _camSel = null; _camSelDirty = true; }
+                    }
+                    else { _showEvt = hit; _showDelay = 3; } // then open THAT event (deferred: the
+                                                              // selection change rebuilds the inspector)
+                }
             }
 
             if (_showEvt != null && --_showDelay <= 0)
@@ -729,6 +838,467 @@ namespace Sapphire
 
         private static LevelEvent _showEvt;   // marker-click → open this exact event
         private static int _showDelay;
+
+        // ── cam keyframe dragging + inline selection ────────────────────────
+        private static LevelEvent _dragEvt;
+        private static float _dragStartX;
+        private static bool _dragMoved;
+        private static int _dragLane;
+        internal static int _camSelLane;
+        internal static LevelEvent _camSel;   // keyframe shown in the inline inspector
+        internal static bool _camSelDirty;
+
+        /* Inline keyframe inspector (the "expanded track"): a row of editable fields at
+           the top of the strip for the clicked keyframe — duration, position, rotation,
+           zoom, ease. Typing a value ENABLES the property; clearing a field disables it
+           (the panel's on/off toggle equivalent). Every commit goes through SaveStateScope. */
+        private static void TickCamInspector(scnEditor ed)
+        {
+            bool want = CamMode && _camSel != null && ed != null && !ed.playMode;
+            if (!want)
+            {
+                if (_camSel != null && !CamMode) { _camSel = null; _camSelDirty = true; }
+                if (_camInspHost != null && _camInspHost.gameObject.activeSelf)
+                { _camInspHost.gameObject.SetActive(false); _tlSig = 0; _scanCooldown = 0; }
+                return;
+            }
+            // ESC closes the row (before other ESC consumers is fine — it's passive UI)
+            if (Input.GetKeyDown(KeyCode.Escape)) { _camSel = null; _camSelDirty = true; _tlSig = 0; _scanCooldown = 0; return; }
+            if (!ed.events.Contains(_camSel)) { _camSel = null; _camSelDirty = true; _tlSig = 0; return; }
+            if (!_camSelDirty) return;
+            _camSelDirty = false;
+            BuildCamInspector(ed, _camSel);
+        }
+
+        private static void BuildCamInspector(scnEditor ed, LevelEvent evt)
+        {
+            if (_camInspHost == null)
+            {
+                var go = new GameObject("CamInspector", typeof(RectTransform));
+                go.transform.SetParent(_stripRect, false);
+                _camInspHost = (RectTransform)go.transform;
+                _camInspHost.anchorMin = new Vector2(0f, 1f);
+                _camInspHost.anchorMax = new Vector2(1f, 1f);
+                _camInspHost.pivot = new Vector2(0.5f, 1f);
+                _camInspHost.offsetMin = new Vector2(12f, -CamInspH); // transport lives in its own band now
+                _camInspHost.offsetMax = new Vector2(-ZoomW - 8f, 0f);
+            }
+            _camInspHost.gameObject.SetActive(true);
+            for (int i = _camInspHost.childCount - 1; i >= 0; i--)
+                Object.Destroy(_camInspHost.GetChild(i).gameObject);
+
+            float x = 0f;
+            x = CamInspLabel(x, evt.eventType + " · #" + evt.floor, 170f);
+            x = CamInspField(x, Loc.T("Beats"), 64f, CamNum(evt, "duration"), s => CamCommitNum(evt, "duration", s, false));
+            Vector2 pos = Vector2.zero;
+            bool hasPos = false;
+            try { var d = EventData(evt); if (d != null && d.TryGetValue("position", out var v) && v is Vector2 p) { pos = p; hasPos = true; } }
+            catch { }
+            if (hasPos)
+            {
+                x = CamInspField(x, "X", 60f, CamDisabled(evt, "position") || float.IsNaN(pos.x) ? "" : Trim(pos.x),
+                    s => CamCommitPos(evt, s, true));
+                x = CamInspField(x, "Y", 60f, CamDisabled(evt, "position") || float.IsNaN(pos.y) ? "" : Trim(pos.y),
+                    s => CamCommitPos(evt, s, false));
+            }
+            x = CamInspField(x, Loc.T("Rotation"), 66f, CamTouchesNumber(evt, "rotation") ? CamNum(evt, "rotation") : "",
+                s => CamCommitNum(evt, "rotation", s, true));
+            x = CamInspField(x, Loc.T("Zoom"), 72f, CamTouchesNumber(evt, "zoom") ? CamNum(evt, "zoom") : "",
+                s => CamCommitNum(evt, "zoom", s, true));
+            x = CamInspButtonAt(x, Loc.T("Ease"), 76f, () => EditorEasePicker.Open(evt, Input.mousePosition));
+            CamInspButtonAt(x, Loc.T("Graph"), 86f, () => EditorGraph.Open(_camSelLane));
+        }
+
+        private static string Trim(float v) => v.ToString("0.###");
+
+        private static string CamNum(LevelEvent evt, string key)
+        {
+            try
+            {
+                var d = EventData(evt);
+                if (d == null || !d.TryGetValue(key, out var v) || v == null) return "";
+                float f = System.Convert.ToSingle(v);
+                return float.IsNaN(f) ? "" : Trim(f);
+            }
+            catch { return ""; }
+        }
+
+        // Commit a numeric field; empty string disables the property (togglable = true).
+        private static void CamCommitNum(LevelEvent evt, string key, string s, bool togglable)
+        {
+            var ed = scnEditor.instance;
+            if (ed == null) return;
+            try
+            {
+                using (new SaveStateScope(ed))
+                {
+                    if (string.IsNullOrWhiteSpace(s))
+                    {
+                        if (togglable && evt.disabled != null && evt.disabled.ContainsKey(key)) evt.disabled[key] = true;
+                    }
+                    else if (float.TryParse(s, out float f))
+                    {
+                        evt[key] = f;
+                        if (evt.disabled != null && evt.disabled.ContainsKey(key)) evt.disabled[key] = false;
+                    }
+                }
+            }
+            catch (System.Exception ex) { SapphireLog.Log("Timeline: edit failed: " + ex.Message); }
+            _tlSig = 0; _scanCooldown = 0; _viewDirty = true; _camSelDirty = true;
+        }
+
+        private static void CamCommitPos(LevelEvent evt, string s, bool isX)
+        {
+            var ed = scnEditor.instance;
+            if (ed == null) return;
+            try
+            {
+                Vector2 p = Vector2.zero;
+                var d = EventData(evt);
+                if (d != null && d.TryGetValue("position", out var v) && v is Vector2 cur) p = cur;
+                using (new SaveStateScope(ed))
+                {
+                    float f = string.IsNullOrWhiteSpace(s) ? float.NaN
+                        : (float.TryParse(s, out float pf) ? pf : (isX ? p.x : p.y));
+                    var np = isX ? new Vector2(f, p.y) : new Vector2(p.x, f);
+                    evt["position"] = np;
+                    bool any = !float.IsNaN(np.x) || !float.IsNaN(np.y);
+                    if (evt.disabled != null && evt.disabled.ContainsKey("position")) evt.disabled["position"] = !any;
+                }
+            }
+            catch (System.Exception ex) { SapphireLog.Log("Timeline: edit failed: " + ex.Message); }
+            _tlSig = 0; _scanCooldown = 0; _viewDirty = true; _camSelDirty = true;
+        }
+
+        private static float CamInspLabel(float x, string text, float w)
+        {
+            var go = new GameObject("L", typeof(RectTransform));
+            go.transform.SetParent(_camInspHost, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 0.5f); r.anchorMax = new Vector2(0f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.anchoredPosition = new Vector2(x, 0f);
+            r.sizeDelta = new Vector2(w, 22f);
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.font = UI.Theme.TmpFont; t.fontSize = 14f;
+            t.color = UI.Theme.TextMuted; t.alignment = TextAlignmentOptions.Left;
+            t.textWrappingMode = TextWrappingModes.NoWrap; t.raycastTarget = false;
+            t.text = text;
+            return x + w + 8f;
+        }
+
+        private static float CamInspField(float x, string label, float w, string value, System.Action<string> commit)
+        {
+            var lgo = new GameObject("FL", typeof(RectTransform));
+            lgo.transform.SetParent(_camInspHost, false);
+            var lr = (RectTransform)lgo.transform;
+            lr.anchorMin = new Vector2(0f, 0.5f); lr.anchorMax = new Vector2(0f, 0.5f);
+            lr.pivot = new Vector2(0f, 0.5f);
+            lr.anchoredPosition = new Vector2(x, 0f);
+            lr.sizeDelta = new Vector2(200f, 22f);
+            var lt = lgo.AddComponent<TextMeshProUGUI>();
+            lt.font = UI.Theme.TmpFont; lt.fontSize = 13f;
+            lt.color = UI.Theme.TextMuted; lt.alignment = TextAlignmentOptions.Left;
+            lt.textWrappingMode = TextWrappingModes.NoWrap; lt.overflowMode = TextOverflowModes.Overflow;
+            lt.raycastTarget = false;
+            lt.text = label;
+            float lw = Mathf.Min(72f, label.Length * 8f + 6f);
+            lr.sizeDelta = new Vector2(lw, 26f);
+            x += lw + 4f;
+
+            var go = new GameObject("F", typeof(RectTransform));
+            go.transform.SetParent(_camInspHost, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 0.5f); r.anchorMax = new Vector2(0f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.anchoredPosition = new Vector2(x, 0f);
+            r.sizeDelta = new Vector2(w, 30f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 6f;
+            bg.color = new Color(1f, 1f, 1f, 0.08f);
+            bg.raycastTarget = true;
+            var txtGo = new GameObject("T", typeof(RectTransform));
+            txtGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)txtGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(7f, 0f); tr.offsetMax = new Vector2(-7f, 0f);
+            var txt = UI.UIBuilder.Tmp(txtGo, value, 14f, TextAnchor.MiddleLeft, UI.Theme.Text);
+            txt.richText = false;
+            var field = UI.UIBuilder.BuildInputField(go, txt);
+            field.lineType = TMP_InputField.LineType.SingleLine;
+            field.text = value;
+            field.onEndEdit.AddListener(sv => commit(sv));
+            return x + w + 10f;
+        }
+
+        private static float CamInspButtonAt(float x, string label, float w, System.Action onClick)
+        {
+            CamInspButton(x, label, w, onClick);
+            return x + w + 8f;
+        }
+
+        private static void CamInspButton(float x, string label, float w, System.Action onClick)
+        {
+            var go = new GameObject("B", typeof(RectTransform));
+            go.transform.SetParent(_camInspHost, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 0.5f); r.anchorMax = new Vector2(0f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.anchoredPosition = new Vector2(x, 0f);
+            r.sizeDelta = new Vector2(w, 30f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 6f;
+            bg.color = new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.3f);
+            bg.raycastTarget = true;
+            var txtGo = new GameObject("T", typeof(RectTransform));
+            txtGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)txtGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = tr.offsetMax = Vector2.zero;
+            var txt = UI.UIBuilder.Tmp(txtGo, label, 14f, TextAnchor.MiddleCenter, UI.Theme.Text);
+            txt.raycastTarget = false;
+            UI.ClickHandler.Attach(go, onClick);
+        }
+
+        // ── deco/filter string lanes ─────────────────────────────────────────
+        private static bool IsStrModeEvent(LevelEvent e)
+        {
+            if (TlMode == 2)
+                return e.eventType == LevelEventType.MoveDecorations
+                    || e.eventType == LevelEventType.EmitParticle
+                    || e.eventType == LevelEventType.SetParticle
+                    || e.eventType == LevelEventType.SetText;
+            if (TlMode == 3)
+                return e.eventType == LevelEventType.SetFilter
+                    || e.eventType == LevelEventType.SetFilterAdvanced;
+            return false;
+        }
+
+        private static IEnumerable<string> KeysOf(LevelEvent e)
+        {
+            var d = EventData(e);
+            if (d == null) yield break;
+            if (TlMode == 2)
+            {
+                if (!d.TryGetValue("tag", out var tv) || !(tv is string tags)) yield break;
+                foreach (var t in tags.Split(' '))
+                    if (!string.IsNullOrEmpty(t)) yield return t;
+            }
+            else if (TlMode == 3)
+            {
+                if (d.TryGetValue("filter", out var fv) && fv != null)
+                {
+                    var n = fv.ToString();
+                    // CameraFilterPack_Blur_BlurHole → Blur_BlurHole (lane labels stay short)
+                    if (n.StartsWith("CameraFilterPack_")) n = n.Substring(17);
+                    if (n.Length > 0) yield return n;
+                }
+            }
+        }
+
+        /* Lanes = the tags/filters VISIBLE in the current view window, capped at 8 by
+           frequency — a level's hundreds of deco tags would be unusable as rows. The view
+           window is part of the structure signature, so panning re-derives the lanes. */
+        private static void BuildStringLanes(List<LevelEvent> events)
+        {
+            _strLanes.Clear();
+            float vEnd = _viewStart + 1f / Mathf.Max(1f, _zoom);
+            float m = (vEnd - _viewStart) * 0.05f;
+            var counts = new Dictionary<string, int>();
+            foreach (var e in events)
+            {
+                if (e == null || !IsStrModeEvent(e)) continue;
+                float frac = FracOfFloor(e.floor);
+                if (frac < _viewStart - m || frac > vEnd + m) continue;
+                foreach (var key in KeysOf(e))
+                    counts[key] = counts.TryGetValue(key, out int n) ? n + 1 : 1;
+            }
+            var sorted = new List<KeyValuePair<string, int>>(counts);
+            sorted.Sort((a, b) =>
+            {
+                int c = b.Value.CompareTo(a.Value);
+                return c != 0 ? c : string.CompareOrdinal(a.Key, b.Key);
+            });
+            for (int i = 0; i < sorted.Count && i < 8; i++) _strLanes.Add(sorted[i].Key);
+        }
+
+        private static Color StrLaneColor(int i) =>
+            Color.HSVToRGB((0.11f + i * 0.618034f) % 1f, 0.55f, 0.95f);
+
+        /* Per-property keyframe independence: retiming ONE property of an event that
+           carries several must SPLIT it — a clone carrying just that property moves to the
+           new tile, the original keeps the rest. comp: "position" | "posx" | "posy" |
+           "rotation" | "zoom". Returns the event that carries comp afterwards. Caller
+           provides the SaveStateScope. */
+        internal static LevelEvent SplitForRetime(scnEditor ed, LevelEvent evt, string comp, int newFloor)
+        {
+            bool posWhole = comp == "position";
+            bool posX = comp == "posx", posY = comp == "posy";
+            bool isPos = posWhole || posX || posY;
+            bool othersTouched =
+                (!isPos && (CamTouchesPosition(evt) || CamTouchesNumber(evt, comp == "rotation" ? "zoom" : "rotation")))
+                || (isPos && (CamTouchesNumber(evt, "rotation") || CamTouchesNumber(evt, "zoom")))
+                || (posX && PosCompTouched(evt, false)) || (posY && PosCompTouched(evt, true));
+            if (!othersTouched)
+            {
+                evt.floor = newFloor;
+                ed.ApplyEventsToFloors();
+                return evt;
+            }
+            var clone = evt.Copy();
+            clone.floor = newFloor;
+            // clone keeps ONLY comp; original loses comp
+            if (isPos)
+            {
+                SetPropOff(clone, "rotation"); SetPropOff(clone, "zoom");
+                if (posX || posY)
+                {
+                    var p = PosOf(clone);
+                    clone["position"] = posX ? new Vector2(p.x, float.NaN) : new Vector2(float.NaN, p.y);
+                    var q = PosOf(evt);
+                    evt["position"] = posX ? new Vector2(float.NaN, q.y) : new Vector2(q.x, float.NaN);
+                    if (!PosCompTouched(evt, true) && !PosCompTouched(evt, false)) SetPropOff(evt, "position");
+                }
+                else SetPropOff(evt, "position");
+            }
+            else
+            {
+                SetPropOff(clone, "position");
+                SetPropOff(clone, comp == "rotation" ? "zoom" : "rotation");
+                SetPropOff(evt, comp);
+            }
+            ed.events.Add(clone);
+            ed.ApplyEventsToFloors();
+            return clone;
+        }
+
+        // The property's value AT a tile = the target of the last earlier keyframe
+        // touching it, else the level-settings camera default. comp: 0=x 1=y 2=rot 3=zoom.
+        private static float CamValueAt(scnEditor ed, int floor, int comp)
+        {
+            LevelEvent best = null;
+            foreach (var e in ed.events)
+            {
+                if (e == null || !e.active || e.eventType != LevelEventType.MoveCamera) continue;
+                if (e.floor > floor) continue;
+                bool touches = comp <= 1 ? PosCompTouched(e, comp == 0)
+                    : CamTouchesNumber(e, comp == 2 ? "rotation" : "zoom");
+                if (!touches) continue;
+                if (best == null || e.floor > best.floor) best = e;
+            }
+            if (best != null)
+            {
+                var d = EventData(best);
+                if (d != null)
+                {
+                    if (comp <= 1 && d.TryGetValue("position", out var pv) && pv is Vector2 p)
+                        return comp == 0 ? p.x : p.y;
+                    if (comp >= 2 && d.TryGetValue(comp == 2 ? "rotation" : "zoom", out var nv) && nv != null)
+                        try { return System.Convert.ToSingle(nv); } catch { }
+                }
+            }
+            try
+            {
+                var ld = scnGame.instance != null ? scnGame.instance.levelData : null;
+                if (ld != null)
+                    return comp == 3 ? ld.camZoom : comp == 2 ? ld.camRotation
+                        : comp == 0 ? ld.camPosition.x : ld.camPosition.y;
+            }
+            catch { }
+            return comp == 3 ? 100f : 0f;
+        }
+
+        private static void CreateCamKeyframe(scnEditor ed, List<scrFloor> floors, int lane, float frac)
+        {
+            int floor = FloorAtFrac(frac);
+            if (floor <= 0 || floor >= floors.Count) return;
+            try
+            {
+                var evt = new LevelEvent(floor, LevelEventType.MoveCamera);
+                evt["duration"] = 0f;
+                evt["ease"] = DG.Tweening.Ease.Linear;
+                if (lane == 0)
+                {
+                    evt["position"] = new Vector2(CamValueAt(ed, floor, 0), CamValueAt(ed, floor, 1));
+                    SetPropOff(evt, "rotation"); SetPropOff(evt, "zoom");
+                }
+                else if (lane == 1)
+                {
+                    evt["rotation"] = CamValueAt(ed, floor, 2);
+                    SetPropOff(evt, "position"); SetPropOff(evt, "zoom");
+                }
+                else
+                {
+                    evt["zoom"] = CamValueAt(ed, floor, 3);
+                    SetPropOff(evt, "position"); SetPropOff(evt, "rotation");
+                }
+                using (new SaveStateScope(ed))
+                {
+                    ed.events.Add(evt);
+                    ed.ApplyEventsToFloors();
+                }
+                try { ed.SelectFloor(floors[floor], true); } catch { }
+                _camSel = evt; _camSelDirty = true; _camSelLane = lane;
+                _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+            }
+            catch (System.Exception ex) { SapphireLog.Log("Timeline: create keyframe failed: " + ex.Message); }
+        }
+
+        private static Vector2 PosOf(LevelEvent e)
+        {
+            var d = EventData(e);
+            return d != null && d.TryGetValue("position", out var v) && v is Vector2 p ? p : new Vector2(float.NaN, float.NaN);
+        }
+
+        internal static bool PosCompTouched(LevelEvent e, bool isX)
+        {
+            if (CamDisabled(e, "position")) return false;
+            var p = PosOf(e);
+            return !float.IsNaN(isX ? p.x : p.y);
+        }
+
+        private static void SetPropOff(LevelEvent e, string key)
+        {
+            try { if (e.disabled != null) e.disabled[key] = true; } catch { }
+        }
+
+        private static void TickCamDrag(scnEditor ed, List<scrFloor> floors, Vector2 mouse)
+        {
+            if (_dragEvt == null) return;
+            if (!CamMode) { _dragEvt = null; return; }
+            Vector2 local;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_markerArea, mouse, null, out local))
+            { if (Input.GetMouseButtonUp(0)) { _dragEvt = null; SyncDragGhost(false, mouse); } return; }
+            var rect = _markerArea.rect;
+            float frac = _viewStart + Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width)) / _zoom;
+            if (!_dragMoved && Mathf.Abs(local.x - _dragStartX) > 6f) _dragMoved = true;
+            SyncDragGhost(_dragMoved, mouse);
+            if (!Input.GetMouseButtonUp(0)) return;
+            SyncDragGhost(false, mouse);
+            var evt = _dragEvt; _dragEvt = null;
+            if (_dragMoved)
+            {
+                int nf = FloorAtFrac(frac);
+                if (nf > 0 && nf < floors.Count && nf != evt.floor)
+                {
+                    // per-property retime: splits the event when it carries other props
+                    string comp = _dragLane == 1 ? "rotation" : _dragLane == 2 ? "zoom" : "position";
+                    try
+                    {
+                        using (new SaveStateScope(ed))
+                            SplitForRetime(ed, evt, comp, nf);
+                    }
+                    catch (System.Exception ex) { SapphireLog.Log("Timeline: keyframe move failed: " + ex.Message); }
+                    _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                }
+                return;
+            }
+            // plain click: select the tile and open the inline inspector row
+            if (evt.floor >= 0 && evt.floor < floors.Count)
+                try { ed.SelectFloor(floors[evt.floor], true); } catch { }
+            _camSel = evt; _camSelDirty = true; _camSelLane = _dragLane;
+            _tlSig = 0; _scanCooldown = 0; _viewDirty = true; // strip grows for the inspector row
+        }
 
         private static float FracOfFloor(int floor)
         {
@@ -762,6 +1332,22 @@ namespace Sapphire
             float center = _viewStart + 0.5f / old;
             _viewStart = Mathf.Clamp(center - 0.5f / _zoom, 0f, 1f - 1f / _zoom);
             _viewDirty = true;
+        }
+
+        // Cam mode: a keyframe owns its whole [start, start+duration] bar, not just the
+        // head — overlapping bars resolve to the latest-starting one (drawn on top).
+        private static LevelEvent CamSpanHit(List<KeyValuePair<float, LevelEvent>> lane, float frac, float tol)
+        {
+            LevelEvent best = null;
+            float bestStart = float.NegativeInfinity;
+            for (int i = 0; i < lane.Count; i++)
+            {
+                float s = lane[i].Key;
+                if (s - tol > frac) break; // sorted by start
+                float e = CamDurationFracEnd(lane[i].Value, s);
+                if (frac <= e + tol && s >= bestStart) { best = lane[i].Value; bestStart = s; }
+            }
+            return best;
         }
 
         private static LevelEvent NearestInLane(List<KeyValuePair<float, LevelEvent>> lane, float frac, float tol)
@@ -874,24 +1460,59 @@ namespace Sapphire
             _viewStart = Mathf.Clamp(_viewStart, 0f, 1f - 1f / _zoom);
 
             _lanes.Clear();
-            bool other = false;
-            var present = new HashSet<LevelEventCategory>();
-            for (int i = 0; i < events.Count; i++)
+            if (CamMode)
             {
-                var ev = events[i];
-                if (ev == null || ev.eventType == LevelEventType.Twirl) continue;
-                var c = PrimaryCategory(ev);
-                if ((int)c < 0) other = true; else present.Add(c);
+                // Property layers are ALWAYS present — this is an editing surface, and an
+                // empty lane is where a new keyframe of that property would go.
+                _lanes.Add((LevelEventCategory)CamLanePos);
+                _lanes.Add((LevelEventCategory)CamLaneRot);
+                _lanes.Add((LevelEventCategory)CamLaneZoom);
             }
-            for (int i = 0; i < LaneOrder.Length; i++)
-                if (present.Contains(LaneOrder[i])) _lanes.Add(LaneOrder[i]);
-            if (other) _lanes.Add((LevelEventCategory)(-1));
+            else if (TlMode >= 2)
+            {
+                BuildStringLanes(events);
+                for (int i = 0; i < _strLanes.Count; i++)
+                    _lanes.Add((LevelEventCategory)(-100 - i)); // sentinels; labels from _strLanes
+            }
+            else
+            {
+                bool other = false;
+                var present = new HashSet<LevelEventCategory>();
+                for (int i = 0; i < events.Count; i++)
+                {
+                    var ev = events[i];
+                    if (ev == null || ev.eventType == LevelEventType.Twirl) continue;
+                    var c = PrimaryCategory(ev);
+                    if ((int)c < 0) other = true; else present.Add(c);
+                }
+                for (int i = 0; i < LaneOrder.Length; i++)
+                    if (present.Contains(LaneOrder[i])) _lanes.Add(LaneOrder[i]);
+                if (other) _lanes.Add((LevelEventCategory)(-1));
+            }
             int laneCount = Mathf.Max(1, _lanes.Count);
 
             // Min height: the 2-line transport cluster clips on 1-lane charts otherwise.
-            _stripRect.sizeDelta = new Vector2(0f, Mathf.Max(66f, StripPad * 2f + laneCount * LaneH));
+            float inspH = CamMode && _camSel != null ? CamInspH : 0f;
+            if (!CamMode) _expandedLane = -1;
+            // The transport lives in a TOP band in every mode — as a full-height left
+            // column its clock text always collided with the lane labels.
+            float transH = _transportGo != null ? TransBandH : 0f;
+            if (_transportGo != null)
+            {
+                var trr = (RectTransform)_transportGo.transform;
+                trr.anchorMin = new Vector2(0f, 1f);
+                trr.anchorMax = new Vector2(0f, 1f);
+                trr.pivot = new Vector2(0f, 1f);
+                trr.sizeDelta = new Vector2(TransportW + 160f, TransBandH);
+                trr.anchoredPosition = new Vector2(8f, -inspH);
+            }
+            float subH = CamMode && _expandedLane >= 0 ? SubRowH : 0f;
+            _stripRect.sizeDelta = new Vector2(0f,
+                Mathf.Max(66f, StripPad * 2f + laneCount * LaneHEff + subH + transH) + inspH);
+            if (_markerArea != null) _markerArea.offsetMax = new Vector2(-ZoomW - 8f, -StripPad - inspH - transH);
+            if (_laneLabelHost != null) _laneLabelHost.offsetMax = new Vector2(HeaderW - 6f, -StripPad - inspH - transH);
 
-            int texH = laneCount * TexLaneH;
+            int texH = laneCount * TexLaneHEff + (CamMode && _expandedLane >= 0 ? (int)SubRowH : 0);
             if (_markerTex == null || _markerTex.height != texH)
             {
                 if (_markerTex != null) Object.Destroy(_markerTex);
@@ -908,6 +1529,29 @@ namespace Sapphire
             {
                 var e = events[i];
                 if (e == null || e.floor < 0 || e.floor >= len) continue;
+                if (CamMode)
+                {
+                    // One event can animate several properties → it appears in each layer.
+                    if (e.eventType != LevelEventType.MoveCamera) continue;
+                    float frac = FracOfFloor(e.floor);
+                    if (CamTouchesPosition(e)) _laneEvents[0].Add(new KeyValuePair<float, LevelEvent>(frac, e));
+                    if (CamTouchesNumber(e, "rotation")) _laneEvents[1].Add(new KeyValuePair<float, LevelEvent>(frac, e));
+                    if (CamTouchesNumber(e, "zoom")) _laneEvents[2].Add(new KeyValuePair<float, LevelEvent>(frac, e));
+                    continue;
+                }
+                if (TlMode >= 2)
+                {
+                    // multi-tag events appear in every matching lane
+                    if (!IsStrModeEvent(e)) continue;
+                    float sfrac = FracOfFloor(e.floor);
+                    foreach (var key in KeysOf(e))
+                    {
+                        int idx = _strLanes.IndexOf(key);
+                        if (idx >= 0 && idx < laneCount)
+                            _laneEvents[idx].Add(new KeyValuePair<float, LevelEvent>(sfrac, e));
+                    }
+                    continue;
+                }
                 // Twirls are on half the tiles of any decent chart — pure noise here.
                 if (e.eventType == LevelEventType.Twirl) continue;
                 int lane;
@@ -926,18 +1570,96 @@ namespace Sapphire
                 var r = (RectTransform)go.transform;
                 r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
                 r.pivot = new Vector2(0.5f, 1f);
-                r.sizeDelta = new Vector2(0f, LaneH);
-                r.anchoredPosition = new Vector2(0f, -i * LaneH);
+                r.sizeDelta = new Vector2(0f, LaneHEff);
+                float shift = CamMode && _expandedLane >= 0 && i > _expandedLane ? SubRowH : 0f;
+                r.anchoredPosition = new Vector2(0f, -i * LaneHEff - shift);
                 var t = go.AddComponent<TextMeshProUGUI>();
                 t.font = UI.Theme.TmpFont;
-                t.fontSize = 13;
+                t.fontSize = CamMode ? 16 : 13;
+                if (CamMode)
+                {
+                    // AE-style: clicking the property label expands its keyframe sub-row —
+                    // the only place timeline keyframes can be retimed.
+                    int laneIdx = i;
+                    t.raycastTarget = true;
+                    UI.ClickHandler.Attach(go, () =>
+                    {
+                        _expandedLane = _expandedLane == laneIdx ? -1 : laneIdx;
+                        _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                    });
+                }
                 t.color = CategoryColor(_lanes[i]);
                 t.alignment = TextAlignmentOptions.Right;
                 t.textWrappingMode = TextWrappingModes.NoWrap;
                 t.overflowMode = TextOverflowModes.Overflow;
-                t.raycastTarget = false;
-                t.text = CategoryLabel(_lanes[i]);
+                if (!CamMode) t.raycastTarget = false;
+                if (TlMode >= 2 && i < _strLanes.Count)
+                {
+                    var tag = _strLanes[i];
+                    t.text = tag.Length > 14 ? tag.Substring(0, 13) + "…" : tag;
+                    t.color = StrLaneColor(i);
+                    t.fontSize = 13;
+                }
+                else t.text = CategoryLabel(_lanes[i]) + (CamMode && _expandedLane == i ? " ›" : "");
             }
+        }
+
+        /* "Touches" = the event actually animates that property. ADOFAI's null-means-keep
+           semantics parse omitted tween fields to NaN, so a real number = a keyframe. */
+        internal static Dictionary<string, object> EventData(LevelEvent e)
+        {
+            if (_dataField == null)
+                _dataField = typeof(LevelEvent).GetField("data", BindingFlags.NonPublic | BindingFlags.Instance);
+            return _dataField?.GetValue(e) as Dictionary<string, object>;
+        }
+
+        // The editor's per-property on/off toggles live in LevelEvent.disabled (public).
+        internal static bool CamDisabled(LevelEvent e, string key)
+        {
+            try { return e.disabled != null && e.disabled.TryGetValue(key, out bool d) && d; }
+            catch { return false; }
+        }
+
+        internal static bool CamTouchesNumber(LevelEvent e, string key)
+        {
+            try
+            {
+                if (CamDisabled(e, key)) return false;
+                var d = EventData(e);
+                if (d == null || !d.TryGetValue(key, out var v) || v == null) return false;
+                float f = System.Convert.ToSingle(v);
+                return !float.IsNaN(f) && !float.IsInfinity(f);
+            }
+            catch { return false; }
+        }
+
+        internal static bool CamTouchesPosition(LevelEvent e)
+        {
+            try
+            {
+                if (CamDisabled(e, "position")) return false;
+                var d = EventData(e);
+                if (d == null || !d.TryGetValue("position", out var v) || !(v is Vector2 p)) return false;
+                return !float.IsNaN(p.x) || !float.IsNaN(p.y);
+            }
+            catch { return false; }
+        }
+
+        // Keyframe end = start + duration beats at the tile's pulse (duration is in beats).
+        private static float CamDurationFracEnd(LevelEvent e, float startFrac)
+        {
+            try
+            {
+                var d = EventData(e);
+                if (d == null || !d.TryGetValue("duration", out var v) || v == null) return startFrac;
+                float beats = System.Convert.ToSingle(v);
+                if (float.IsNaN(beats) || beats <= 0f) return startFrac;
+                int fl = Mathf.Clamp(e.floor, 0, _tileBpmPrefix.Length - 1);
+                double bpm = _tileBpmPrefix[fl] > 1.0 ? _tileBpmPrefix[fl] : _levelBpm;
+                double endT = _timePrefix[fl] + beats * (60.0 / bpm);
+                return _totalTime > 0.001 ? (float)(endT / _totalTime) : startFrac;
+            }
+            catch { return startFrac; }
         }
 
         // Paint the events inside the current view window (3×9 blocks, category-colored,
@@ -946,7 +1668,9 @@ namespace Sapphire
         {
             if (_markerTex == null || _laneEvents == null) return;
             int laneCount = _laneEvents.Length;
-            int texH = laneCount * TexLaneH;
+            int tlh = TexLaneHEff;
+            int subH = CamMode && _expandedLane >= 0 ? (int)SubRowH : 0;
+            int texH = laneCount * tlh + subH;
             var px = new Color32[TexW * texH];
             float viewEnd = _viewStart + 1f / _zoom;
 
@@ -1003,30 +1727,134 @@ namespace Sapphire
             for (int lane = 0; lane < laneCount; lane++)
             {
                 var cat = lane < _lanes.Count ? _lanes[lane] : (LevelEventCategory)(-1);
-                var c = CategoryColor(cat);
+                var c = TlMode >= 2 ? StrLaneColor(lane) : CategoryColor(cat);
                 var list = _laneEvents[lane];
-                int y0 = (laneCount - 1 - lane) * TexLaneH + 1; // texture row 0 = bottom
+                // texture row 0 = bottom; lanes at/above the expanded one sit above its sub-row
+                int y0 = (laneCount - 1 - lane) * tlh + (subH > 0 && lane <= _expandedLane ? subH : 0) + 1;
                 for (int i = 0; i < list.Count; i++)
                 {
                     float frac = list[i].Key;
-                    if (frac < _viewStart || frac > viewEnd) continue;
                     var e = list[i].Value;
+                    float fracEnd = KeyframeMode ? CamDurationFracEnd(e, frac) : frac;
+                    if (fracEnd < _viewStart || frac > viewEnd) continue;
                     var col = e.active
                         ? new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255)
                         : new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 90);
                     int x0 = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 4)), 0, TexW - 4);
-                    for (int y = y0; y < y0 + TexLaneH - 3; y++)
+                    if (!KeyframeMode)
+                    {
+                        for (int y = y0; y < y0 + tlh - 3; y++)
+                        {
+                            int row = y * TexW;
+                            px[row + x0] = col;
+                            px[row + x0 + 1] = col;
+                            px[row + x0 + 2] = col;
+                            px[row + x0 + 3] = col;
+                        }
+                        continue;
+                    }
+                    // Camera keyframes: duration-0 = thin SET tick; tweens = head + body
+                    // bar to the end beat. A set tick followed by a tween at the same spot
+                    // is the classic pair — they join visually into tick-then-bar.
+                    bool selKf = ReferenceEquals(e, _camSel);
+                    if (selKf) col = new Color32(255, 255, 255, 255);
+                    int x1 = Mathf.Clamp((int)((fracEnd - _viewStart) * _zoom * (TexW - 4)), x0, TexW - 4);
+                    var body = new Color32(col.r, col.g, col.b, (byte)(e.active ? 120 : 45));
+                    if (x1 <= x0 + 1)
+                    {
+                        for (int y = y0; y < y0 + tlh - 3; y++)
+                        {
+                            int row = y * TexW;
+                            px[row + x0] = col;
+                            px[row + x0 + 1] = col;
+                        }
+                        continue;
+                    }
+                    int midLo = y0 + 4, midHi = y0 + tlh - 7;
+                    for (int y = y0; y < y0 + tlh - 3; y++)
                     {
                         int row = y * TexW;
-                        px[row + x0] = col;
+                        px[row + x0] = col;                      // head
                         px[row + x0 + 1] = col;
                         px[row + x0 + 2] = col;
-                        px[row + x0 + 3] = col;
+                        if (y >= midLo && y <= midHi)
+                            for (int x = x0 + 3; x <= x1; x++) px[row + x] = body;
+                        px[row + x1] = col;                      // end cap
                     }
                 }
             }
+            // Expanded property sub-row: one diamond per keyframe, pairs fanned apart so
+            // duration-0 partners stay individually clickable. This row is where retiming
+            // happens; the cache feeds its hit-testing.
+            _subKf.Clear();
+            if (subH > 0 && _expandedLane < laneCount)
+            {
+                int rowBase = (laneCount - 1 - _expandedLane) * tlh;
+                int cy = rowBase + subH / 2;
+                var list = _laneEvents[_expandedLane];
+                var rowBg = new Color32(255, 255, 255, 12);
+                for (int y = rowBase; y < rowBase + subH - 2; y++)
+                    for (int x = 0; x < TexW; x++)
+                        if (px[y * TexW + x].a == 0) px[y * TexW + x] = rowBg;
+                int lastX = -1000; // NOT int.MinValue — cx - lastX must not overflow
+                for (int i = 0; i < list.Count; i++)
+                {
+                    float frac = list[i].Key;
+                    if (frac < _viewStart || frac > viewEnd) continue;
+                    int cx = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 4)), 0, TexW - 4) + 2;
+                    if (cx - lastX < 12) cx = lastX + 12; // fan out stacked pairs
+                    if (cx > TexW - 6) continue;
+                    lastX = cx;
+                    var e = list[i].Value;
+                    bool selK = ReferenceEquals(e, _camSel);
+                    var kc = selK ? new Color32(255, 255, 255, 255)
+                        : new Color32(200, 220, 255, e.active ? (byte)230 : (byte)90);
+                    int rad = selK ? 7 : 5;
+                    for (int dy = -rad; dy <= rad; dy++)
+                    {
+                        int w2 = rad - Mathf.Abs(dy);
+                        int yy = Mathf.Clamp(cy + dy, 0, texH - 1);
+                        for (int dx = -w2; dx <= w2; dx++)
+                            px[yy * TexW + Mathf.Clamp(cx + dx, 0, TexW - 1)] = kc;
+                    }
+                    _subKf.Add(new KeyValuePair<int, LevelEvent>(cx, e));
+                }
+            }
+
             _markerTex.SetPixels32(px);
             _markerTex.Apply(false);
+        }
+
+        // sub-row diamond cache: texture-x → event (for hit-testing)
+        private static readonly List<KeyValuePair<int, LevelEvent>> _subKf = new List<KeyValuePair<int, LevelEvent>>();
+
+        // ghost diamond riding the cursor while a keyframe is being dragged (visual only)
+        private static GameObject _dragGhostGo;
+
+        private static void SyncDragGhost(bool show, Vector2 mouse)
+        {
+            if (!show)
+            {
+                if (_dragGhostGo != null && _dragGhostGo.activeSelf) _dragGhostGo.SetActive(false);
+                return;
+            }
+            if (_dragGhostGo == null)
+            {
+                _dragGhostGo = new GameObject("DragGhost", typeof(RectTransform));
+                _dragGhostGo.transform.SetParent(_canvasGo.transform, false);
+                var r = (RectTransform)_dragGhostGo.transform;
+                r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+                r.pivot = new Vector2(0.5f, 0.5f);
+                r.sizeDelta = new Vector2(13f, 13f);
+                r.localEulerAngles = new Vector3(0f, 0f, 45f); // square → diamond
+                var img = _dragGhostGo.AddComponent<Image>();
+                img.color = new Color(1f, 1f, 1f, 0.75f);
+                img.raycastTarget = false;
+            }
+            if (!_dragGhostGo.activeSelf) _dragGhostGo.SetActive(true);
+            Vector2 local;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRect, mouse, null, out local))
+                ((RectTransform)_dragGhostGo.transform).anchoredPosition = local;
         }
 
         // ── tooltip ─────────────────────────────────────────────────────────
@@ -1485,6 +2313,8 @@ namespace Sapphire
 
             MakeZoomButton(stripGo.transform, "-", -ZoomW + 2f, () => Zoom(1f / 1.5f));
             MakeZoomButton(stripGo.transform, "+", -ZoomW / 2f + 3f, () => Zoom(1.5f));
+            BuildCamButton(stripGo.transform);
+            BuildGraphButton(stripGo.transform);
             BuildTransport(stripGo.transform);
             BuildModeCluster();
             _stripRect.gameObject.SetActive(false);
@@ -2012,6 +2842,137 @@ namespace Sapphire
             if (seconds < 0.0) seconds = 0.0;
             int s = (int)seconds;
             return (s / 60) + ":" + (s % 60).ToString("00");
+        }
+
+        // Mode dropdown: NORMAL (category view) / CAM / DECO / FILTER — the CDF surfaces.
+        private static void BuildCamButton(Transform parent)
+        {
+            var go = new GameObject("CamMode", typeof(RectTransform)); // name kept for help mapping
+            go.transform.SetParent(parent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(1f, 0.5f);
+            r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.sizeDelta = new Vector2(ZoomW - 4f, 22f);
+            r.anchoredPosition = new Vector2(-ZoomW + 2f, -26f);
+            _camBtnBg = go.AddComponent<RoundedRectGraphic>();
+            _camBtnBg.Radius = 5f;
+            _camBtnBg.color = new Color(1f, 1f, 1f, 0.12f);
+            _camBtnBg.raycastTarget = true;
+            var txtGo = new GameObject("Label", typeof(RectTransform));
+            txtGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)txtGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = tr.offsetMax = Vector2.zero;
+            _modeBtnLabel = txtGo.AddComponent<TextMeshProUGUI>();
+            _modeBtnLabel.font = UI.Theme.TmpFont;
+            _modeBtnLabel.fontSize = 11;
+            _modeBtnLabel.color = Color.white;
+            _modeBtnLabel.alignment = TextAlignmentOptions.Center;
+            _modeBtnLabel.raycastTarget = false;
+            _modeBtnLabel.text = "NORMAL";
+            UI.ClickHandler.Attach(go, ToggleModeMenu);
+            SyncCamButton();
+        }
+
+        private static void ToggleModeMenu()
+        {
+            if (_modeMenuGo != null) { Object.Destroy(_modeMenuGo); _modeMenuGo = null; return; }
+            _modeMenuGo = new GameObject("ModeMenu", typeof(RectTransform));
+            _modeMenuGo.transform.SetParent(_stripRect, false);
+            var menuCanvas = _modeMenuGo.AddComponent<Canvas>();
+            menuCanvas.overrideSorting = true;
+            menuCanvas.sortingOrder = 941; // above the strip, cluster and dock
+            _modeMenuGo.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            var r = (RectTransform)_modeMenuGo.transform;
+            r.anchorMin = r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(1f, 0f);
+            r.anchoredPosition = new Vector2(-6f, -14f);
+            r.sizeDelta = new Vector2(96f, 4 * 26f + 8f);
+            var bg = _modeMenuGo.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 8f;
+            bg.color = new Color(0.07f, 0.07f, 0.09f, 0.98f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            bg.raycastTarget = true;
+            for (int i = 0; i < 4; i++)
+            {
+                int mode = i;
+                var rowGo = new GameObject("M" + i, typeof(RectTransform));
+                rowGo.transform.SetParent(_modeMenuGo.transform, false);
+                var rr = (RectTransform)rowGo.transform;
+                rr.anchorMin = new Vector2(0f, 1f); rr.anchorMax = new Vector2(1f, 1f);
+                rr.pivot = new Vector2(0.5f, 1f);
+                rr.offsetMin = new Vector2(4f, 0f); rr.offsetMax = new Vector2(-4f, 0f);
+                rr.anchoredPosition = new Vector2(0f, -4f - i * 26f);
+                rr.sizeDelta = new Vector2(rr.sizeDelta.x, 24f);
+                var rbg = rowGo.AddComponent<RoundedRectGraphic>();
+                rbg.Radius = 5f;
+                var a = UI.Theme.Accent;
+                rbg.color = TlMode == mode ? new Color(a.r, a.g, a.b, 0.45f) : new Color(1f, 1f, 1f, 0.03f);
+                rbg.raycastTarget = true;
+                var lGo = new GameObject("L", typeof(RectTransform));
+                lGo.transform.SetParent(rowGo.transform, false);
+                var lr = (RectTransform)lGo.transform;
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = lr.offsetMax = Vector2.zero;
+                var lt = lGo.AddComponent<TextMeshProUGUI>();
+                lt.font = UI.Theme.TmpFont;
+                lt.fontSize = 12;
+                lt.color = Color.white;
+                lt.alignment = TextAlignmentOptions.Center;
+                lt.raycastTarget = false;
+                lt.text = TlModeNames[i];
+                UI.ClickHandler.Attach(rowGo, () =>
+                {
+                    TlMode = mode;
+                    if (!CamMode) { _camSel = null; _camSelDirty = true; _expandedLane = -1; }
+                    Object.Destroy(_modeMenuGo); _modeMenuGo = null;
+                    SyncCamButton();
+                    _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                });
+            }
+        }
+
+        private static void SyncCamButton()
+        {
+            if (_camBtnBg == null) return;
+            var a = UI.Theme.Accent;
+            _camBtnBg.color = TlMode > 0 ? new Color(a.r, a.g, a.b, 0.5f) : new Color(1f, 1f, 1f, 0.12f);
+            if (_modeBtnLabel != null) _modeBtnLabel.text = TlModeNames[Mathf.Clamp(TlMode, 0, 3)];
+            if (_graphBtnGo != null && _graphBtnGo.activeSelf != CamMode) _graphBtnGo.SetActive(CamMode);
+        }
+
+        // No selection needed: opens on the timeline's current view (zoom tab by default).
+        private static void BuildGraphButton(Transform parent)
+        {
+            var go = new GameObject("GraphBtn", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            _graphBtnGo = go;
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(1f, 0.5f);
+            r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.sizeDelta = new Vector2(ZoomW - 4f, 22f);
+            r.anchoredPosition = new Vector2(-ZoomW + 2f, -52f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = new Color(1f, 1f, 1f, 0.12f);
+            bg.raycastTarget = true;
+            var txtGo = new GameObject("Label", typeof(RectTransform));
+            txtGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)txtGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = tr.offsetMax = Vector2.zero;
+            var t = txtGo.AddComponent<TextMeshProUGUI>();
+            t.font = UI.Theme.TmpFont;
+            t.fontSize = 11;
+            t.color = Color.white;
+            t.alignment = TextAlignmentOptions.Center;
+            t.raycastTarget = false;
+            t.text = "GRAPH";
+            UI.ClickHandler.Attach(go, () => EditorGraph.Open(_camSel != null ? _camSelLane : 2));
+            go.SetActive(false);
         }
 
         private static void MakeZoomButton(Transform parent, string label, float x, UnityEngine.Events.UnityAction onClick)

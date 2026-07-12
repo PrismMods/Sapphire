@@ -94,6 +94,25 @@ namespace Sapphire
             ["DLC"] = "DLC",
             ["Other"] = "그 외",
 
+            // ── presets ──
+            ["Presets"] = "프리셋",
+            ["Preset"] = "프리셋",
+            ["+ Save capture"] = "+ 캡처 저장",
+            ["(none — capture a tile, then Save)"] = "(없음 — 타일을 캡처한 뒤 저장하세요)",
+
+            // ── camera timeline ──
+            ["Ease"] = "이징",
+            ["Custom bezier"] = "커스텀 베지어",
+            ["Graph"] = "그래프",
+            ["Needs an earlier keyframe for the start value"] = "시작 값을 읽을 이전 키프레임이 필요합니다",
+            ["This keyframe has no duration to decompose"] = "분해할 지속 시간이 없는 키프레임입니다",
+            ["This keyframe animates nothing decomposable"] = "분해할 수 있는 속성이 없는 키프레임입니다",
+            ["Segments"] = "구간 수",
+            ["Cancel"] = "취소",
+            ["Position"] = "위치",
+            ["Rotation"] = "회전",
+            ["Zoom"] = "확대",
+
             // ── pitch bar ──
             ["Pitch"] = "피치",
             ["Reset"] = "초기화",

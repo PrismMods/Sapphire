@@ -150,6 +150,10 @@ namespace Sapphire
                 EditorGameSettings.Tick();
                 EditorVfxPreview.Tick();
                 EditorHelp.Tick();
+                EditorPresets.Tick();
+                EditorEasePicker.Tick();
+                EditorBezier.Tick();
+                EditorGraph.Tick();
                 EditorMasterSwitch.Tick();
             }
         }
@@ -210,6 +214,10 @@ namespace Sapphire
             EditorGameSettings.Dispose();
             EditorVfxPreview.Dispose();
             EditorHelp.Dispose();
+            EditorPresets.Dispose();
+            EditorEasePicker.Dispose();
+            EditorBezier.Dispose();
+            EditorGraph.Dispose();
             EditorMasterSwitch.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
