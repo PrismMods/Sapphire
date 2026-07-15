@@ -1,6 +1,6 @@
 # Sapphire
 
-ADOFAI editor suite by QuartzTeam
+ADOFAI editor suite by PrismMods
 
 - Premiere-style event timeline
 - redesigned editor UI
