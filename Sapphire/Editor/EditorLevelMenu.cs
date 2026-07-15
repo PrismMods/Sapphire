@@ -128,7 +128,8 @@ namespace Sapphire
 
             if (_open)
             {
-                if (ed == null || ed.playMode || _panelRect == null || ed.settingsPanel == null)
+                if (ed == null || ed.playMode || _panelRect == null || ed.settingsPanel == null
+                    || !MainClass.EditorSuiteOn)
                 { Close(); return; }
                 if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
                 // Hold it in our card against the game's own slide/relayout.
@@ -158,7 +159,31 @@ namespace Sapphire
                 }
                 catch { }
             }
-            else { ShowPanelInPlace(); ManagesPanel = false; }
+            else
+            {
+                ShowPanelInPlace();
+                RestorePanelGeometry();
+                ManagesPanel = false;
+            }
+        }
+
+        // Belt-and-braces: if our wide hosted size ever survives a hand-back (mod toggled
+        // off mid-layout, exception during Close), re-assert the captured vanilla geometry.
+        private static void RestorePanelGeometry()
+        {
+            if (_panelRect == null || _origParent == null) return;
+            try
+            {
+                if (_panelRect.parent != _origParent) return; // still hosted → Close() owns it
+                if ((_panelRect.sizeDelta - _origSizeDelta).sqrMagnitude > 1f)
+                {
+                    _panelRect.anchorMin = _origAnchorMin; _panelRect.anchorMax = _origAnchorMax;
+                    _panelRect.pivot = _origPivot;
+                    _panelRect.sizeDelta = _origSizeDelta;
+                    _panelRect.anchoredPosition = _origAnchoredPos;
+                }
+            }
+            catch { }
         }
 
         private static void HidePanelInPlace(scnEditor ed)

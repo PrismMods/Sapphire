@@ -119,7 +119,8 @@ namespace Sapphire
         [HarmonyPatch(typeof(scnEditor), "ZoomCamera")]
         private static class EditorZoomBlockPatch
         {
-            public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered && !EditorGraph.PanelHovered;
+            public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
+                && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen;
         }
 
         /* Editor Mode hides the autoplay status label. Disabling the Text directly is the
@@ -134,7 +135,7 @@ namespace Sapphire
                 try
                 {
                     var s = MainClass.Settings;
-                    if (s == null || !s.EditorModeActive) return;
+                    if (s == null || !s.EditorModeActive || !MainClass.EditorSuiteOn) return;
                     var t = __instance.GetComponent<UnityEngine.UI.Text>();
                     if (t != null) t.enabled = false;
                 }

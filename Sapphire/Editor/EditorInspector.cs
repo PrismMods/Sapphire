@@ -300,6 +300,7 @@ namespace Sapphire
                 return;
             }
             int sig = ((int)sel.levelEventType) * 1000 + count;
+            foreach (var l in InstanceLabels(sel.levelEventType, count)) sig = sig * 31 + l.GetHashCode();
             if (sig != _instSig || _instGo == null) BuildInstanceChips(sel.levelEventType, count);
             _instSig = sig;
             if (!_instGo.activeSelf) _instGo.SetActive(true);
@@ -313,19 +314,64 @@ namespace Sapphire
             }
         }
 
+        // Filter events label their chips with the FILTER NAME instead of 1/2/3 —
+        // "which of the four SetFilterAdvanced is Manga Flash" was unanswerable.
+        private static List<string> InstanceLabels(ADOFAI.LevelEventType type, int count)
+        {
+            var labels = new List<string>();
+            if (type == ADOFAI.LevelEventType.SetFilterAdvanced || type == ADOFAI.LevelEventType.SetFilter)
+            {
+                try
+                {
+                    var ed = scnEditor.instance;
+                    var sel = ed.selectedFloors;
+                    int seq = sel != null && sel.Count > 0 && sel[sel.Count - 1] != null
+                        ? sel[sel.Count - 1].seqID : -1;
+                    foreach (var e in ed.events)
+                    {
+                        if (e == null || e.floor != seq || e.eventType != type) continue;
+                        string n = "";
+                        var d = EditorEvents.EventData(e);
+                        if (d != null && d.TryGetValue("filter", out var v) && v != null) n = v.ToString();
+                        if (n.StartsWith("CameraFilterPack_")) n = n.Substring(17);
+                        int us = n.IndexOf('_');
+                        if (us > 0) n = n.Substring(us + 1).Replace('_', ' ');
+                        labels.Add(string.IsNullOrEmpty(n) ? (labels.Count + 1).ToString() : n);
+                    }
+                }
+                catch { }
+            }
+            while (labels.Count < count) labels.Add((labels.Count + 1).ToString());
+            return labels;
+        }
+
         private static void BuildInstanceChips(ADOFAI.LevelEventType type, int count)
         {
             if (_instGo != null) UnityEngine.Object.Destroy(_instGo);
             _instBgs.Clear();
 
-            const float chip = 22f, gap = 4f, pad = 6f;
-            float width = pad * 2f + count * (chip + gap) - gap;
+            var labels = InstanceLabels(type, count);
+            const float gap = 4f, pad = 6f, rowH = 26f, maxW = 360f;
+            var widths = new float[count];
+            var rowOf = new int[count];
+            var xOf = new float[count];
+            int rows = 1;
+            float cxw = pad, width = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                widths[i] = Mathf.Clamp(labels[i].Length * 7f + 12f, 22f, 130f);
+                if (cxw + widths[i] > maxW && cxw > pad) { rows++; cxw = pad; }
+                rowOf[i] = rows - 1;
+                xOf[i] = cxw;
+                cxw += widths[i] + gap;
+                width = Mathf.Max(width, cxw - gap + pad);
+            }
             _instGo = new GameObject("InstanceChips", typeof(RectTransform));
             _instGo.transform.SetParent(_railGo.transform, false);
             _instRect = (RectTransform)_instGo.transform;
             _instRect.anchorMin = _instRect.anchorMax = new Vector2(0f, 1f);
             _instRect.pivot = new Vector2(1f, 0.5f); // hangs off the rail's left edge
-            _instRect.sizeDelta = new Vector2(width, 30f);
+            _instRect.sizeDelta = new Vector2(width, rows * rowH + 6f);
             var bg = _instGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 9f;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.9f);
@@ -339,10 +385,11 @@ namespace Sapphire
                 var cGo = new GameObject("C" + i, typeof(RectTransform));
                 cGo.transform.SetParent(_instGo.transform, false);
                 var cr = (RectTransform)cGo.transform;
-                cr.anchorMin = cr.anchorMax = new Vector2(0f, 0.5f);
-                cr.pivot = new Vector2(0f, 0.5f);
-                cr.anchoredPosition = new Vector2(pad + i * (chip + gap), 0f);
-                cr.sizeDelta = new Vector2(chip, chip);
+                cr.anchorMin = new Vector2(0f, 1f);
+                cr.anchorMax = new Vector2(0f, 1f);
+                cr.pivot = new Vector2(0f, 1f);
+                cr.anchoredPosition = new Vector2(xOf[i], -4f - rowOf[i] * rowH);
+                cr.sizeDelta = new Vector2(widths[i], 22f);
                 var cbg = cGo.AddComponent<RoundedRectGraphic>();
                 cbg.Radius = 6f;
                 cbg.color = new Color(1f, 1f, 1f, 0.07f);
@@ -355,11 +402,13 @@ namespace Sapphire
                 lr.offsetMin = Vector2.zero; lr.offsetMax = Vector2.zero;
                 var lbl = lblGo.AddComponent<TextMeshProUGUI>();
                 lbl.font = UI.Theme.TmpFont;
-                lbl.fontSize = 12.5f;
+                lbl.fontSize = 11.5f;
                 lbl.color = new Color(0.93f, 0.93f, 0.94f, 1f);
                 lbl.alignment = TextAlignmentOptions.Center;
+                lbl.textWrappingMode = TextWrappingModes.NoWrap;
+                lbl.overflowMode = TextOverflowModes.Ellipsis;
                 lbl.raycastTarget = false;
-                lbl.text = (i + 1).ToString();
+                lbl.text = labels[i];
                 UI.ClickHandler.Attach(cGo, () =>
                 {
                     try { scnEditor.instance.levelEventsPanel.ShowPanel(type, n); }

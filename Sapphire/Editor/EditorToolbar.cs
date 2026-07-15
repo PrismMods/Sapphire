@@ -42,7 +42,10 @@ namespace Sapphire
             try
             {
                 var s = MainClass.Settings;
-                if (s == null || !s.EditorTileActions) return Input.GetMouseButton(1);
+                // Master switch off = pure vanilla (EditorTileActions is force-true now,
+                // so it can't gate this on its own anymore).
+                if (s == null || !s.EditorTileActions || !MainClass.EditorSuiteOn)
+                    return Input.GetMouseButton(1);
                 if (!(_freeAngleTool || Input.GetKey(KeyCode.LeftAlt))) return false;
                 // While the cursor is over Sapphire UI, stand down — this frame-delays
                 // freeAngleMode to false before a click on the UI can place a tile on exit.

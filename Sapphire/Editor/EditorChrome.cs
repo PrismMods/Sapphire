@@ -90,8 +90,11 @@ namespace Sapphire
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) { _canvasGo.SetActive(false); CloseMenu(); }
                 // During play-testing keep the game chrome faded — the game re-shows it on
-                // exit and un-fading here made it flash before the next fade landed.
-                if (ed == null)
+                // exit and un-fading here made it flash before the next fade landed. But
+                // master-off in the editor must restore, or the file bar stays invisible.
+                bool playing = false;
+                try { playing = ed != null && ed.playMode; } catch { }
+                if (!playing)
                 {
                     RestoreBar();
                     RestoreTabs();
@@ -525,7 +528,7 @@ namespace Sapphire
             // Wheel scrolls an overflowing event column while hovered.
             if (_dockScrollMax > 0f && _dockEvtContent != null && DockHovered)
             {
-                float wheel = Input.mouseScrollDelta.y;
+                float wheel = MainClass.WheelY;
                 if (wheel != 0f)
                 {
                     _dockScroll = Mathf.Clamp(_dockScroll - wheel * 40f, 0f, _dockScrollMax);

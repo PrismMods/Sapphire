@@ -113,6 +113,7 @@
         <Compile Include="Editor\EditorEasePicker.cs" />
         <Compile Include="Editor\EditorBezier.cs" />
         <Compile Include="Editor\EditorGraph.cs" />
+        <Compile Include="Editor\EditorFilterPicker.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />

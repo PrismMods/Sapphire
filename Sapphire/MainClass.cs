@@ -16,6 +16,15 @@ namespace Sapphire
         public static Settings Settings { get; private set; }
         // Editor-suite master switch (the corner button) — every editor feature gates on this.
         internal static bool EditorSuiteOn => Settings == null || Settings.EditorSuiteOn;
+        // Wheel delta for Sapphire's own scroll surfaces, honoring the invert setting.
+        internal static float WheelY
+        {
+            get
+            {
+                float w = UnityEngine.Input.mouseScrollDelta.y;
+                return Settings != null && Settings.InvertScroll ? -w : w;
+            }
+        }
         public static UnityModManager.ModEntry.ModLogger Logger { get; private set; }
         public static string ModPath { get; private set; }
 
@@ -154,6 +163,7 @@ namespace Sapphire
                 EditorEasePicker.Tick();
                 EditorBezier.Tick();
                 EditorGraph.Tick();
+                EditorFilterPicker.Tick();
                 EditorMasterSwitch.Tick();
             }
         }
@@ -218,6 +228,7 @@ namespace Sapphire
             EditorEasePicker.Dispose();
             EditorBezier.Dispose();
             EditorGraph.Dispose();
+            EditorFilterPicker.Dispose();
             EditorMasterSwitch.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();

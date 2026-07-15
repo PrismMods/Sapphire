@@ -32,7 +32,11 @@ namespace Sapphire
         private static readonly List<TextMeshProUGUI> _xLabels = new List<TextMeshProUGUI>();
 
         private const int TexW = 1400, TexH = 380;
-        private const float PanelW = 1480f, PanelH = 470f, PlotH = 398f;
+        private const float PanelW = 1480f, PanelH = 500f, PlotH = 398f;
+        // user-adjusted geometry survives reopen (drag the header / resize the edges)
+        private static Vector2 _userPos = Vector2.zero;
+        private static Vector2 _userSize = Vector2.zero;
+        private static bool _userMoved;
 
         private static int _tab;                 // 0=pos(X+Y) 1=X 2=Y 3=rotation 4=zoom
         private static float _vs, _ve;           // view window (frac space)
@@ -123,6 +127,11 @@ namespace Sapphire
                 Repaint();
             }
             TickMouse(ed);
+            if (_panelGo != null)
+            {
+                var pr = (RectTransform)_panelGo.transform;
+                _userPos = pr.anchoredPosition; _userSize = pr.sizeDelta; _userMoved = true;
+            }
             if (--_repaint <= 0) { _repaint = 30; Repaint(); } // catch external edits
         }
 
@@ -389,7 +398,7 @@ namespace Sapphire
             float ny = Mathf.Clamp01((local.y - rect.yMin) / rect.height);
             float frac = _vs + nx * (_ve - _vs);
 
-            float wheel = Input.mouseScrollDelta.y;
+            float wheel = MainClass.WheelY;
             if (Mathf.Abs(wheel) > 0.01f && (insidePlot || onXAxis || onYAxis))
             {
                 if (onYAxis)
@@ -565,15 +574,37 @@ namespace Sapphire
             var r = (RectTransform)_panelGo.transform;
             r.anchorMin = new Vector2(0.5f, 0f);
             r.anchorMax = new Vector2(0.5f, 0f);
-            r.pivot = new Vector2(0.5f, 0f);
-            r.anchoredPosition = new Vector2(0f, EditorEvents.GraphStripTop + 10f);
-            r.sizeDelta = new Vector2(PanelW, PanelH);
+            r.pivot = new Vector2(0.5f, 0.5f); // centered pivot = exact edge-resize math
+            r.sizeDelta = _userMoved && _userSize.x > 100f ? _userSize : new Vector2(PanelW, PanelH);
+            r.anchoredPosition = _userMoved
+                ? _userPos
+                : new Vector2(0f, EditorEvents.GraphStripTop + 10f + r.sizeDelta.y * 0.5f);
             var bg = _panelGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 12f;
             bg.color = new Color(0.05f, 0.05f, 0.07f, 0.97f);
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
             bg.raycastTarget = true;
+
+            // drag header: full-width band behind the tab row; "Graph View" title center
+            var headGo = new GameObject("Header", typeof(RectTransform));
+            headGo.transform.SetParent(_panelGo.transform, false);
+            var hr = (RectTransform)headGo.transform;
+            hr.anchorMin = new Vector2(0f, 1f); hr.anchorMax = new Vector2(1f, 1f);
+            hr.pivot = new Vector2(0.5f, 1f);
+            hr.offsetMin = new Vector2(4f, -40f); hr.offsetMax = new Vector2(-4f, -2f);
+            var hImg = headGo.AddComponent<Image>();
+            hImg.color = new Color(1f, 1f, 1f, 0.02f);
+            hImg.raycastTarget = true;
+            headGo.AddComponent<DragHandle>();
+            var htGo = new GameObject("T", typeof(RectTransform));
+            htGo.transform.SetParent(headGo.transform, false);
+            var htr = (RectTransform)htGo.transform;
+            htr.anchorMin = new Vector2(0.5f, 0.5f); htr.anchorMax = new Vector2(0.5f, 0.5f);
+            htr.pivot = new Vector2(0.5f, 0.5f);
+            htr.sizeDelta = new Vector2(240f, 22f);
+            var ht = UIBuilder.Tmp(htGo, Loc.T("Graph View"), 13.5f, TextAnchor.MiddleCenter, Theme.TextMuted);
+            ht.raycastTarget = false;
 
             _tabBgs.Clear();
             string[] labels = { Loc.T("Position"), "X", "Y", Loc.T("Rotation"), Loc.T("Zoom") };
@@ -630,11 +661,13 @@ namespace Sapphire
             var plotGo = new GameObject("Plot", typeof(RectTransform));
             plotGo.transform.SetParent(_panelGo.transform, false);
             _plotArea = (RectTransform)plotGo.transform;
+            // full-stretch: the plot follows the panel through resizes (fixed height left
+            // dead space when the window grew)
             _plotArea.anchorMin = new Vector2(0f, 0f);
-            _plotArea.anchorMax = new Vector2(1f, 0f);
+            _plotArea.anchorMax = new Vector2(1f, 1f);
             _plotArea.pivot = new Vector2(0.5f, 0f);
             _plotArea.offsetMin = new Vector2(78f, 30f);
-            _plotArea.offsetMax = new Vector2(-28f, 30f + PlotH - 18f);
+            _plotArea.offsetMax = new Vector2(-28f, -48f); // clears the header/tab row
             _plotImg = plotGo.AddComponent<RawImage>();
             _plotTex = new Texture2D(TexW, TexH, TextureFormat.RGBA32, false);
             _plotTex.filterMode = FilterMode.Bilinear;
@@ -680,6 +713,8 @@ namespace Sapphire
             cr2.sizeDelta = new Vector2(90f, 16f);
             var cap = UIBuilder.Tmp(capGo, Loc.T("Beats"), 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
             cap.raycastTarget = false;
+
+            ResizeHandle.AttachAll(r); // all 8 edges/corners
 
             _repaint = 30;
         }

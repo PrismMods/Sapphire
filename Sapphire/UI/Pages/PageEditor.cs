@@ -27,6 +27,9 @@ namespace Sapphire.UI.Pages
             });
             langLabel = langBtn.GetComponentInChildren<TextMeshProUGUI>();
 
+            UIBuilder.Collapsible(content, "Invert scroll direction", s.InvertScroll,
+                v => { s.InvertScroll = v; notify?.Invoke(); }, null);
+
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Editor mode",
                 "Clean screen for charting: while in the editor\n(play-testing included), " +

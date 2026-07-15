@@ -146,6 +146,8 @@ namespace Sapphire
         public bool EditorSuiteOn = true;
         // UI language: 0 = auto (follow the game), 1 = English, 2 = Korean.
         public int UiLanguage = 0;
+        // Flips the wheel direction on Sapphire's scroll surfaces (timeline, graph, docks).
+        public bool InvertScroll = false;
         // Tweaks tab → Editor: on-screen angle readout for the selected editor tile.
         public bool EditorTileAngle = false;
         // Tweaks tab → Editor: chips listing the selected tile's events (hover = details).

@@ -49,8 +49,11 @@ namespace Sapphire
         private const float CamInspH = 46f;  // inline keyframe-inspector row (cam mode)
         // Cam mode is a WORKSPACE, not a readout — people park here for whole sessions,
         // so lanes and text get room (the strip covers gameplay, which doesn't matter here).
-        private static float LaneHEff => KeyframeMode ? 44f : LaneH;
-        private static int TexLaneHEff => KeyframeMode ? 44 : TexLaneH;
+        // User-resizable lane height: the grip on the strip's top edge adds to every
+        // lane (all modes). Session-scoped.
+        private static float _laneHExtra;
+        private static float LaneHEff => (KeyframeMode ? 44f : LaneH) + _laneHExtra;
+        private static int TexLaneHEff => Mathf.Max(12, Mathf.RoundToInt(LaneHEff));
         private const float TransBandH = 44f; // keyframe modes park the transport up top
         private const float SubRowH = 32f;   // expanded keyframe sub-row (label click)
         internal static int _expandedLane = -1;
@@ -346,7 +349,7 @@ namespace Sapphire
         {
             var s = MainClass.Settings;
             scnEditor ed = null;
-            bool wantChips = false, wantTl = false;
+            bool wantChips = false, wantTl = false, wantFold = false;
             try
             {
                 if (s != null && MainClass.EditorSuiteOn && (s.EditorShowEvents || s.EditorTimeline))
@@ -361,15 +364,21 @@ namespace Sapphire
                     // (the playhead follows the run); only the fold arrow hides it (ESC kept
                     // colliding with the game's own ESC behaviors — dropped July 11).
                     wantTl = (inEditor || playing) && s.EditorTimeline && !_tlUserHidden;
-                    TickFoldButton((inEditor || playing) && s.EditorTimeline);
+                    wantFold = (inEditor || playing) && s.EditorTimeline;
                 }
             }
             catch { }
+            // Outside the master gate: the arrow has its OWN canvas, so it must be told to
+            // hide when the suite is switched off — it used to linger.
+            TickFoldButton(wantFold);
 
             if (!wantChips && !wantTl)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 _chipFloor = -2; // force chip rebuild on return
+                // Master-off lands here without ever reaching TickTimeline's restore — un-fade
+                // the game's play cluster or it stays invisible.
+                FadePlayCluster(null, false);
                 // Manual zoom survives transient hides (file menu, prefs panel) but resets
                 // once the user actually leaves the editor.
                 if (ed == null) _userZoomed = false;
@@ -477,23 +486,60 @@ namespace Sapphire
             _chipRects.Clear();
             _chipEvents.Clear();
 
-            int made = 0, skipped = 0;
+            // Heavily-evented tiles repeat the same type over and over — stack a type
+            // into one "×N" chip once it appears more than 3 times (tooltip = 1st event).
+            var counts = new Dictionary<LevelEventType, int>();
             for (int i = 0; i < events.Count; i++)
             {
                 var e = events[i];
                 if (e == null || e.floor != seq) continue;
+                counts[e.eventType] = counts.TryGetValue(e.eventType, out int n) ? n + 1 : 1;
+            }
+            int made = 0, skipped = 0;
+            var stacked = new HashSet<LevelEventType>();
+            Transform row = null;
+            float rowW = 0f;
+            const float MaxRowW = 880f;
+            Transform Row(float nextW)
+            {
+                if (row == null || rowW + nextW > MaxRowW)
+                {
+                    var rGo = new GameObject("ChipRow", typeof(RectTransform));
+                    rGo.transform.SetParent(_chipsRow, false);
+                    var h = rGo.AddComponent<HorizontalLayoutGroup>();
+                    h.spacing = 6f;
+                    h.childAlignment = TextAnchor.MiddleCenter;
+                    h.childForceExpandWidth = false;
+                    h.childForceExpandHeight = false;
+                    h.childControlWidth = true;
+                    h.childControlHeight = true;
+                    row = rGo.transform;
+                    rowW = 0f;
+                }
+                rowW += nextW + 6f;
+                return row;
+            }
+            for (int i = 0; i < events.Count; i++)
+            {
+                var e = events[i];
+                if (e == null || e.floor != seq) continue;
+                bool stack = counts[e.eventType] > 3;
+                if (stack && stacked.Contains(e.eventType)) continue;
                 if (made >= MaxChips) { skipped++; continue; }
-                MakeChip(EventName(e), CategoryColor(PrimaryCategory(e)), e);
+                string label = stack ? EventName(e) + " ×" + counts[e.eventType] : EventName(e);
+                if (stack) stacked.Add(e.eventType);
+                float w = label.Length * 8.5f + 24f;
+                MakeChip(label, CategoryColor(PrimaryCategory(e)), e, Row(w));
                 made++;
             }
-            if (skipped > 0) MakeChip("+" + skipped + " more", new Color(0.62f, 0.62f, 0.66f), null);
-            if (made == 0) MakeChip("No events", new Color(0.55f, 0.55f, 0.6f), null);
+            if (skipped > 0) MakeChip("+" + skipped + " more", new Color(0.62f, 0.62f, 0.66f), null, Row(100f));
+            if (made == 0) MakeChip("No events", new Color(0.55f, 0.55f, 0.6f), null, Row(100f));
         }
 
-        private static void MakeChip(string label, Color cat, LevelEvent evt)
+        private static void MakeChip(string label, Color cat, LevelEvent evt, Transform parent = null)
         {
             var go = new GameObject("Chip", typeof(RectTransform));
-            go.transform.SetParent(_chipsRow, false);
+            go.transform.SetParent(parent != null ? parent : _chipsRow, false);
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 8f;
             bg.color = new Color(0.08f, 0.08f, 0.1f, 0.78f);
@@ -694,14 +740,17 @@ namespace Sapphire
                 {
                     var rct = _markerArea.rect;
                     float headX = rct.xMin + (selFrac - _viewStart) * _zoom * rct.width;
-                    if (Mathf.Abs(lp.x - headX) <= 8f) _draggingHead = true;
+                    // Keyframe modes: the playhead is only grabbable by its top KNOB —
+                    // claiming the whole column made keyframes under the marker unclickable.
+                    bool inGrabZone = KeyframeMode ? lp.y > rct.yMax - 14f : true;
+                    if (inGrabZone && Mathf.Abs(lp.x - headX) <= 8f) _draggingHead = true;
                 }
             }
 
             // Wheel pans while hovering the strip (only meaningful when zoomed in).
             if (hoverStrip && _zoom > 1f)
             {
-                float wheel = Input.mouseScrollDelta.y;
+                float wheel = MainClass.WheelY;
                 if (wheel != 0f)
                 {
                     _viewStart = Mathf.Clamp(_viewStart - wheel * 0.08f / _zoom, 0f, 1f - 1f / _zoom);
@@ -795,10 +844,11 @@ namespace Sapphire
                     }
                     else
                     {
-                        // main view: selection + inline inspector only, never dragging
+                        // main view: select tile + inline row + open THAT event's panel
                         if (hit.floor >= 0 && hit.floor < floors.Count)
                             try { ed.SelectFloor(floors[hit.floor], true); } catch { }
                         _camSel = hit; _camSelDirty = true; _camSelLane = lane;
+                        _showEvt = hit; _showDelay = 3;
                         _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
                     }
                 }
@@ -1293,10 +1343,11 @@ namespace Sapphire
                 }
                 return;
             }
-            // plain click: select the tile and open the inline inspector row
+            // plain click: select the tile, open the inline row AND that event's panel
             if (evt.floor >= 0 && evt.floor < floors.Count)
                 try { ed.SelectFloor(floors[evt.floor], true); } catch { }
             _camSel = evt; _camSelDirty = true; _camSelLane = _dragLane;
+            _showEvt = evt; _showDelay = 3;
             _tlSig = 0; _scanCooldown = 0; _viewDirty = true; // strip grows for the inspector row
         }
 
@@ -1600,7 +1651,31 @@ namespace Sapphire
                     t.color = StrLaneColor(i);
                     t.fontSize = 13;
                 }
-                else t.text = CategoryLabel(_lanes[i]) + (CamMode && _expandedLane == i ? " ›" : "");
+                else t.text = CategoryLabel(_lanes[i]);
+                if (CamMode)
+                {
+                    // Left-aligned label with the chevron RIGHT AFTER the text — the
+                    // right-aligned layout wasted the whole column as a gap.
+                    t.alignment = TextAlignmentOptions.Left;
+                    float tw = t.GetPreferredValues(t.text).x;
+                    var chevGo = new GameObject("Chev", typeof(RectTransform));
+                    chevGo.transform.SetParent(go.transform, false);
+                    var cr = (RectTransform)chevGo.transform;
+                    cr.anchorMin = new Vector2(0f, 0.5f);
+                    cr.anchorMax = new Vector2(0f, 0.5f);
+                    cr.pivot = new Vector2(0.5f, 0.5f);
+                    cr.anchoredPosition = new Vector2(tw + 12f, _expandedLane == i ? -2f : 0f);
+                    cr.sizeDelta = new Vector2(16f, 16f);
+                    cr.localEulerAngles = new Vector3(0f, 0f, _expandedLane == i ? -90f : 0f);
+                    var ct = chevGo.AddComponent<TextMeshProUGUI>();
+                    ct.font = UI.Theme.TmpFont;
+                    ct.fontSize = 17;
+                    ct.fontStyle = TMPro.FontStyles.Bold;
+                    ct.color = t.color;
+                    ct.alignment = TextAlignmentOptions.Center;
+                    ct.raycastTarget = false;
+                    ct.text = "›";
+                }
             }
         }
 
@@ -2311,6 +2386,20 @@ namespace Sapphire
             knobBg.color = Color.white;
             knobBg.raycastTarget = false;
 
+            // top-edge grip: drag vertically to resize lane height (all modes)
+            var gripGo = new GameObject("HeightGrip", typeof(RectTransform));
+            gripGo.transform.SetParent(stripGo.transform, false);
+            var gr = (RectTransform)gripGo.transform;
+            gr.anchorMin = new Vector2(0f, 1f);
+            gr.anchorMax = new Vector2(1f, 1f);
+            gr.pivot = new Vector2(0.5f, 0.5f);
+            gr.offsetMin = new Vector2(0f, -3f);
+            gr.offsetMax = new Vector2(0f, 5f);
+            var gripImg = gripGo.AddComponent<Image>();
+            gripImg.color = new Color(1f, 1f, 1f, 0.03f);
+            gripImg.raycastTarget = true;
+            gripGo.AddComponent<StripHeightGrip>();
+
             MakeZoomButton(stripGo.transform, "-", -ZoomW + 2f, () => Zoom(1f / 1.5f));
             MakeZoomButton(stripGo.transform, "+", -ZoomW / 2f + 3f, () => Zoom(1.5f));
             BuildCamButton(stripGo.transform);
@@ -2325,10 +2414,10 @@ namespace Sapphire
             _chipsRow = (RectTransform)rowGo.transform;
             _chipsRow.anchorMin = _chipsRow.anchorMax = new Vector2(0.5f, 0.93f);
             _chipsRow.pivot = new Vector2(0.5f, 1f);
-            _chipsRow.anchoredPosition = new Vector2(0f, -36f);
-            var layout = rowGo.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 6f;
-            layout.childAlignment = TextAnchor.MiddleCenter;
+            _chipsRow.anchoredPosition = new Vector2(0f, -52f); // clear of the angle readout
+            var layout = rowGo.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 5f;
+            layout.childAlignment = TextAnchor.UpperCenter;
             layout.childForceExpandWidth = false;
             layout.childForceExpandHeight = false;
             layout.childControlWidth = true;
@@ -2973,6 +3062,28 @@ namespace Sapphire
             t.text = "GRAPH";
             UI.ClickHandler.Attach(go, () => EditorGraph.Open(_camSel != null ? _camSelLane : 2));
             go.SetActive(false);
+        }
+
+        // Dragging the strip's top edge scales lane height; rebuilds throttled to whole
+        // pixels so the texture isn't re-allocated every frame of the drag.
+        private class StripHeightGrip : MonoBehaviour,
+            UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler
+        {
+            private float _acc;
+            public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e) { _acc = 0f; }
+            public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
+            {
+                var canvas = GetComponentInParent<Canvas>();
+                float scale = canvas != null ? canvas.scaleFactor : 1f;
+                int laneCount = Mathf.Max(1, _lanes.Count);
+                _acc += (e.delta.y / Mathf.Max(0.01f, scale)) / laneCount;
+                if (Mathf.Abs(_acc) < 1f) return;
+                float step = Mathf.Round(_acc);
+                _acc -= step;
+                float min = KeyframeMode ? -18f : -6f; // never below readable
+                _laneHExtra = Mathf.Clamp(_laneHExtra + step, min, 70f);
+                _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+            }
         }
 
         private static void MakeZoomButton(Transform parent, string label, float x, UnityEngine.Events.UnityAction onClick)
