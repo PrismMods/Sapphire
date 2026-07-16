@@ -278,45 +278,60 @@ namespace Sapphire
 "도움말 모드",
 "<b>사용법</b>\nSapphire UI에 마우스를 올리면 강조 표시됩니다. 클릭하면 해당 기능의 설명이 여기에 표시됩니다.\n\n<b>단축키</b>\nESC — 도움말 모드 종료.");
 
-            Add(d, "Tool0", "Circular path",
+            Add(d, "ToolCircle", "Circular path",
 "<b>What it does</b>\nGenerates stars, circles and midspin-circles after the selected tile (Star Calculator parameters).\n\n<b>How to use</b>\nSelect a tile, open the tool, set Pseudo per round / interval / angle, optional Reverse, Keep BPM, mid-spin. Apply builds in one undo.\n\n<b>Keys</b>\n1 — open (no tile selected).",
 "원형 경로",
 "<b>기능</b>\n선택한 타일 뒤에 별/원/미드스핀 원을 생성합니다 (Star Calculator 방식 파라미터).\n\n<b>사용법</b>\n타일을 선택하고 도구를 연 뒤 라운드당 동타 수 / 간격 / 각도를 설정합니다. Reverse, BPM 유지, 미드스핀 옵션 제공. 적용 시 실행 취소 1회로 묶입니다.\n\n<b>단축키</b>\n1 — 열기 (타일 미선택 시).");
 
-            Add(d, "Tool1", "Free angle",
+            Add(d, "ToolFreeAngle", "Free angle",
 "<b>What it does</b>\nAim the next tile freely with the mouse.\n\n<b>How to use</b>\nToggle the tool (or hold left-Alt) with a single tile selected; the preview follows the cursor. Left-click places. Leaving without placing reverts the preview.\n\n<b>Keys</b>\n2 — toggle (no tile selected). Left-Alt — hold for quick use.",
 "자유 각도",
 "<b>기능</b>\n다음 타일의 각도를 마우스로 자유롭게 지정합니다.\n\n<b>사용법</b>\n타일 하나를 선택한 상태에서 도구를 켜거나 왼쪽 Alt를 누르고 있으면 미리보기가 커서를 따라옵니다. 좌클릭으로 배치, 배치하지 않고 나가면 원래대로 돌아갑니다.\n\n<b>단축키</b>\n2 — 토글 (타일 미선택 시). 왼쪽 Alt — 누르는 동안 활성화.");
 
-            Add(d, "Tool2", "Pseudo",
+            Add(d, "ToolPseudo", "Pseudo",
 "<b>What it does</b>\nConverts tiles into pseudos (multi-hit tiles). Beat-neutral: a pseudo replaces one beat with K hits.\n\n<b>How to use</b>\nSingle tile: with the tool on, click the selected tile again to convert. Multi-select: a dialog offers interval + style (Upwards / Sideways / Inline) — pseudos are added ON TOP of the selected path.\n\n<b>Submenu</b>\nKey count (buttons or typed), tap angle presets + custom field, Midspin toggle (interleaved tap+midspin pairs), Custom per-tile angles.\n\n<b>Keys</b>\n3 — toggle (no tile selected). Digits set the key count while active.",
 "동타",
 "<b>기능</b>\n타일을 동타(여러 번 치는 타일)로 변환합니다. 박자 중립: 동타는 1박자를 K번의 입력으로 대체합니다.\n\n<b>사용법</b>\n단일 타일: 도구를 켠 상태에서 선택된 타일을 다시 클릭하면 변환됩니다. 다중 선택: 간격 + 스타일(위로 / 옆으로 / 인라인) 대화상자가 열리며, 기존 경로 위에 동타가 추가됩니다.\n\n<b>서브메뉴</b>\n키 수(버튼 또는 직접 입력), 각도 프리셋 + 자유 입력, 미드스핀 토글(탭+미드스핀 교차 구성), 타일별 커스텀 각도.\n\n<b>단축키</b>\n3 — 토글 (타일 미선택 시). 활성 중 숫자 키 = 키 수 설정.");
 
-            Add(d, "Tool3", "Camera path",
-"<b>What it does</b>\nOverlays every MoveCamera keyframe: cyan dots (orange = player-relative) joined by dotted lines.\n\n<b>How to use</b>\nClick a dot for its details card and the framed-area box. ▶ on the card previews that move with its real duration and ease.\n\n<b>Submenu</b>\n▶ Play all — run the whole sequence. ▶ Sel — from the selected keyframe. Gaps — wait out the real beat gaps between events.\n\n<b>Keys</b>\n4 — toggle (no tile selected).",
+            Add(d, "ToolCamera", "Camera path",
+"<b>What it does</b>\nOverlays every MoveCamera keyframe: cyan dots (orange = player-relative) joined by dotted lines.\n\n<b>How to use</b>\nClick a dot for its details card and the framed-area box. ▶ on the card previews that move with its real duration and ease.\n\n<b>Submenu</b>\n▶ Play all — run the whole sequence. ▶ Sel — from the selected keyframe. Gaps — wait out the real beat gaps between events.\n\n<b>Keys</b>\n9 — toggle (no tile selected).",
 "카메라 경로",
-"<b>기능</b>\n모든 MoveCamera 키프레임을 표시합니다: 청록 점(주황 = 플레이어 기준)이 점선으로 연결됩니다.\n\n<b>사용법</b>\n점을 클릭하면 상세 카드와 화면 영역 박스가 표시됩니다. 카드의 ▶는 실제 길이와 이징으로 해당 이동을 미리 재생합니다.\n\n<b>서브메뉴</b>\n▶ 전체 재생 — 시퀀스 전체. ▶ 선택부터 — 선택한 키프레임부터. 박자 간격 — 이벤트 사이의 실제 박자 간격을 기다립니다.\n\n<b>단축키</b>\n4 — 토글 (타일 미선택 시).");
+"<b>기능</b>\n모든 MoveCamera 키프레임을 표시합니다: 청록 점(주황 = 플레이어 기준)이 점선으로 연결됩니다.\n\n<b>사용법</b>\n점을 클릭하면 상세 카드와 화면 영역 박스가 표시됩니다. 카드의 ▶는 실제 길이와 이징으로 해당 이동을 미리 재생합니다.\n\n<b>서브메뉴</b>\n▶ 전체 재생 — 시퀀스 전체. ▶ 선택부터 — 선택한 키프레임부터. 박자 간격 — 이벤트 사이의 실제 박자 간격을 기다립니다.\n\n<b>단축키</b>\n9 — 토글 (타일 미선택 시).");
 
-            Add(d, "Tool4", "VFX preview",
-"<b>What it does</b>\nHides ALL UI — Sapphire and the game's — for a clean view of the level. Stays hidden through play-testing.\n\n<b>Keys</b>\n5 — toggle (no tile selected). ESC — exit (the only way out; the toolbar is hidden too).",
+            Add(d, "ToolVfx", "VFX preview",
+"<b>What it does</b>\nHides ALL UI — Sapphire and the game's — for a clean view of the level. Stays hidden through play-testing.\n\n<b>Keys</b>\n0 — toggle (no tile selected). ESC — exit (the only way out; the toolbar is hidden too).",
 "VFX 미리보기",
-"<b>기능</b>\nSapphire와 게임의 모든 UI를 숨겨 레벨만 깔끔하게 봅니다. 플레이 테스트 중에도 유지됩니다.\n\n<b>단축키</b>\n5 — 토글 (타일 미선택 시). ESC — 종료 (툴바도 숨겨지므로 유일한 종료 방법).");
+"<b>기능</b>\nSapphire와 게임의 모든 UI를 숨겨 레벨만 깔끔하게 봅니다. 플레이 테스트 중에도 유지됩니다.\n\n<b>단축키</b>\n0 — 토글 (타일 미선택 시). ESC — 종료 (툴바도 숨겨지므로 유일한 종료 방법).");
 
-            Add(d, "Tool5", "Inspector",
-"<b>What it does</b>\nEvent format-painter: copy one tile's events, paste onto others.\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to CAPTURE its events. Right-click any tile to PASTE. The panel that appears is the paste filter — untick types you don't want pasted.\n\n<b>Keys</b>\n6 — toggle (no tile selected).",
+            Add(d, "ToolInspector", "Inspector",
+"<b>What it does</b>\nEvent format-painter: copy one tile's events, paste onto others.\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to CAPTURE its events. Right-click any tile to PASTE. The panel that appears is the paste filter — untick types you don't want pasted.\n\n<b>Keys</b>\n8 — toggle (no tile selected).",
 "인스펙터",
-"<b>기능</b>\n이벤트 서식 복사 도구: 한 타일의 이벤트를 복사해 다른 타일에 붙여넣습니다.\n\n<b>사용법</b>\n도구를 켠 상태에서 선택된 타일을 다시 클릭하면 이벤트를 캡처합니다. 아무 타일이나 우클릭하면 붙여넣습니다. 표시되는 패널은 붙여넣기 필터입니다 — 원하지 않는 유형은 체크를 해제하세요.\n\n<b>단축키</b>\n6 — 토글 (타일 미선택 시).");
+"<b>기능</b>\n이벤트 서식 복사 도구: 한 타일의 이벤트를 복사해 다른 타일에 붙여넣습니다.\n\n<b>사용법</b>\n도구를 켠 상태에서 선택된 타일을 다시 클릭하면 이벤트를 캡처합니다. 아무 타일이나 우클릭하면 붙여넣습니다. 표시되는 패널은 붙여넣기 필터입니다 — 원하지 않는 유형은 체크를 해제하세요.\n\n<b>단축키</b>\n8 — 토글 (타일 미선택 시).");
 
-            Add(d, "Tool6", "Zip",
-"<b>What it does</b>\nReplaces a tile with a zip — a run of redirecting tiles + swirls totalling 360° (8k = 45° per tile).\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to zip it. The submenu picks the key count (from 4k) and the total duration in beats (default 2 = 360°).\n\n<b>Keys</b>\n7 — toggle (no tile selected). Digits 4–8 set the key count while active.",
+            Add(d, "ToolZip", "Zip",
+"<b>What it does</b>\nReplaces a tile with a zip — a run of redirecting tiles + swirls totalling 360° (8k = 45° per tile).\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to zip it. The submenu picks the key count (from 4k) and the total duration in beats (default 2 = 360°).\n\n<b>Keys</b>\n4 — toggle (no tile selected). Digits 4–8 set the key count while active.",
 "집",
-"<b>기능</b>\n타일을 집(zip)으로 대체합니다 — 총 360°를 이루는 방향 전환 타일 + 소용돌이의 연속 (8키 = 타일당 45°).\n\n<b>사용법</b>\n도구를 켠 상태에서 선택된 타일을 다시 클릭합니다. 서브메뉴에서 키 수(4부터)와 총 길이(박자, 기본 2박자 = 360°)를 설정합니다.\n\n<b>단축키</b>\n7 — 토글 (타일 미선택 시). 활성 중 숫자 4–8 = 키 수.");
+"<b>기능</b>\n타일을 집(zip)으로 대체합니다 — 총 360°를 이루는 방향 전환 타일 + 소용돌이의 연속 (8키 = 타일당 45°).\n\n<b>사용법</b>\n도구를 켠 상태에서 선택된 타일을 다시 클릭합니다. 서브메뉴에서 키 수(4부터)와 총 길이(박자, 기본 2박자 = 360°)를 설정합니다.\n\n<b>단축키</b>\n4 — 토글 (타일 미선택 시). 활성 중 숫자 4–8 = 키 수.");
+
+            Add(d, "ToolMagic", "Magic shape",
+"<b>What it does</b>\nMagic-circle toolkit: MULTIPLY retimes the selection so every hit lands at a target BPM (or ×multiplier, or reshapes the angles instead), CREATE sweeps a tile range into an N-vertex shape with a ghost preview, ROTATE offsets tile angles across a range.\n\n<b>How to use</b>\nOpen the panel, pick a tab, set the range (Sel = selection, All = whole level) and Apply. Errors show in the status line.\n\n<b>Keys</b>\n5 — toggle (no tile selected).\n\n<b>Credits</b>\nMagicShapeMultiply (tjwogud, JofoDuh) + MappingHelper (Sprout34).",
+"마법진",
+"<b>기능</b>\n마법진 도구 모음: 승수 — 선택 구간을 목표 BPM(또는 배수)에 맞춰 리타이밍하거나 각도를 재구성합니다. 생성 — 타일 범위를 N꼭짓점 도형으로 복제합니다 (고스트 미리보기). 회전 — 범위의 타일 각도를 회전합니다.\n\n<b>사용법</b>\n패널에서 탭을 고르고 범위를 설정한 뒤 (선택 = 현재 선택, 전체 = 레벨 전체) 적용합니다. 오류는 상태 줄에 표시됩니다.\n\n<b>단축키</b>\n5 — 토글 (타일 미선택 시).\n\n<b>크레딧</b>\nMagicShapeMultiply (tjwogud, JofoDuh) + MappingHelper (Sprout34).");
+
+            Add(d, "ToolTrack", "Track tools",
+"<b>What it does</b>\nTrack VFX generators: FADE IN/OUT (randomized MoveTrack animations), EXPLODE (rippling shockwave), SIZE (eased scale ramps), MULTI (decoration copies of the track ± fake planets, and animating tagged copies), GENERATE (append tiles from an angle string, T = twirl, with ghost preview).\n\n<b>How to use</b>\nPick a tab, set the tile range, tune the randomization rows (click a row label to enable/disable it) and Apply — one undo step.\n\n<b>Keys</b>\n6 — toggle (no tile selected).\n\n<b>Credits</b>\nMappingHelper (Sprout34).",
+"트랙 도구",
+"<b>기능</b>\n트랙 연출 생성기: 페이드 인/아웃 — 무작위 MoveTrack 애니메이션. 폭발 — 퍼져나가는 충격파. 크기 — 이징 스케일 램프. 다중 트랙 — 트랙의 장식 복제 (가짜 행성 포함) 및 태그된 복제 애니메이션. 생성 — 각도 문자열로 타일 추가 (T = 회오리, 고스트 미리보기).\n\n<b>사용법</b>\n탭을 고르고 타일 범위를 설정한 뒤 무작위 행을 조정하고 (행 라벨 클릭 = 켜기/끄기) 적용합니다 — 실행 취소 1회로 묶입니다.\n\n<b>단축키</b>\n6 — 토글 (타일 미선택 시).\n\n<b>크레딧</b>\nMappingHelper (Sprout34).");
+
+            Add(d, "ToolDeco", "Deco tools",
+"<b>What it does</b>\nDecoration generators: FLIPBOOK (image-sequence folder → animated decoration), EXTRACT (video → frame folder), 3D STACK (N lerped decoration copies with a color gradient), LYRICS (text parts as game text or font-rendered PNGs, with appear/disappear moves).\n\n<b>How to use</b>\nSave the level first — file paths are relative to the level folder. Pick a tab, fill the fields and Apply.\n\n<b>Keys</b>\n7 — toggle (no tile selected).\n\n<b>Credits</b>\nMappingHelper (Sprout34).",
+"장식 도구",
+"<b>기능</b>\n장식 생성기: 플립북 — 이미지 시퀀스 폴더로 애니메이션 장식 생성. 추출 — 영상을 프레임 폴더로 변환. 3D 스택 — 색상 그라디언트와 함께 보간된 장식 복제 N개. 가사 — 텍스트를 게임 텍스트 또는 폰트 렌더링 PNG로 생성 (등장/소멸 애니메이션 포함).\n\n<b>사용법</b>\n먼저 레벨을 저장하세요 — 파일 경로는 레벨 폴더 기준입니다. 탭을 고르고 항목을 채운 뒤 적용합니다.\n\n<b>단축키</b>\n7 — 토글 (타일 미선택 시).\n\n<b>크레딧</b>\nMappingHelper (Sprout34).");
 
             Add(d, "ToolBar", "Toolbox",
-"<b>What it does</b>\nThe Sapphire tool strip. Hover a tool for a hint below the bar; click a tool's icon here in help mode for its full docs.\n\n<b>Keys</b>\nDigits 1–7 select tools when no tile is selected.",
+"<b>What it does</b>\nThe Sapphire tool strip, grouped by function: build (curved path, free angle, pseudo, zip, magic shape) · generate (track tools, deco tools) · events (inspector) · view (camera path, VFX preview). Hover a tool for a hint below the bar; click a tool's icon here in help mode for its full docs.\n\n<b>Keys</b>\nDigits 1–0 select tools when no tile is selected.",
 "도구 모음",
-"<b>기능</b>\nSapphire 도구 모음입니다. 도구에 마우스를 올리면 아래에 힌트가 표시됩니다. 도움말 모드에서 아이콘을 클릭하면 상세 설명을 볼 수 있습니다.\n\n<b>단축키</b>\n타일 미선택 시 숫자 1–7로 도구 선택.");
+"<b>기능</b>\nSapphire 도구 모음입니다. 기능별로 묶여 있습니다: 제작 (곡선 경로, 자유 각도, 동타, 집, 마법진) · 생성 (트랙 도구, 장식 도구) · 이벤트 (인스펙터) · 보기 (카메라 경로, VFX 미리보기). 도구에 마우스를 올리면 아래에 힌트가 표시됩니다. 도움말 모드에서 아이콘을 클릭하면 상세 설명을 볼 수 있습니다.\n\n<b>단축키</b>\n타일 미선택 시 숫자 1–0으로 도구 선택.");
 
             Add(d, "PseudoMenu", "Pseudo submenu",
 "<b>What it does</b>\nSettings for the pseudo tool.\n\n<b>Rows</b>\nKeys — hit count (buttons, or type any N). Midspin — interleaved tap+midspin construction (exact return to course). Angle — tap angle presets + free field. Custom — space-separated per-tile angles (overrides Keys).",
@@ -384,9 +399,9 @@ namespace Sapphire
 "<b>기능</b>\n파일 헤더 바와 이벤트 팔레트 — 게임 에디터 UI의 Sapphire 대체입니다. 개별 컨트롤을 클릭하면 상세 설명이 표시됩니다.");
 
             Add(d, "SapphireToolbar", "Toolbox",
-"<b>What it does</b>\nThe Sapphire tool strip and its submenus. Click a specific tool icon for details.\n\n<b>Keys</b>\nDigits 1–7 select tools when no tile is selected.",
+"<b>What it does</b>\nThe Sapphire tool strip and its submenus. Click a specific tool icon for details.\n\n<b>Keys</b>\nDigits 1–0 select tools when no tile is selected.",
 "도구 모음",
-"<b>기능</b>\nSapphire 도구 모음과 서브메뉴입니다. 개별 도구 아이콘을 클릭하면 상세 설명이 표시됩니다.\n\n<b>단축키</b>\n타일 미선택 시 숫자 1–7로 도구 선택.");
+"<b>기능</b>\nSapphire 도구 모음과 서브메뉴입니다. 개별 도구 아이콘을 클릭하면 상세 설명이 표시됩니다.\n\n<b>단축키</b>\n타일 미선택 시 숫자 1–0으로 도구 선택.");
 
             Add(d, "SapphireEditorEvents", "Timeline",
 "<b>What it does</b>\nEvent timeline on real song time: markers by category, playhead, zoom, transport (play/rewind · clock · BPM), mode cluster (EDITOR / difficulty / NO FAIL / AUTO).\n\n<b>How to use</b>\nClick a marker — jumps to its tile and opens that exact event. Click empty strip — moves the playhead (drag to scrub). Wheel pans when zoomed.\n\n<b>Modes</b>\nThe mode button under the zoom controls switches between NORMAL / CAM / DECO / FILTER — the CDF workspaces. In help mode, click that button for details; the CAM workspace guide covers keyframe editing.\n\n<b>Keys</b>\nThe centre-bottom arrow folds/expands the strip; drag the strip's TOP EDGE to resize lane height.",

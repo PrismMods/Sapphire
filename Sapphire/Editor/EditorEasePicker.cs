@@ -61,16 +61,30 @@ namespace Sapphire
         internal static void Open(ADOFAI.LevelEvent evt, Vector2 screenPos)
         {
             if (evt == null) return;
-            Close();
-            _target = evt;
-            if (_canvasGo == null) BuildCanvas();
-
             DG.Tweening.Ease current = DG.Tweening.Ease.Linear;
             try { if (evt.ContainsKey("ease") && evt["ease"] is DG.Tweening.Ease cur) current = cur; }
             catch { }
+            OpenCore(Loc.T("Ease") + " · " + evt.eventType, current, screenPos, ApplyToTarget, true);
+            _target = evt;
+        }
+
+        // Generic entry: any module can use the curve grid; onPick receives the choice.
+        internal static void Open(string title, DG.Tweening.Ease current, Vector2 screenPos, Action<DG.Tweening.Ease> onPick)
+            => OpenCore(title, current, screenPos, onPick, false);
+
+        private static Action<DG.Tweening.Ease> _onPick;
+
+        private static void OpenCore(string titleText, DG.Tweening.Ease current, Vector2 screenPos,
+            Action<DG.Tweening.Ease> onPick, bool showCustom)
+        {
+            Close();
+            _target = null; // event path re-sets it after OpenCore; generic path must not inherit one
+            _onPick = onPick;
+            if (_canvasGo == null) BuildCanvas();
 
             var eases = EaseList();
-            int rows = (eases.Count + 1 + Cols - 1) / Cols; // +1: the Custom bezier cell
+            int cellCount = eases.Count + (showCustom ? 1 : 0); // +1: the Custom bezier cell
+            int rows = (cellCount + Cols - 1) / Cols;
             float w = Pad * 2f + Cols * CellW + (Cols - 1) * Gap;
             float h = Pad * 2f + 22f + rows * (CellH + Gap);
 
@@ -105,7 +119,7 @@ namespace Sapphire
             tr.pivot = new Vector2(0.5f, 1f);
             tr.sizeDelta = new Vector2(0f, 20f);
             tr.anchoredPosition = new Vector2(0f, -Pad * 0.7f);
-            var title = UIBuilder.Tmp(titleGo, Loc.T("Ease") + " · " + evt.eventType, 13f,
+            var title = UIBuilder.Tmp(titleGo, titleText, 13f,
                 TextAnchor.MiddleCenter, Theme.TextMuted);
             title.raycastTarget = false;
 
@@ -116,6 +130,7 @@ namespace Sapphire
                 float y = -(Pad + 22f + row * (CellH + Gap));
                 MakeCell(panelGo.transform, eases[i], eases[i] == current, x, y);
             }
+            if (showCustom)
             {
                 // Custom bezier: decomposes the tween into linear segments (own editor)
                 int i = eases.Count;
@@ -175,7 +190,7 @@ namespace Sapphire
             lbl.overflowMode = TextOverflowModes.Ellipsis;
             lbl.raycastTarget = false;
 
-            UI.ClickHandler.Attach(cellGo, () => Apply(ease));
+            UI.ClickHandler.Attach(cellGo, () => Pick(ease));
         }
 
         // "Custom" opens the Sapphire bezier editor for this event.
@@ -248,34 +263,39 @@ namespace Sapphire
         private static int MapY(float v, int h) =>
             Mathf.Clamp(Mathf.RoundToInt((v + 0.35f) / 1.7f * (h - 1)), 0, h - 1);
 
-        private static void Apply(DG.Tweening.Ease ease)
+        private static void Pick(DG.Tweening.Ease ease)
+        {
+            var cb = _onPick;
+            Close();
+            try { cb?.Invoke(ease); }
+            catch (Exception ex) { SapphireLog.Log("EasePicker: apply failed: " + ex.Message); }
+        }
+
+        // Event-bound pick path: write evt["ease"] as one undo + refresh the inspector.
+        private static void ApplyToTarget(DG.Tweening.Ease ease)
         {
             var evt = _target;
-            Close();
+            _target = null;
             var ed = scnEditor.instance;
             if (ed == null || evt == null) return;
-            try
+            using (new SaveStateScope(ed))
+                evt["ease"] = ease;
+            // Refresh the inspector if this event is on screen (same instance-index
+            // dance as the timeline's marker click).
+            int idx = 0;
+            foreach (var e in ed.events)
             {
-                using (new SaveStateScope(ed))
-                    evt["ease"] = ease;
-                // Refresh the inspector if this event is on screen (same instance-index
-                // dance as the timeline's marker click).
-                int idx = 0;
-                foreach (var e in ed.events)
-                {
-                    if (e == null || e.floor != evt.floor || e.eventType != evt.eventType) continue;
-                    if (ReferenceEquals(e, evt)) break;
-                    idx++;
-                }
-                ed.levelEventsPanel.ShowPanel(evt.eventType, idx);
+                if (e == null || e.floor != evt.floor || e.eventType != evt.eventType) continue;
+                if (ReferenceEquals(e, evt)) break;
+                idx++;
             }
-            catch (Exception ex) { SapphireLog.Log("EasePicker: apply failed: " + ex.Message); }
+            ed.levelEventsPanel.ShowPanel(evt.eventType, idx);
         }
 
         private static void Close()
         {
             if (_popupGo != null) UnityEngine.Object.Destroy(_popupGo);
-            _popupGo = null; _target = null;
+            _popupGo = null; _onPick = null;
             foreach (var t in _curveTex) if (t != null) UnityEngine.Object.Destroy(t);
             _curveTex.Clear();
         }

@@ -70,6 +70,8 @@
         <Reference Include="UnityEngine.UIElementsModule"><HintPath>$(AdofaiManaged)/UnityEngine.UIElementsModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.UIModule"><HintPath>$(AdofaiManaged)/UnityEngine.UIModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.UnityWebRequestModule"><HintPath>$(AdofaiManaged)/UnityEngine.UnityWebRequestModule.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="UnityEngine.VideoModule"><HintPath>$(AdofaiManaged)/UnityEngine.VideoModule.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(AdofaiManaged)/UnityEngine.ImageConversionModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(AdofaiManaged)/UnityEngine.JSONSerializeModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityModManager"><HintPath>$(GameRoot)/UserLibs/UnityModManager.dll</HintPath><Private>False</Private></Reference>
     </ItemGroup>
@@ -88,6 +90,7 @@
         <Compile Include="Editor\EditorHandles.cs" />
         <Compile Include="Editor\EditorUiEditor.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
+        <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\Pages\PageEditor.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
         <Compile Include="Util\SapphireLog.cs" />
@@ -114,6 +117,12 @@
         <Compile Include="Editor\EditorBezier.cs" />
         <Compile Include="Editor\EditorGraph.cs" />
         <Compile Include="Editor\EditorFilterPicker.cs" />
+        <Compile Include="Editor\MagicShapeEngine.cs" />
+        <Compile Include="Editor\EditorMagicShape.cs" />
+        <Compile Include="Editor\TrackToolsEngine.cs" />
+        <Compile Include="Editor\EditorTrackTools.cs" />
+        <Compile Include="Editor\DecoToolsEngine.cs" />
+        <Compile Include="Editor\EditorDecoTools.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />

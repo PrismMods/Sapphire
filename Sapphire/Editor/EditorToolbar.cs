@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -69,6 +70,7 @@ namespace Sapphire
         private static int _pseudoSidewaysVariant; // 0 = up staircase, 1 = inline, 2 = downwards
         private static int _pseudoBatchTileCount;  // remembered so the dialog can rebuild in place
         private static string _pseudoBatchIntervalStr = "4"; // survives a rebuild
+        private static bool _wasPlayMode; // swallow the ESC that exited play mode
         private static long _lastMultiSig;       // dedups the auto-opened batch dialog
         private static bool _pseudoMode = true;  // Pseudo checkbox: true = star UI, false = circle
         private static bool _midspinPseudos;
@@ -127,14 +129,18 @@ namespace Sapphire
             catch { }
             if (!want)
             {
+                try { _wasPlayMode = ed != null && ed.playMode; } catch { }
                 if (_canvasGo != null && _canvasGo.activeSelf) { _canvasGo.SetActive(false); CloseDialog(); }
                 return;
             }
             if (_canvasGo == null) Build();
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
-            // ESC deselects an active tool (and closes the dialog).
-            if (Input.GetKeyDown(KeyCode.Escape))
+            // ESC deselects an active tool (and closes the dialog) — but the ESC that exits
+            // play mode must not leak here, or every armed tool dies on returning to edit.
+            bool justLeftPlay = _wasPlayMode;
+            _wasPlayMode = false;
+            if (Input.GetKeyDown(KeyCode.Escape) && !justLeftPlay)
             {
                 if (_dialogGo != null) CloseDialog();
                 if (_freeAngleTool) DeactivateFreeAngle();
@@ -264,7 +270,7 @@ namespace Sapphire
             _pseudoCounterLbl = null; _fPseudoTap = null; _fPseudoCustom = null;
             _pseudoCustomBg = null; _pseudoCustomFieldGo = null; _pseudoPresetObjs.Clear(); _fPseudoN = null;
             _toolLabelGo = null; _toolLabelText = null; _tipGo = null; _tipText = null;
-            _zipMenuGo = null; _zipCellBg = null; _fZipBeats = null;
+            _zipMenuGo = null; _zipCellBg = null; _fZipBeats = null; _magicCellBg = null; _trackCellBg = null; _decoCellBg = null;
             for (int i = 0; i < _zipBtnBgs.Length; i++) _zipBtnBgs[i] = null;
             for (int i = 0; i < _pseudoAngleBtnBgs.Length; i++) _pseudoAngleBtnBgs[i] = null;
             for (int i = 0; i < _pseudoBtnBgs.Length; i++) _pseudoBtnBgs[i] = null;
@@ -287,15 +293,15 @@ namespace Sapphire
             _canvasGo.AddComponent<GraphicRaycaster>();
             _canvasRect = (RectTransform)_canvasGo.transform;
 
-            const float cell = 32f, gap = 4f, pad = 5f;
-            const int tools = 7;
+            const float cell = 32f, gap = 4f, pad = 5f, groupGap = 6f; // extra px between groups
+            const int tools = 10, groups = 4;
             _barGo = new GameObject("ToolBar", typeof(RectTransform));
             _barGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_barGo.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot = new Vector2(0.5f, 1f);
             r.anchoredPosition = new Vector2(0f, -10f);
-            r.sizeDelta = new Vector2(tools * (cell + gap) - gap + pad * 2f, cell + pad * 2f);
+            r.sizeDelta = new Vector2(tools * (cell + gap) - gap + pad * 2f + (groups - 1) * groupGap, cell + pad * 2f);
             var bg = _barGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 7f;   // flatter, Adobe-suite look
             bg.color = new Color(0.10f, 0.10f, 0.12f, 0.96f);
@@ -303,15 +309,23 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.09f);
             bg.raycastTarget = true; // toolbar swallows clicks under it
 
-            MakeToolCell(0, Loc.T("Circular path"), cell, pad, DrawCircleIcon, OpenDialog);
-            _freeAngleCellBg = MakeToolCell(1, Loc.T("Free angle"), cell, pad, DrawAngleIcon, ToggleFreeAngle);
-            _pseudoCellBg = MakeToolCell(2, Loc.T("Pseudo"), cell, pad, DrawPseudoIcon, TogglePseudo);
-            _cameraCellBg = MakeToolCell(3, Loc.T("Camera path"), cell, pad, DrawCameraIcon, ToggleCameraPath);
-            MakeToolCell(4, Loc.T("VFX preview (ESC exits)"), cell, pad, DrawEyeOffIcon, EditorVfxPreview.Toggle);
-            _inspCellBg = MakeToolCell(5, Loc.T("Inspector (copy tile events)"), cell, pad, DrawDropperIcon, ToggleInspector);
-            _zipCellBg = MakeToolCell(6, Loc.T("Zip (redirect through tiny angles)"), cell, pad, DrawZipIcon, ToggleZip);
+            // grouped by function: build → generate → events → view (hotkeys 1..0 follow)
+            float cx = pad;
+            MakeToolCell("ToolCircle", Loc.T("Circular path"), cx, cell, DrawCircleIcon, OpenDialog); cx += cell + gap;
+            _freeAngleCellBg = MakeToolCell("ToolFreeAngle", Loc.T("Free angle"), cx, cell, DrawAngleIcon, ToggleFreeAngle); cx += cell + gap;
+            _pseudoCellBg = MakeToolCell("ToolPseudo", Loc.T("Pseudo"), cx, cell, DrawPseudoIcon, TogglePseudo); cx += cell + gap;
+            _zipCellBg = MakeToolCell("ToolZip", Loc.T("Zip (redirect through tiny angles)"), cx, cell, DrawZipIcon, ToggleZip); cx += cell + gap;
+            _magicCellBg = MakeToolCell("ToolMagic", Loc.T("Magic shape (multiply / create / rotate)"), cx, cell, DrawMagicIcon, EditorMagicShape.Toggle); cx += cell + gap + groupGap;
+            _trackCellBg = MakeToolCell("ToolTrack", Loc.T("Track tools (fades / explode / copies / generate)"), cx, cell, DrawTrackIcon, EditorTrackTools.Toggle); cx += cell + gap;
+            _decoCellBg = MakeToolCell("ToolDeco", Loc.T("Deco tools (flipbook / video / 3D / lyrics)"), cx, cell, DrawDecoIcon, EditorDecoTools.Toggle); cx += cell + gap + groupGap;
+            _inspCellBg = MakeToolCell("ToolInspector", Loc.T("Inspector (copy tile events)"), cx, cell, DrawDropperIcon, ToggleInspector); cx += cell + gap + groupGap;
+            _cameraCellBg = MakeToolCell("ToolCamera", Loc.T("Camera path"), cx, cell, DrawCameraIcon, ToggleCameraPath); cx += cell + gap;
+            MakeToolCell("ToolVfx", Loc.T("VFX preview (ESC exits)"), cx, cell, DrawEyeOffIcon, EditorVfxPreview.Toggle);
             SyncInspectorHighlight();
             SyncZipHighlight();
+            SyncMagicShapeHighlight();
+            SyncTrackToolsHighlight();
+            SyncDecoToolsHighlight();
             SyncFreeAngleHighlight();
             SyncPseudoHighlight();
             SyncCameraHighlight();
@@ -336,10 +350,13 @@ namespace Sapphire
             if (Input.GetKeyDown(KeyCode.Alpha1)) OpenDialog();
             else if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleFreeAngle();
             else if (Input.GetKeyDown(KeyCode.Alpha3)) TogglePseudo();
-            else if (Input.GetKeyDown(KeyCode.Alpha4)) ToggleCameraPath();
-            else if (Input.GetKeyDown(KeyCode.Alpha5)) EditorVfxPreview.Toggle();
-            else if (Input.GetKeyDown(KeyCode.Alpha6)) ToggleInspector();
-            else if (Input.GetKeyDown(KeyCode.Alpha7)) ToggleZip();
+            else if (Input.GetKeyDown(KeyCode.Alpha4)) ToggleZip();
+            else if (Input.GetKeyDown(KeyCode.Alpha5)) EditorMagicShape.Toggle();
+            else if (Input.GetKeyDown(KeyCode.Alpha6)) EditorTrackTools.Toggle();
+            else if (Input.GetKeyDown(KeyCode.Alpha7)) EditorDecoTools.Toggle();
+            else if (Input.GetKeyDown(KeyCode.Alpha8)) ToggleInspector();
+            else if (Input.GetKeyDown(KeyCode.Alpha9)) ToggleCameraPath();
+            else if (Input.GetKeyDown(KeyCode.Alpha0)) EditorVfxPreview.Toggle();
         }
 
         // Small hover-hint text just below the toolbar (Adobe-style).
@@ -448,15 +465,17 @@ namespace Sapphire
             }
         }
 
-        private static RoundedRectGraphic MakeToolCell(int index, string tip, float cell, float pad,
+        // Stable GO names ("ToolZip" …) — EditorHelp topics key off them, so reordering
+        // the bar never breaks the docs. x is laid out by the caller (group gaps).
+        private static RoundedRectGraphic MakeToolCell(string name, string tip, float x, float cell,
             Action<GameObject> drawIcon, Action onClick)
         {
-            var go = new GameObject("Tool" + index, typeof(RectTransform));
+            var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(_barGo.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 0.5f);
             r.pivot = new Vector2(0f, 0.5f);
-            r.anchoredPosition = new Vector2(pad + index * (cell + 4f), 0f);
+            r.anchoredPosition = new Vector2(x, 0f);
             r.sizeDelta = new Vector2(cell, cell);
             var bgc = go.AddComponent<RoundedRectGraphic>();
             bgc.Radius = 5f;
@@ -950,6 +969,75 @@ namespace Sapphire
             if (hover != null) hover.Base = rest;
         }
 
+        private static RoundedRectGraphic _magicCellBg;
+
+        internal static void SyncMagicShapeHighlight()
+        {
+            if (_magicCellBg == null) return;
+            var rest = EditorMagicShape.IsOpen
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _magicCellBg.color = rest;
+            var hover = _magicCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        // pentagon of dots + center — a "magic circle"
+        private static void DrawMagicIcon(GameObject cell)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                float a = i * Mathf.PI * 2f / 5f;
+                MakeDot(cell, new Vector2(Mathf.Sin(a) * 8f, Mathf.Cos(a) * 8f), 3.4f);
+            }
+            MakeDot(cell, Vector2.zero, 4.5f);
+        }
+
+        private static RoundedRectGraphic _trackCellBg;
+
+        internal static void SyncTrackToolsHighlight()
+        {
+            if (_trackCellBg == null) return;
+            var rest = EditorTrackTools.IsOpen
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _trackCellBg.color = rest;
+            var hover = _trackCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        // staircase of track segments
+        private static void DrawTrackIcon(GameObject cell)
+        {
+            MakeBar(cell, new Vector2(-5.5f, -6f), new Vector2(9f, 3.2f), 0f);
+            MakeBar(cell, new Vector2(0f, 0f), new Vector2(9f, 3.2f), 45f);
+            MakeBar(cell, new Vector2(5.5f, 6f), new Vector2(9f, 3.2f), 0f);
+        }
+
+        private static RoundedRectGraphic _decoCellBg;
+
+        internal static void SyncDecoToolsHighlight()
+        {
+            if (_decoCellBg == null) return;
+            var rest = EditorDecoTools.IsOpen
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _decoCellBg.color = rest;
+            var hover = _decoCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        // picture frame with a "sun" dot and a hill bar
+        private static void DrawDecoIcon(GameObject cell)
+        {
+            MakeBar(cell, new Vector2(0f, 8f), new Vector2(18f, 2.2f), 0f);
+            MakeBar(cell, new Vector2(0f, -8f), new Vector2(18f, 2.2f), 0f);
+            MakeBar(cell, new Vector2(-8f, 0f), new Vector2(13.8f, 2.2f), 90f);
+            MakeBar(cell, new Vector2(8f, 0f), new Vector2(13.8f, 2.2f), 90f);
+            MakeDot(cell, new Vector2(-3f, 2.5f), 3.4f);
+            MakeBar(cell, new Vector2(2f, -3.5f), new Vector2(9f, 2.4f), 35f);
+        }
+
         private static void TickZipTool(scnEditor ed)
         {
             // digits set the key count (zips start at 4)
@@ -1021,6 +1109,12 @@ namespace Sapphire
 
         internal static bool InspectorActive => _inspectorTool;
         internal static bool PseudoToolOn => _pseudoTool || _zipTool;   // their digits set the key count
+
+        // ESC is "owned" by the toolbar while any of these are up: it disarms the tool, and the
+        // game's own ESC keybinds (deselect floors etc.) must not fire on the same press.
+        internal static bool EscDisarmsSomething =>
+            _dialogGo != null || _freeAngleTool || _pseudoTool || _eventTool >= 0
+            || _inspectorTool || _zipTool || EditorCameraPath.IsOn;
         internal static int InspectorVersion => _inspVersion;
 
         // The presets menu reads/loads the capture buffer directly.
@@ -1210,7 +1304,8 @@ namespace Sapphire
         }
 
         // Select the tile, add the event (game's own AddEventAtSelected applies it + draws its
-        // indicator), then deselect so the inspector doesn't linger. One undo step.
+        // indicator). The tile STAYS selected afterwards (user request July 16 — repeated
+        // stamping/tweaking on the same tile shouldn't need re-selecting). One undo step.
         private static void StampEvent(scnEditor ed, scrFloor floor)
         {
             try
@@ -1220,7 +1315,6 @@ namespace Sapphire
                     ed.DeselectFloors();
                     ed.SelectFloor(floor, false);
                     ed.AddEventAtSelected((ADOFAI.LevelEventType)_eventTool);
-                    ed.DeselectFloors();
                 }
             }
             catch (Exception ex) { SapphireLog.Log("Event tool: place failed: " + ex.Message); }
@@ -1918,7 +2012,6 @@ namespace Sapphire
             }
         }
 
-        // (unreferenced since the July 11 overlay model)
         private static void GeneratePseudoBatchUpwards(scnEditor ed, int interval, int keys)
         {
             BuildSerpentine(ed, interval, +1);
@@ -2083,11 +2176,204 @@ namespace Sapphire
             }
         }
 
+        /* Non-90 Sideways up/down — REFERENCE-VERIFIED (user level, July 16). Every fold is a
+           beat-neutral K-key pseudo, charters [X ×(K−1), 180−(K−1)X]:
+           • the fold's FIRST hit is the run's last course tile (its charter shrinks to X);
+           • K−1 inserted tiles alternate between run + dev·(180−X) and run (dev = up side on
+             the way up, down side on the way back);
+           • a twirl goes on every tile whose sweep needs the opposite spin — each middle hit
+             must sweep exactly X, so spins alternate; the LAST hit's spin choice is what picks
+             the landing direction (fold-up: the most-upward exit; fold-down: back on course).
+           The diagonal's lean is EMERGENT from X and K (e.g. X=30 K=2 → 120°, K=3 → 60°).
+           Delete+rebuild in absolute facings, twirls added after the build (mid-build twirls
+           corrupt AppendAbs). One undo. */
+        private static void BuildAlternatingRuns(scnEditor ed, int interval, int keys, int upSign)
+        {
+            if (ed.lockPathEditing) { SapphireLog.Log("Batch pseudo: path editing locked"); return; }
+            if (interval < 2) interval = 2;
+            if (keys < 2) keys = 2;
+
+            var seqs = new System.Collections.Generic.List<int>();
+            try { foreach (var f in ed.selectedFloors) seqs.Add(f.seqID); } catch { }
+            if (seqs.Count == 0) { SapphireLog.Log("Batch pseudo: no selection"); return; }
+            seqs.Sort();
+            int n = seqs.Count, first = seqs[0];
+            if (first <= 0) { SapphireLog.Log("Alternating runs: need a tile before the selection"); return; }
+
+            double x = _pseudoTapAngle;
+            if (x <= 0.0 || x >= 180.0) x = 30.0;
+            SapphireLog.Log("Alternating runs: n=" + n + " interval=" + interval + " x=" + x
+                + " keys=" + keys + " up=" + upSign);
+
+            using (new SaveStateScope(ed))
+            {
+                double courseDir = 0.0;
+                try { courseDir = ed.floors[first].floatDirection; } catch { }
+
+                for (int i = n - 1; i >= 0; i--)   // delete the whole selected run, high→low
+                {
+                    scrFloor tile = null;
+                    try { var fl = ed.floors; if (seqs[i] >= 0 && seqs[i] < fl.Count) tile = fl[seqs[i]]; } catch { }
+                    if (tile == null) continue;
+                    try { ed.DeselectFloors(); ed.SelectFloor(tile, false); if (ed.SelectionIsSingle()) ed.DeleteSingleSelection(false); } catch { }
+                }
+
+                scrFloor prev = null;
+                try { prev = ed.floors[first - 1]; } catch { }
+                if (prev == null) { SapphireLog.Log("Alternating runs: lost predecessor"); return; }
+                try { ed.DeselectFloors(); ed.SelectFloor(prev, false); } catch { }
+
+                bool cw = true; try { cw = !prev.isCCW; } catch { }
+                var twirlSeqs = new System.Collections.Generic.List<int>();
+                int seq = first - 1;
+                double cur = courseDir;   // current run direction
+                bool onDiag = false;
+
+                for (int beat = 0; beat < n; beat++)
+                {
+                    if ((beat + 1) % interval != 0)
+                    {
+                        AppendAbs(ed, Norm360(cur)); seq++;   // plain run tile (spin-agnostic)
+                        continue;
+                    }
+
+                    // ── fold (one beat, K hits) ──
+                    int dev = onDiag ? -upSign : upSign;
+                    // first hit: the run's last tile; sweeping X toward an "up" deviation needs
+                    // CW spin, toward "down" needs CCW
+                    AppendAbs(ed, Norm360(cur)); seq++;
+                    bool needCw = dev > 0;
+                    if (cw != needCw) { twirlSeqs.Add(seq); cw = needCw; }
+
+                    double exit = cur;
+                    for (int k = 1; k <= keys - 1; k++)
+                    {
+                        double ang = (k % 2 == 1) ? cur + dev * (180.0 - x) : cur;
+                        AppendAbs(ed, Norm360(ang)); seq++;
+                        if (k < keys - 1)
+                        {
+                            // middle hits alternate spin so each sweeps exactly X
+                            bool kNeedCw = (k % 2 == 1) ? dev < 0 : dev > 0;
+                            if (cw != kNeedCw) { twirlSeqs.Add(seq); cw = kNeedCw; }
+                        }
+                        else
+                        {
+                            // last hit sweeps 180−(K−1)X; its spin choice picks where we land
+                            double entry = ang + 180.0;
+                            double sweep = 180.0 - (keys - 1) * x;
+                            double exitCw = Norm360(entry - sweep);
+                            double exitCcw = Norm360(entry + sweep);
+                            double target;
+                            if (!onDiag)
+                            {
+                                // fold-up: take the exit leaning toward upSign
+                                double vCw = Math.Sin(exitCw * Math.PI / 180.0) * upSign;
+                                double vCcw = Math.Sin(exitCcw * Math.PI / 180.0) * upSign;
+                                target = vCw >= vCcw ? exitCw : exitCcw;
+                            }
+                            else
+                            {
+                                // fold-down: land back on the course
+                                target = Math.Abs(SignedDelta(exitCw - courseDir)) <= Math.Abs(SignedDelta(exitCcw - courseDir))
+                                    ? exitCw : exitCcw;
+                                if (Math.Abs(SignedDelta(target - courseDir)) > 0.01)
+                                    SapphireLog.Log("Alternating runs: fold-down missed the course by "
+                                        + SignedDelta(target - courseDir).ToString("0.##") + "°");
+                            }
+                            bool lastCw = Math.Abs(SignedDelta(target - exitCw)) < 0.01;
+                            if (cw != lastCw) { twirlSeqs.Add(seq); cw = lastCw; }
+                            exit = target;
+                        }
+                    }
+                    cur = exit;
+                    onDiag = !onDiag;
+                }
+                foreach (var s in twirlSeqs) if (s >= first && s <= seq) AddTwirl(ed, s);
+                try { ed.RemakePath(true, true); } catch { }
+            }
+        }
+
         private static double Norm360(double a)
         {
             a %= 360.0;
             if (a < 0.0) a += 360.0;
             return a;
+        }
+
+        private static double SignedDelta(double a) => ((a % 360.0) + 540.0) % 360.0 - 180.0;
+
+        /* Retune every pseudo in the selection to tap angle X, keeping the rhythm (all our
+           constructions are beat-neutral by shape, so only the geometry moves):
+           • midspin pseudos (tap+999 interleaved): tap k re-aimed to base + 180 − X·k, where
+             base = the course facing the group returns to (read off the tile after it).
+           • 2-tile U-turn pseudos (serpentine folds: [cur ± (180−x), cur+180]): the deviation
+             tile re-aimed to cur ± (180−X); the reversed tile already encodes the course.
+           Angled-zigzag turns (tile2 ≠ cur+180) are not matched — retune can't preserve their
+           diagonal without a rebuild. Facing of tile s lives in angleData[s−1] (its arrival
+           direction — same slot AppendAbs writes). */
+        private static void RetunePseudos(scnEditor ed, double x)
+        {
+            if (ed == null || ed.lockPathEditing) return;
+            if (x <= 0.0 || x >= 180.0) { SapphireLog.Log("Retune: tap angle must be inside (0,180)"); return; }
+            var seqs = new System.Collections.Generic.List<int>();
+            try { foreach (var f in ed.selectedFloors) if (f != null) seqs.Add(f.seqID); } catch { }
+            if (seqs.Count == 0) return;
+            seqs.Sort();
+            var floors = ed.floors;
+            var angleData = ed.levelData.angleData;
+            bool IsMid(int s) { return s >= 0 && s < floors.Count && floors[s].midSpin; }
+            double F(int s) { return s >= 1 && s - 1 < angleData.Count ? angleData[s - 1] : 0.0; }
+            const double eps = 0.5;
+            int changed = 0;
+            using (new SaveStateScope(ed))
+            {
+                for (int idx = 0; idx < seqs.Count; idx++)
+                {
+                    int s = seqs[idx];
+                    if (s < 1 || s >= floors.Count || IsMid(s)) continue;
+
+                    if (IsMid(s + 1))
+                    {
+                        if (IsMid(s - 1)) continue; // continuation tap — handled at the group start
+                        // walk the interleaved group: tap s, 999, [tap, 999]…
+                        var taps = new System.Collections.Generic.List<int> { s };
+                        int mid = s + 1;
+                        while (IsMid(mid) && mid + 2 < floors.Count && IsMid(mid + 2))
+                        {
+                            taps.Add(mid + 1);
+                            mid += 2;
+                        }
+                        int after = mid + 1; // course resumes here (exact return)
+                        double baseF = after < floors.Count ? F(after) : F(s - 1);
+                        for (int k = 1; k <= taps.Count; k++)
+                            angleData[taps[k - 1] - 1] = (float)Norm360(baseF + 180.0 - x * k);
+                        changed++;
+                    }
+                    else if (s >= 2 && s + 1 < floors.Count && !IsMid(s + 1) && !IsMid(s - 1))
+                    {
+                        // (!IsMid(s-1): the course tile right after a 999 must not match here —
+                        // its "incoming course" F(s-1) would be the 999 sentinel, and re-aiming
+                        // it bends the whole track into a staircase.)
+                        // 2-tile pseudos: incoming course = arrival of the straight tile before.
+                        // U-turn fold reverses the course (tile2 = cur+180); step pseudo returns
+                        // to it (tile2 = cur — user choice July 16: retune leans the step tile
+                        // only, runs stay put). Either way only tile1 is re-aimed.
+                        double cur = F(s - 1);
+                        double a = F(s), b = F(s + 1);
+                        bool bReversed = Math.Abs(SignedDelta(b - (cur + 180.0))) < eps;
+                        bool bReturns = Math.Abs(SignedDelta(b - cur)) < eps;
+                        bool aDeviates = Math.Abs(SignedDelta(a - cur)) > eps
+                                      && Math.Abs(SignedDelta(a - (cur + 180.0))) > eps;
+                        if ((!bReversed && !bReturns) || !aDeviates) continue;
+                        int t = SignedDelta(a - cur) >= 0 ? 1 : -1;
+                        angleData[s - 1] = (float)Norm360(cur + t * (180.0 - x));
+                        changed++;
+                    }
+                }
+                if (changed > 0)
+                    try { ed.RemakePath(true, true); } catch { }
+            }
+            SapphireLog.Log("Retune: " + changed + " pseudo(s) → " + x + "°");
         }
 
         // ── circular-path dialog ────────────────────────────────────────────
@@ -2122,55 +2408,55 @@ namespace Sapphire
             cardBg.raycastTarget = true; // clicks on the card must not close it
 
             float y = -20f;
-            var title = MakeLabel(card, "Curved path", padX, y, 16f, Theme.Text, TextAnchor.UpperLeft);
+            var title = MakeLabel(card, Loc.T("Curved path"), padX, y, 16f, Theme.Text, TextAnchor.UpperLeft);
             title.fontStyle = FontStyles.Bold;
             y -= 34f;
 
             // Pseudo checkbox: on = star generator UI, off = plain circle-path fields.
-            MakeCheckbox(card, "Pseudo (star)", padX, y, w,
+            MakeCheckbox(card, Loc.T("Pseudo (star)"), padX, y, w,
                 () => _pseudoMode, v => { _pseudoMode = v; RebuildDialog(); });
             y -= 32f;
 
             if (_pseudoMode)
             {
-                _fPerRound = MakeLabeledField(card, "Pseudo per round", y, "6", w, padX);
+                _fPerRound = MakeLabeledField(card, Loc.T("Pseudo per round"), y, "6", w, padX);
                 y -= 34f;
-                _fInterval = MakeLabeledField(card, "Pseudo interval", y, "4", w, padX);
+                _fInterval = MakeLabeledField(card, Loc.T("Pseudo interval"), y, "4", w, padX);
                 y -= 34f;
-                _fPseudoAngle = MakeLabeledField(card, "Pseudo angle", y, "30", w, padX);
+                _fPseudoAngle = MakeLabeledField(card, Loc.T("Pseudo angle"), y, "30", w, padX);
                 y -= 38f;
-                MakeSegmented(card, "Reverse", "Outer angle", "Inner angle", padX, y, w,
+                MakeSegmented(card, Loc.T("Reverse"), Loc.T("Outer angle"), Loc.T("Inner angle"), padX, y, w,
                     () => _innerAngle, v => _innerAngle = v);
                 y -= 52f;
-                MakeCheckbox(card, "Keep BPM", padX, y, w,
+                MakeCheckbox(card, Loc.T("Keep BPM"), padX, y, w,
                     () => _keepBpm, v => _keepBpm = v);
                 y -= 28f;
-                MakeCheckbox(card, "Pseudos as mid-spin tiles", padX, y, w,
+                MakeCheckbox(card, Loc.T("Pseudos as mid-spin tiles"), padX, y, w,
                     () => _midspinPseudos, v => _midspinPseudos = v);
                 y -= 40f;
             }
             else
             {
-                _fDegrees = MakeLabeledField(card, "Circle degrees", y, "360", w, padX);
+                _fDegrees = MakeLabeledField(card, Loc.T("Circle degrees"), y, "360", w, padX);
                 y -= 34f;
-                _fTileCount = MakeLabeledField(card, "Tile count", y, "24", w, padX);
+                _fTileCount = MakeLabeledField(card, Loc.T("Tile count"), y, "24", w, padX);
                 y -= 38f;
-                MakeSegmented(card, "Reverse", "Outer angle", "Inner angle", padX, y, w,
+                MakeSegmented(card, Loc.T("Reverse"), Loc.T("Outer angle"), Loc.T("Inner angle"), padX, y, w,
                     () => _innerAngle, v => _innerAngle = v);
                 y -= 52f;
-                MakeCheckbox(card, "Keep BPM", padX, y, w,
+                MakeCheckbox(card, Loc.T("Keep BPM"), padX, y, w,
                     () => _keepBpm, v => _keepBpm = v);
                 y -= 40f;
             }
 
             // Buttons: Generate (positive, right), Cancel (neutral, left of it).
             float bx = -padX;
-            bx -= MakeButton(card, "Generate", BtnKind.Positive, new Vector2(bx, y), () =>
+            bx -= MakeButton(card, Loc.T("Generate"), BtnKind.Positive, new Vector2(bx, y), () =>
             {
                 Generate();
                 CloseDialog();
             }) + 10f;
-            MakeButton(card, "Cancel", BtnKind.Neutral, new Vector2(bx, y), CloseDialog);
+            MakeButton(card, Loc.T("Cancel"), BtnKind.Neutral, new Vector2(bx, y), CloseDialog);
             y -= 34f + 18f;
 
             card.sizeDelta = new Vector2(w, -y);
@@ -2259,7 +2545,7 @@ namespace Sapphire
 
             _pseudoBatchTileCount = tileCount;
             float y = -20f;
-            var title = MakeLabel(card, "Pseudo across " + tileCount + " tiles", padX, y, 16f, Theme.Text, TextAnchor.UpperLeft);
+            var title = MakeLabel(card, string.Format(Loc.T("Pseudo across {0} tiles"), tileCount), padX, y, 16f, Theme.Text, TextAnchor.UpperLeft);
             title.fontStyle = FontStyles.Bold;
             y -= 34f;
 
@@ -2286,30 +2572,43 @@ namespace Sapphire
                 bool is90 = Mathf.Abs((float)_pseudoTapAngle - 90f) < 0.01f;
                 if (is90)   // 90° square pseudos → up / inline / down
                 {
-                    MakeSegmented3(card, "Sideways", "Upwards", "Inline", "Downwards", padX, y, w,
+                    MakeSegmented3(card, Loc.T("Sideways"), Loc.T("Upwards"), Loc.T("Inline"), Loc.T("Downwards"), padX, y, w,
                         () => _pseudoSidewaysVariant, v => _pseudoSidewaysVariant = v);
                     y -= 52f;
                 }
                 else        // non-90 → angled serpentine, inline not available
                 {
                     if (_pseudoSidewaysVariant == 1) _pseudoSidewaysVariant = 0;
-                    MakeSegmented(card, "Sideways", "Upwards", "Downwards", padX, y, w,
+                    MakeSegmented(card, Loc.T("Sideways"), Loc.T("Upwards"), Loc.T("Downwards"), padX, y, w,
                         () => _pseudoSidewaysVariant == 2, v => _pseudoSidewaysVariant = v ? 2 : 0);
                     y -= 52f;
-                    MakeLabel(card, "Angled at " + _pseudoTapAngle.ToString("0.##", CultureInfo.InvariantCulture)
-                        + "° (inline needs 90°).", padX, y, 11f, Theme.TextMuted, TextAnchor.UpperLeft)
+                    MakeLabel(card, string.Format(Loc.T("Angled at {0}° (inline needs 90°)."),
+                        _pseudoTapAngle.ToString("0.##", CultureInfo.InvariantCulture)), padX, y, 11f, Theme.TextMuted, TextAnchor.UpperLeft)
                         .rectTransform.sizeDelta = new Vector2(w - padX * 2f, 16f);
                     y -= 30f;
                 }
             }
 
+            // Retune: rewrite the EXISTING pseudos in the selection to the submenu's tap angle
+            // (midspin taps + serpentine U-turns; rhythm untouched).
+            float rx = -padX;
+            MakeButton(card, string.Format(Loc.T("Set pseudos to {0}°"),
+                _pseudoTapAngle.ToString("0.##", CultureInfo.InvariantCulture)), BtnKind.Neutral, new Vector2(rx, y), () =>
+            {
+                scnEditor edd = null;
+                try { edd = scnEditor.instance; } catch { }
+                RetunePseudos(edd, _pseudoTapAngle);
+                CloseDialog();
+            });
+            y -= 34f;
+
             float bx = -padX;
-            bx -= MakeButton(card, "Apply", BtnKind.Positive, new Vector2(bx, y), () =>
+            bx -= MakeButton(card, Loc.T("Apply"), BtnKind.Positive, new Vector2(bx, y), () =>
             {
                 ApplyPseudoBatch(tileCount);
                 CloseDialog();
             }) + 10f;
-            MakeButton(card, "Cancel", BtnKind.Neutral, new Vector2(bx, y), CloseDialog);
+            MakeButton(card, Loc.T("Cancel"), BtnKind.Neutral, new Vector2(bx, y), CloseDialog);
             y -= 34f + 18f;
 
             card.sizeDelta = new Vector2(w, -y);
@@ -2339,11 +2638,20 @@ namespace Sapphire
 
             if (_pseudoBatchStyle == 2)      // Inline (battlements — already layout-preserving)
                 GeneratePseudoBatchFlat(ed, interval, keys);
-            else if (_pseudoBatchStyle == 0) // Upwards — overlay on the existing layout
-                GeneratePseudoBatchOverlay(ed, interval, keys, 0);
-            else                             // Sideways up / alternate / down — overlay
-                GeneratePseudoBatchOverlay(ed, interval, keys,
-                    _pseudoSidewaysVariant == 1 ? 2 : _pseudoSidewaysVariant == 2 ? 3 : 1);
+            else if (_pseudoBatchStyle == 0) // Upwards = the ㄹ serpentine REBUILD (user-confirmed
+                GeneratePseudoBatchUpwards(ed, interval, keys); // July 16 — not the overlay)
+            else
+            {
+                // Sideways: non-90 up/down = the LEANING SERPENTINE rebuild (user shape July 16 —
+                // the overlay's tap fallback drifted into a staircase). 90° and Inline keep the
+                // course-preserving overlay steps.
+                bool is90 = Mathf.Abs((float)_pseudoTapAngle - 90f) < 0.01f;
+                if (!is90 && _pseudoSidewaysVariant != 1)
+                    BuildAlternatingRuns(ed, interval, keys, _pseudoSidewaysVariant == 2 ? -1 : +1);
+                else
+                    GeneratePseudoBatchOverlay(ed, interval, keys,
+                        _pseudoSidewaysVariant == 1 ? 2 : _pseudoSidewaysVariant == 2 ? 3 : 1);
+            }
         }
 
         // Sideways batch: the run CONTINUES its direction (no fold), with 90° pseudos drifting
@@ -2878,6 +3186,27 @@ namespace Sapphire
                 if (Bg != null) Bg.color = Base;
                 HideToolTip();
             }
+        }
+    }
+
+    /* The ESC that disarms a Sapphire tool must not ALSO run the game's ESC keybinds
+       (deselect floors, etc.). Skipping HandleKeyboardActions for that one press is safe in
+       either tick order: if the game runs first we suppress before it deselects; if the
+       toolbar ran first the tool is already disarmed and the press is spent. Popups keep
+       their ESC (the close-popup branch lives inside the skipped method). */
+    [HarmonyPatch(typeof(scnEditor), "HandleKeyboardActions")]
+    internal static class ToolEscKeepsSelectionPatch
+    {
+        private static bool Prefix(bool ___showingPopup)
+        {
+            try
+            {
+                if (!MainClass.EditorSuiteOn) return true;
+                if (___showingPopup) return true;                       // ESC still closes popups
+                if (!Input.GetKeyDown(KeyCode.Escape)) return true;
+                return !EditorToolbar.EscDisarmsSomething;
+            }
+            catch { return true; }
         }
     }
 }

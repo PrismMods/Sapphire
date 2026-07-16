@@ -164,6 +164,9 @@ namespace Sapphire
                 EditorBezier.Tick();
                 EditorGraph.Tick();
                 EditorFilterPicker.Tick();
+                EditorMagicShape.Tick();
+                EditorTrackTools.Tick();
+                EditorDecoTools.Tick();
                 EditorMasterSwitch.Tick();
             }
         }
@@ -229,6 +232,9 @@ namespace Sapphire
             EditorBezier.Dispose();
             EditorGraph.Dispose();
             EditorFilterPicker.Dispose();
+            EditorMagicShape.Dispose();
+            EditorTrackTools.Dispose();
+            EditorDecoTools.Dispose();
             EditorMasterSwitch.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
