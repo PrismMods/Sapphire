@@ -74,6 +74,12 @@ namespace Sapphire
             ["Pseudo across {0} tiles"] = "타일 {0}개에 동타",
             ["Angled at {0}° (inline needs 90°)."] = "{0}° 각도 (인라인은 90°에서만 가능).",
             ["Set pseudos to {0}°"] = "동타를 {0}°로 변경",
+            ["Level settings"] = "레벨 설정",
+            ["On"] = "켬",
+            // filter manager: keys/values the game leaves unmapped in its own tables
+            ["targetType"] = "대상 유형",
+            ["Foreground"] = "전경",
+            ["Background"] = "배경",
             ["Style"] = "스타일",
             ["Upwards"] = "위로",
             ["Sideways"] = "옆으로",

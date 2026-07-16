@@ -157,7 +157,84 @@ namespace Sapphire
             if (_inspectorTool) TickInspectorTool(ed);
             if (_zipTool) TickZipTool(ed);
             TickToolHotkeys(ed);
+            TickToolSwap(ed);
             TickToolLabel();
+        }
+
+        // ── quick tool switching: X = previous tool, C = saved tool (Shift+C saves) ──
+
+        private static int _lastToolSeen, _prevTool, _savedTool;
+
+        // tool identity: 0 none · 1 free angle · 2 pseudo · 3 camera · 4 inspector · 5 zip ·
+        // 100+type = event tool (the type survives the round-trip)
+        private static int CurrentToolId() =>
+            _freeAngleTool ? 1 : _pseudoTool ? 2 : EditorCameraPath.IsOn ? 3
+            : _inspectorTool ? 4 : _zipTool ? 5 : _eventTool >= 0 ? 100 + _eventTool : 0;
+
+        private static void TickToolSwap(scnEditor ed)
+        {
+            int cur = CurrentToolId();
+            if (cur != _lastToolSeen)
+            {
+                if (_lastToolSeen != 0) _prevTool = _lastToolSeen;
+                _lastToolSeen = cur;
+            }
+
+            bool typing = false;
+            try
+            {
+                typing = ed.userIsEditingAnInputField;
+                if (!typing)
+                {
+                    var es = EventSystem.current;
+                    var sel = es != null ? es.currentSelectedGameObject : null;
+                    typing = sel != null && (sel.GetComponent<TMP_InputField>() != null
+                                          || sel.GetComponent<InputField>() != null);
+                }
+            }
+            catch { }
+            if (typing) return;
+            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)) return;
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+            // comma/period: bare keys are unbound in the game (only Ctrl+,/. rotate floors,
+            // and ctrl already returned above) — no keybind suppression needed
+            if (Input.GetKeyDown(KeyCode.Comma) && !shift)
+            {
+                if (_prevTool != 0) ActivateTool(_prevTool);
+            }
+            else if (Input.GetKeyDown(KeyCode.Period))
+            {
+                if (shift)
+                {
+                    _savedTool = cur;
+                    SapphireLog.Log(cur != 0 ? "Tool slot saved" : "Tool slot cleared");
+                }
+                else if (_savedTool != 0) ActivateTool(_savedTool);
+            }
+        }
+
+        private static void ActivateTool(int id)
+        {
+            if (id == CurrentToolId()) return;
+            switch (id)
+            {
+                case 1: ToggleFreeAngle(); break;
+                case 2: TogglePseudo(); break;
+                case 3: ToggleCameraPath(); break;
+                case 4: ToggleInspector(); break;
+                case 5: ToggleZip(); break;
+                default:
+                    if (id >= 100)
+                    {
+                        int type = id - 100;
+                        string name;
+                        try { name = ((ADOFAI.LevelEventType)type).ToString(); } catch { name = "event " + type; }
+                        SelectEventTool(type, name);
+                    }
+                    break;
+            }
         }
 
         // Free-angle preview is purely visual: while freeAngleMode is on the game only calls
@@ -2383,29 +2460,10 @@ namespace Sapphire
             if (_dialogGo != null) { CloseDialog(); return; }
             DeactivateFreeAngle(); DeactivatePseudo(); // one tool at a time
 
-            _dialogGo = new GameObject("CircleDialog", typeof(RectTransform));
-            _dialogGo.transform.SetParent(_canvasGo.transform, false);
-            var blocker = (RectTransform)_dialogGo.transform;
-            blocker.anchorMin = Vector2.zero; blocker.anchorMax = Vector2.one;
-            blocker.offsetMin = Vector2.zero; blocker.offsetMax = Vector2.zero;
-            var blockImg = _dialogGo.AddComponent<Image>();
-            blockImg.color = new Color(0f, 0f, 0f, 0.35f);
-            blockImg.raycastTarget = true;
-            UI.ClickHandler.Attach(_dialogGo, CloseDialog); // click outside closes
-
+            // Floating window (user request July 16): no modal blocker — the editor stays
+            // interactive behind it; drag by the title area, × or the toolbar cell closes.
             const float w = 320f, padX = 22f;
-            var cardGo = new GameObject("Card", typeof(RectTransform));
-            cardGo.transform.SetParent(_dialogGo.transform, false);
-            var card = (RectTransform)cardGo.transform;
-            card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
-            card.pivot = new Vector2(0.5f, 0.5f);
-            card.anchoredPosition = new Vector2(0f, 30f);
-            var cardBg = cardGo.AddComponent<RoundedRectGraphic>();
-            cardBg.Radius = 14f;
-            cardBg.color = new Color(0.07f, 0.07f, 0.09f, 0.99f);
-            cardBg.BorderWidth = 1f;
-            cardBg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
-            cardBg.raycastTarget = true; // clicks on the card must not close it
+            var card = MakeFloatingCard("CircleDialog", w, _circleDialogPos);
 
             float y = -20f;
             var title = MakeLabel(card, Loc.T("Curved path"), padX, y, 16f, Theme.Text, TextAnchor.UpperLeft);
@@ -2460,14 +2518,86 @@ namespace Sapphire
             y -= 34f + 18f;
 
             card.sizeDelta = new Vector2(w, -y);
+            AttachFloatingChrome(card);
         }
 
         private static void CloseDialog()
         {
-            if (_dialogGo != null) UnityEngine.Object.Destroy(_dialogGo);
+            if (_dialogGo != null)
+            {
+                // remember where the user dragged each floating dialog (session-scoped)
+                try
+                {
+                    var r = (RectTransform)_dialogGo.transform;
+                    if (_dialogGo.name == "CircleDialog") _circleDialogPos = r.anchoredPosition;
+                    else if (_dialogGo.name == "PseudoBatchDialog") _batchDialogPos = r.anchoredPosition;
+                }
+                catch { }
+                UnityEngine.Object.Destroy(_dialogGo);
+            }
             _dialogGo = null;
             _fPerRound = _fInterval = _fPseudoAngle = _fDegrees = _fTileCount = null;
             _fPseudoBatchInterval = null;
+        }
+
+        private static Vector2 _circleDialogPos = new Vector2(0f, 30f);
+        private static Vector2 _batchDialogPos = new Vector2(0f, 30f);
+
+        // Floating dialog shell: the card IS _dialogGo (no fullscreen blocker), centered
+        // anchors so a saved anchoredPosition restores it where the user left it.
+        private static RectTransform MakeFloatingCard(string name, float w, Vector2 pos)
+        {
+            _dialogGo = new GameObject(name, typeof(RectTransform));
+            _dialogGo.transform.SetParent(_canvasGo.transform, false);
+            var card = (RectTransform)_dialogGo.transform;
+            card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
+            card.pivot = new Vector2(0.5f, 0.5f);
+            card.anchoredPosition = pos;
+            card.sizeDelta = new Vector2(w, 200f);
+            var cardBg = _dialogGo.AddComponent<RoundedRectGraphic>();
+            cardBg.Radius = 14f;
+            cardBg.color = new Color(0.07f, 0.07f, 0.09f, 0.99f);
+            cardBg.BorderWidth = 1f;
+            cardBg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            cardBg.raycastTarget = true;
+            return card;
+        }
+
+        // Added LAST so the strip raycasts above the title text: drag by the title row, ×
+        // closes. (The toolbar cell and ESC still close too.)
+        private static void AttachFloatingChrome(RectTransform card)
+        {
+            var dragGo = new GameObject("Drag", typeof(RectTransform));
+            dragGo.transform.SetParent(card, false);
+            var dr = (RectTransform)dragGo.transform;
+            dr.anchorMin = new Vector2(0f, 1f); dr.anchorMax = new Vector2(1f, 1f);
+            dr.pivot = new Vector2(0.5f, 1f);
+            dr.anchoredPosition = Vector2.zero;
+            dr.sizeDelta = new Vector2(0f, 34f);
+            var img = dragGo.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.01f);
+            img.raycastTarget = true;
+            dragGo.AddComponent<DragHandle>();
+
+            var xGo = new GameObject("Close", typeof(RectTransform));
+            xGo.transform.SetParent(card, false);
+            var xr = (RectTransform)xGo.transform;
+            xr.anchorMin = xr.anchorMax = new Vector2(1f, 1f);
+            xr.pivot = new Vector2(1f, 1f);
+            xr.anchoredPosition = new Vector2(-8f, -8f);
+            xr.sizeDelta = new Vector2(22f, 22f);
+            var bg = xGo.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = new Color(1f, 1f, 1f, 0.07f);
+            bg.raycastTarget = true;
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(xGo.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = lr.offsetMax = Vector2.zero;
+            var xTmp = UIBuilder.Tmp(lGo, "×", 13f, TextAnchor.MiddleCenter, Theme.Text);
+            xTmp.raycastTarget = false;
+            UI.ClickHandler.Attach(xGo, CloseDialog);
         }
 
         // A stable-ish fingerprint of the current multi-selection (count + span) so the batch
@@ -2519,29 +2649,8 @@ namespace Sapphire
         {
             if (_dialogGo != null) return;
 
-            _dialogGo = new GameObject("PseudoBatchDialog", typeof(RectTransform));
-            _dialogGo.transform.SetParent(_canvasGo.transform, false);
-            var blocker = (RectTransform)_dialogGo.transform;
-            blocker.anchorMin = Vector2.zero; blocker.anchorMax = Vector2.one;
-            blocker.offsetMin = Vector2.zero; blocker.offsetMax = Vector2.zero;
-            var blockImg = _dialogGo.AddComponent<Image>();
-            blockImg.color = new Color(0f, 0f, 0f, 0.35f);
-            blockImg.raycastTarget = true;
-            UI.ClickHandler.Attach(_dialogGo, CloseDialog);
-
             const float w = 320f, padX = 22f;
-            var cardGo = new GameObject("Card", typeof(RectTransform));
-            cardGo.transform.SetParent(_dialogGo.transform, false);
-            var card = (RectTransform)cardGo.transform;
-            card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
-            card.pivot = new Vector2(0.5f, 0.5f);
-            card.anchoredPosition = new Vector2(0f, 30f);
-            var cardBg = cardGo.AddComponent<RoundedRectGraphic>();
-            cardBg.Radius = 14f;
-            cardBg.color = new Color(0.07f, 0.07f, 0.09f, 0.99f);
-            cardBg.BorderWidth = 1f;
-            cardBg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
-            cardBg.raycastTarget = true;
+            var card = MakeFloatingCard("PseudoBatchDialog", w, _batchDialogPos);
 
             _pseudoBatchTileCount = tileCount;
             float y = -20f;
@@ -2612,6 +2721,7 @@ namespace Sapphire
             y -= 34f + 18f;
 
             card.sizeDelta = new Vector2(w, -y);
+            AttachFloatingChrome(card);
         }
 
         // Rebuild the batch dialog in place (style toggle swaps the Sideways sub-selector in/out),
@@ -3190,12 +3300,13 @@ namespace Sapphire
     }
 
     /* The ESC that disarms a Sapphire tool must not ALSO run the game's ESC keybinds
-       (deselect floors, etc.). Skipping HandleKeyboardActions for that one press is safe in
-       either tick order: if the game runs first we suppress before it deselects; if the
-       toolbar ran first the tool is already disarmed and the press is spent. Popups keep
-       their ESC (the close-popup branch lives inside the skipped method). */
+       (deselect floors, etc.). The tool-swap keys need no suppression here: bare comma/
+       period are unbound in the game (only Ctrl+,/. rotate floors, which we don't touch).
+       Skipping HandleKeyboardActions for one press is tick-order-safe: whichever side
+       runs first, the press is spent once. Popups keep their ESC (that branch lives
+       inside the skipped method). */
     [HarmonyPatch(typeof(scnEditor), "HandleKeyboardActions")]
-    internal static class ToolEscKeepsSelectionPatch
+    internal static class ToolbarOwnedKeysPatch
     {
         private static bool Prefix(bool ___showingPopup)
         {
@@ -3203,8 +3314,9 @@ namespace Sapphire
             {
                 if (!MainClass.EditorSuiteOn) return true;
                 if (___showingPopup) return true;                       // ESC still closes popups
-                if (!Input.GetKeyDown(KeyCode.Escape)) return true;
-                return !EditorToolbar.EscDisarmsSomething;
+                if (Input.GetKeyDown(KeyCode.Escape))
+                    return !EditorToolbar.EscDisarmsSomething;
+                return true;
             }
             catch { return true; }
         }

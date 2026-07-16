@@ -714,7 +714,7 @@ namespace Sapphire
             var cap = UIBuilder.Tmp(capGo, Loc.T("Beats"), 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
             cap.raycastTarget = false;
 
-            ResizeHandle.AttachAll(r); // all 8 edges/corners
+            ResizeHandle.AttachAll(r, true); // all 8 edges/corners + the BR grip cue
 
             _repaint = 30;
         }

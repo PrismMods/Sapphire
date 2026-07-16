@@ -75,10 +75,47 @@ namespace Sapphire.UI
             Panel.anchoredPosition = p;
         }
 
-        public static void AttachAll(RectTransform panel)
+        public static void AttachAll(RectTransform panel, bool grip = false)
         {
             foreach (ResizeEdge edge in System.Enum.GetValues(typeof(ResizeEdge)))
                 Make(panel, edge);
+            if (grip) BuildGrip(panel);
+        }
+
+        // The visible bottom-right resize cue (the Ctrl+E panel's dot staircase): 3-2-1 dots
+        // pointing into the corner, raycast-transparent so the BR handle under it gets drags.
+        public static void BuildGrip(RectTransform panel)
+        {
+            var gripGo = new GameObject("ResizeGrip", typeof(RectTransform));
+            gripGo.transform.SetParent(panel, false);
+            var gripRect = (RectTransform)gripGo.transform;
+            gripRect.anchorMin = new Vector2(1, 0);
+            gripRect.anchorMax = new Vector2(1, 0);
+            gripRect.pivot = new Vector2(1, 0);
+            gripRect.sizeDelta = new Vector2(16f, 16f);
+            gripRect.anchoredPosition = new Vector2(-4f, 4f);
+
+            Vector2[] dotPositions = new[]
+            {
+                new Vector2(0f, 0f),  new Vector2(6f, 0f),  new Vector2(12f, 0f),
+                new Vector2(6f, 6f),  new Vector2(12f, 6f),
+                new Vector2(12f, 12f),
+            };
+            foreach (var pos in dotPositions)
+            {
+                var dotGo = new GameObject("Dot", typeof(RectTransform));
+                dotGo.transform.SetParent(gripGo.transform, false);
+                var dotRect = (RectTransform)dotGo.transform;
+                dotRect.anchorMin = new Vector2(0, 0);
+                dotRect.anchorMax = new Vector2(0, 0);
+                dotRect.pivot = new Vector2(0, 0);
+                dotRect.sizeDelta = new Vector2(3f, 3f);
+                dotRect.anchoredPosition = pos;
+                var img = dotGo.AddComponent<Image>();
+                img.sprite = Theme.White;
+                img.color = Theme.TextMuted;
+                img.raycastTarget = false;
+            }
         }
 
         private static void Make(RectTransform panel, ResizeEdge edge)

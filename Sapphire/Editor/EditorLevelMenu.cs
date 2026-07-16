@@ -37,8 +37,15 @@ namespace Sapphire
         // screen): a CanvasGroup we drive to alpha 0 while the popup is closed.
         private static CanvasGroup _panelCg;
 
-        // 1920×1080-reference canvas: wide panel — a popup isn't screen-estate constrained.
-        private const float RailW = 210f, PanelW = 900f, PanelH = 840f, Pad = 12f;
+        // Vertical proportions, matching the game's own side-panel silhouette: a narrow tall
+        // window (rail + roughly native panel width). Grow it by resizing if a session calls
+        // for it.
+        private const float RailW = 160f, PanelW = 410f, PanelH = 780f, Pad = 10f, HeaderH = 26f;
+
+        // floating-window geometry, session-scoped (captured on Close)
+        private static Vector2 _floatPos = Vector2.zero;
+        private static Vector2 _floatSize = new Vector2(Pad + RailW + Pad + PanelW + Pad, PanelH + Pad * 2f + HeaderH);
+        private static readonly Vector2 MinSize = new Vector2(520f, 480f);
 
         internal static bool IsOpen => _open;
         // True while we're keeping the game panel off-screen — the Sapphire settings rail suppresses
@@ -113,7 +120,11 @@ namespace Sapphire
                 }
                 catch (Exception ex) { SapphireLog.Log("LevelMenu: restore failed: " + ex.Message); }
             }
-            if (_popupGo != null) UnityEngine.Object.Destroy(_popupGo);
+            if (_popupGo != null)
+            {
+                try { _floatPos = _cardRect.anchoredPosition; _floatSize = _cardRect.sizeDelta; } catch { }
+                UnityEngine.Object.Destroy(_popupGo);
+            }
             _popupGo = null; _cardRect = null; _hostRect = null; _railRect = null;
             _panelRect = null; _origParent = null;
             _rowBgs.Clear(); _rowTabs.Clear(); _rowSelected = -2;
@@ -132,12 +143,19 @@ namespace Sapphire
                     || !MainClass.EditorSuiteOn)
                 { Close(); return; }
                 if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
-                // Hold it in our card against the game's own slide/relayout.
+                // Hold it in our card against the game's own slide/relayout; enforce the
+                // resize floor, then size the game panel to the (resizable) host.
+                if (_cardRect != null)
+                {
+                    var sz = _cardRect.sizeDelta;
+                    if (sz.x < MinSize.x || sz.y < MinSize.y)
+                        _cardRect.sizeDelta = new Vector2(Mathf.Max(sz.x, MinSize.x), Mathf.Max(sz.y, MinSize.y));
+                }
                 if (_hostRect != null && _panelRect.parent != _hostRect)
                     _panelRect.SetParent(_hostRect, false);
                 _panelRect.anchoredPosition = Vector2.zero;
-                var want = new Vector2(PanelW, PanelH);
-                if (_panelRect.sizeDelta != want) _panelRect.sizeDelta = want;
+                var want = _hostRect != null ? _hostRect.rect.size : new Vector2(PanelW, PanelH);
+                if ((_panelRect.sizeDelta - want).sqrMagnitude > 0.5f) _panelRect.sizeDelta = want;
                 if (--_helpCooldown <= 0) { _helpCooldown = 20; ShrinkHelpButtons(); }
                 SyncRailHighlight(ed.settingsPanel);
                 ManagesPanel = true;
@@ -224,46 +242,84 @@ namespace Sapphire
             _canvasGo.AddComponent<GraphicRaycaster>();
         }
 
+        /* Floating window (user request July 16): no modal blocker — the editor stays live
+           behind it. Drag by the header, resize from edges/corners (ResizeHandle); geometry
+           survives close/reopen within the session. The hosted game panel follows the host
+           rect, which stretches with the card. */
         private static void BuildPopup()
         {
-            _popupGo = new GameObject("Popup", typeof(RectTransform));
+            _popupGo = new GameObject("Card", typeof(RectTransform));
             _popupGo.transform.SetParent(_canvasGo.transform, false);
-            var blocker = (RectTransform)_popupGo.transform;
-            blocker.anchorMin = Vector2.zero; blocker.anchorMax = Vector2.one;
-            blocker.offsetMin = Vector2.zero; blocker.offsetMax = Vector2.zero;
-            var blockImg = _popupGo.AddComponent<Image>();
-            blockImg.color = new Color(0f, 0f, 0f, 0.4f);
-            blockImg.raycastTarget = true; // swallows stray clicks; ESC or the chip closes
-
-            var cardGo = new GameObject("Card", typeof(RectTransform));
-            cardGo.transform.SetParent(_popupGo.transform, false);
-            _cardRect = (RectTransform)cardGo.transform;
+            _cardRect = (RectTransform)_popupGo.transform;
             _cardRect.anchorMin = _cardRect.anchorMax = new Vector2(0.5f, 0.5f);
             _cardRect.pivot = new Vector2(0.5f, 0.5f);
-            _cardRect.anchoredPosition = Vector2.zero;
-            _cardRect.sizeDelta = new Vector2(Pad + RailW + Pad + PanelW + Pad, PanelH + Pad * 2f);
-            var cardBg = cardGo.AddComponent<RoundedRectGraphic>();
+            _cardRect.anchoredPosition = _floatPos;
+            _cardRect.sizeDelta = _floatSize;
+            var cardBg = _popupGo.AddComponent<RoundedRectGraphic>();
             cardBg.Radius = 14f;
             cardBg.color = new Color(0.07f, 0.07f, 0.09f, 0.98f);
             cardBg.BorderWidth = 1f;
             cardBg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
-            cardBg.raycastTarget = true; // clicks on the card must not close it
+            cardBg.raycastTarget = true;
+
+            // header: title + drag handle + close
+            var headGo = new GameObject("Head", typeof(RectTransform));
+            headGo.transform.SetParent(_popupGo.transform, false);
+            var hr = (RectTransform)headGo.transform;
+            hr.anchorMin = new Vector2(0f, 1f); hr.anchorMax = new Vector2(1f, 1f);
+            hr.pivot = new Vector2(0.5f, 1f);
+            hr.anchoredPosition = Vector2.zero;
+            hr.sizeDelta = new Vector2(0f, HeaderH);
+            var headBg = headGo.AddComponent<RoundedRectGraphic>();
+            headBg.Radius = 14f;
+            headBg.color = new Color(1f, 1f, 1f, 0.04f);
+            headBg.raycastTarget = true;
+            headGo.AddComponent<DragHandle>();
+            var titleGo = new GameObject("T", typeof(RectTransform));
+            titleGo.transform.SetParent(headGo.transform, false);
+            var tr = (RectTransform)titleGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(Pad, 0f); tr.offsetMax = new Vector2(-34f, 0f);
+            var title = UIBuilder.Tmp(titleGo, Loc.T("Level settings"), 13.5f, TextAnchor.MiddleLeft, Theme.Text);
+            title.raycastTarget = false;
+            var xGo = new GameObject("Close", typeof(RectTransform));
+            xGo.transform.SetParent(_popupGo.transform, false);
+            var xr = (RectTransform)xGo.transform;
+            xr.anchorMin = xr.anchorMax = new Vector2(1f, 1f);
+            xr.pivot = new Vector2(1f, 1f);
+            xr.anchoredPosition = new Vector2(-6f, -4f);
+            xr.sizeDelta = new Vector2(22f, 22f);
+            var xBg = xGo.AddComponent<RoundedRectGraphic>();
+            xBg.Radius = 5f;
+            xBg.color = new Color(1f, 1f, 1f, 0.07f);
+            xBg.raycastTarget = true;
+            var xLGo = new GameObject("L", typeof(RectTransform));
+            xLGo.transform.SetParent(xGo.transform, false);
+            var xlr = (RectTransform)xLGo.transform;
+            xlr.anchorMin = Vector2.zero; xlr.anchorMax = Vector2.one;
+            xlr.offsetMin = xlr.offsetMax = Vector2.zero;
+            var xTmp = UIBuilder.Tmp(xLGo, "×", 13f, TextAnchor.MiddleCenter, Theme.Text);
+            xTmp.raycastTarget = false;
+            UI.ClickHandler.Attach(xGo, Close);
 
             var railGo = new GameObject("Rail", typeof(RectTransform));
-            railGo.transform.SetParent(cardGo.transform, false);
+            railGo.transform.SetParent(_popupGo.transform, false);
             _railRect = (RectTransform)railGo.transform;
             _railRect.anchorMin = new Vector2(0f, 0f); _railRect.anchorMax = new Vector2(0f, 1f);
             _railRect.pivot = new Vector2(0f, 1f);
-            _railRect.anchoredPosition = new Vector2(Pad, -Pad);
-            _railRect.sizeDelta = new Vector2(RailW, -Pad * 2f);
+            _railRect.anchoredPosition = new Vector2(Pad, -(Pad + HeaderH));
+            _railRect.sizeDelta = new Vector2(RailW, -(Pad * 2f + HeaderH));
 
+            // host stretches with the card; the game panel is resized to it every tick
             var hostGo = new GameObject("Host", typeof(RectTransform));
-            hostGo.transform.SetParent(cardGo.transform, false);
+            hostGo.transform.SetParent(_popupGo.transform, false);
             _hostRect = (RectTransform)hostGo.transform;
-            _hostRect.anchorMin = new Vector2(1f, 0.5f); _hostRect.anchorMax = new Vector2(1f, 0.5f);
-            _hostRect.pivot = new Vector2(1f, 0.5f);
-            _hostRect.anchoredPosition = new Vector2(-Pad, 0f);
-            _hostRect.sizeDelta = new Vector2(PanelW, PanelH);
+            _hostRect.anchorMin = new Vector2(0f, 0f); _hostRect.anchorMax = new Vector2(1f, 1f);
+            _hostRect.pivot = new Vector2(0.5f, 0.5f);
+            _hostRect.offsetMin = new Vector2(Pad + RailW + Pad, Pad);
+            _hostRect.offsetMax = new Vector2(-Pad, -(Pad + HeaderH));
+
+            ResizeHandle.AttachAll(_cardRect, true);
         }
 
         // ── labeled tab rail (Ctrl+E style) ─────────────────────────────────
@@ -274,7 +330,7 @@ namespace Sapphire
             try { tabsRt = panel.tabs; } catch { }
             if (tabsRt == null || _railRect == null) return;
 
-            const float rowH = 44f, rowGap = 6f;
+            const float rowH = 34f, rowGap = 4f;
             float y = 0f;
             for (int i = 0; i < tabsRt.childCount; i++)
             {
@@ -306,8 +362,8 @@ namespace Sapphire
                     var ir = (RectTransform)iconGo.transform;
                     ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
                     ir.pivot = new Vector2(0f, 0.5f);
-                    ir.anchoredPosition = new Vector2(10f, 0f);
-                    ir.sizeDelta = new Vector2(24f, 24f);
+                    ir.anchoredPosition = new Vector2(8f, 0f);
+                    ir.sizeDelta = new Vector2(20f, 20f);
                     var img = iconGo.AddComponent<Image>();
                     img.sprite = sprite;
                     img.preserveAspect = true;
@@ -318,8 +374,8 @@ namespace Sapphire
                 lblGo.transform.SetParent(rowGo.transform, false);
                 var lr = (RectTransform)lblGo.transform;
                 lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = new Vector2(44f, 0f); lr.offsetMax = new Vector2(-8f, 0f);
-                var lbl = UIBuilder.Tmp(lblGo, TabName(tab), 14f, TextAnchor.MiddleLeft, Theme.Text);
+                lr.offsetMin = new Vector2(34f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
+                var lbl = UIBuilder.Tmp(lblGo, TabName(tab), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
                 lbl.raycastTarget = false;
 
                 var tabGo = tabTr.gameObject;

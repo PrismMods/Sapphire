@@ -175,6 +175,7 @@ namespace Sapphire
         internal static double GraphBeatAtFrac(float frac) => BeatAtTime(frac * _totalTime) - _beatOffset;
         private static RoundedRectGraphic _camBtnBg;
         private static GameObject _graphBtnGo;
+        private static RoundedRectGraphic _graphBtnBg;
         private static RectTransform _camInspHost;
         private const int CamLanePos = -2, CamLaneRot = -3, CamLaneZoom = -4;
 
@@ -371,6 +372,14 @@ namespace Sapphire
             // Outside the master gate: the arrow has its OWN canvas, so it must be told to
             // hide when the suite is switched off — it used to linger.
             TickFoldButton(wantFold);
+            // graph view opens/closes independently of the mode — mirror its state per frame
+            if (_graphBtnBg != null)
+            {
+                var ac = UI.Theme.Accent;
+                var wantCol = EditorGraph.IsOpen
+                    ? new Color(ac.r, ac.g, ac.b, 0.5f) : new Color(1f, 1f, 1f, 0.12f);
+                if (_graphBtnBg.color != wantCol) _graphBtnBg.color = wantCol;
+            }
 
             if (!wantChips && !wantTl)
             {
@@ -422,7 +431,7 @@ namespace Sapphire
             _foldCanvasGo = null; _foldRect = null; _foldGlyph = null;
             if (_markerTex != null) Object.Destroy(_markerTex);
             _canvasGo = null; _canvasRect = null; _canvas = null; _chipsRow = null;
-            _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null; _graphBtnGo = null; _dragGhostGo = null; _modeMenuGo = null; _modeBtnLabel = null;
+            _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null; _graphBtnGo = null; _graphBtnBg = null; _dragGhostGo = null; _modeMenuGo = null; _modeBtnLabel = null;
             _playhead = null; _laneLabelHost = null;
             _tooltipGo = null; _tooltipRect = null; _tooltipText = null;
             _chipRects.Clear(); _chipEvents.Clear(); _lanes.Clear(); _laneEvents = null;
@@ -2351,6 +2360,13 @@ namespace Sapphire
             _laneLabelHost.pivot = new Vector2(0f, 0.5f);
             _laneLabelHost.offsetMin = new Vector2(4f, StripPad);
             _laneLabelHost.offsetMax = new Vector2(HeaderW - 6f, -StripPad);
+            // Something in the strip stack outraces the labels for pointer raycasts (the cam
+            // lane expand chevrons read dead) — give the label column its own sorting layer
+            // so its clicks always land, above the strip (899) / fold (903), under menus (905+).
+            var labelCanvas = labelGo.AddComponent<Canvas>();
+            labelCanvas.overrideSorting = true;
+            labelCanvas.sortingOrder = 904;
+            labelGo.AddComponent<UnityEngine.UI.GraphicRaycaster>();
 
             var areaGo = new GameObject("Markers", typeof(RectTransform));
             areaGo.transform.SetParent(stripGo.transform, false);
@@ -3030,6 +3046,7 @@ namespace Sapphire
             _camBtnBg.color = TlMode > 0 ? new Color(a.r, a.g, a.b, 0.5f) : new Color(1f, 1f, 1f, 0.12f);
             if (_modeBtnLabel != null) _modeBtnLabel.text = TlModeNames[Mathf.Clamp(TlMode, 0, 3)];
             if (_graphBtnGo != null && _graphBtnGo.activeSelf != CamMode) _graphBtnGo.SetActive(CamMode);
+            // (the GRAPH chip's open-state accent is synced per frame in Tick)
         }
 
         // No selection needed: opens on the timeline's current view (zoom tab by default).
@@ -3048,6 +3065,7 @@ namespace Sapphire
             bg.Radius = 5f;
             bg.color = new Color(1f, 1f, 1f, 0.12f);
             bg.raycastTarget = true;
+            _graphBtnBg = bg;
             var txtGo = new GameObject("Label", typeof(RectTransform));
             txtGo.transform.SetParent(go.transform, false);
             var tr = (RectTransform)txtGo.transform;

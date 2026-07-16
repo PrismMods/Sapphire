@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Sapphire
@@ -29,6 +30,7 @@ namespace Sapphire
                 pm.gameObject.SetActive(true);   // first activation runs its Awake (builds buttons)
                 pm.ShowSettingsMenu();           // hides the pause main menu, shows settings
                 _open = true;
+                HideSapphireUi();
             }
             catch (Exception ex)
             {
@@ -47,6 +49,41 @@ namespace Sapphire
             }
             _pm = null;
             _open = false;
+            ShowSapphireUi();
+        }
+
+        /* The native settings menu is fullscreen — Sapphire chrome bleeding through reads as
+           broken UI. While it's up, every root canvas named "Sapphire*" is faded via a
+           CanvasGroup (alpha 0 + no raycasts — the proven proxied-click-safe hide); only the
+           ones WE hid are restored, so canvases that were already hidden by their own logic
+           stay untouched. Swept per tick: panels that build their canvas lazily while the
+           menu is open get caught too. */
+        private static readonly List<CanvasGroup> _hidden = new List<CanvasGroup>();
+
+        private static void HideSapphireUi()
+        {
+            try
+            {
+                foreach (var canvas in UnityEngine.Object.FindObjectsOfType<Canvas>())
+                {
+                    if (canvas == null || !canvas.isRootCanvas) continue;
+                    if (!canvas.name.StartsWith("Sapphire")) continue;
+                    var go = canvas.gameObject;
+                    var cg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+                    if (cg.alpha <= 0f) continue;
+                    cg.alpha = 0f;
+                    cg.blocksRaycasts = false;
+                    if (!_hidden.Contains(cg)) _hidden.Add(cg);
+                }
+            }
+            catch { }
+        }
+
+        private static void ShowSapphireUi()
+        {
+            foreach (var cg in _hidden)
+                if (cg != null) { cg.alpha = 1f; cg.blocksRaycasts = true; }
+            _hidden.Clear();
         }
 
         internal static void Tick()
@@ -61,7 +98,8 @@ namespace Sapphire
             bool onSettings = true;
             try { onSettings = _pm.settingsMenu != null && _pm.settingsMenu.gameObject.activeInHierarchy; }
             catch { }
-            if (!onSettings) Close();
+            if (!onSettings) { Close(); return; }
+            HideSapphireUi(); // catch canvases built while the menu is open
         }
 
         internal static void Dispose()

@@ -299,41 +299,8 @@ namespace Sapphire.UI
         }
 
         // Visible 6-dot staircase in the bottom-right corner — affordance for the existing
-        // invisible bottom-right ResizeHandle. The dots have raycastTarget=false so drag
-        // events fall through to the underlying handle.
-        private static void BuildResizeGrip()
-        {
-            var gripGo = UIBuilder.Rect("ResizeGrip", _panel);
-            var gripRect = (RectTransform)gripGo.transform;
-            gripRect.anchorMin = new Vector2(1, 0);
-            gripRect.anchorMax = new Vector2(1, 0);
-            gripRect.pivot = new Vector2(1, 0);
-            gripRect.sizeDelta = new Vector2(16f, 16f);
-            gripRect.anchoredPosition = new Vector2(-4f, 4f);
-
-            // Staircase pointing into the corner: 3 dots bottom, 2 dots middle, 1 dot top.
-            // Coordinates are bottom-left anchored inside the 16×16 grip box.
-            Vector2[] dotPositions = new[]
-            {
-                new Vector2(0f, 0f),  new Vector2(6f, 0f),  new Vector2(12f, 0f),
-                new Vector2(6f, 6f),  new Vector2(12f, 6f),
-                new Vector2(12f, 12f),
-            };
-            foreach (var pos in dotPositions)
-            {
-                var dotGo = UIBuilder.Rect("Dot", gripGo.transform);
-                var dotRect = (RectTransform)dotGo.transform;
-                dotRect.anchorMin = new Vector2(0, 0);
-                dotRect.anchorMax = new Vector2(0, 0);
-                dotRect.pivot = new Vector2(0, 0);
-                dotRect.sizeDelta = new Vector2(3f, 3f);
-                dotRect.anchoredPosition = pos;
-                var img = dotGo.AddComponent<Image>();
-                img.sprite = Theme.White;
-                img.color = Theme.TextMuted;
-                img.raycastTarget = false;
-            }
-        }
+        // invisible bottom-right ResizeHandle (shared drawer in ResizeHandle.BuildGrip).
+        private static void BuildResizeGrip() => ResizeHandle.BuildGrip(_panel);
 
         private static RectTransform _railRect;
         private static RectTransform _pageHostRect;

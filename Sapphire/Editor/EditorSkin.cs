@@ -50,9 +50,56 @@ namespace Sapphire
                 return;
             }
             GuardTick(); // cheap per-frame re-assert against the game's direct color writes
+            try { StyleOpenDropdownLists(); } catch { }
             if (--_cooldown > 0) return;
             _cooldown = 30;
             try { Apply(ed); } catch (System.Exception e) { SapphireLog.Debug("[skin] " + e.Message); }
+        }
+
+        /* Dropdown option lists spawn FRESH on every open, restyled by the game — after the
+           dark sweep that can land same-on-same (white option labels over the white list box
+           = the invisible dropdown text). While a list is open, force it coherent every
+           frame: dark plates, dark item tint-blocks, light labels; glyphs (checkmark) and
+           already-light text stay. Dropdowns are cached by the 30-frame sweep. */
+        private static readonly List<Component> _dropdowns = new List<Component>();
+
+        private static void StyleOpenDropdownLists()
+        {
+            for (int i = 0; i < _dropdowns.Count; i++)
+            {
+                var dd = _dropdowns[i];
+                if (dd == null) continue;
+                Transform list = dd.transform.Find("Dropdown List");
+                if (list == null || !list.gameObject.activeInHierarchy) continue;
+
+                foreach (var tog in list.GetComponentsInChildren<Toggle>(true))
+                {
+                    var g = tog.targetGraphic;
+                    if (g == null) continue;
+                    g.color = Color.white;
+                    var block = tog.colors;
+                    block.normalColor = new Color(0.11f, 0.11f, 0.14f, 1f);
+                    block.highlightedColor = new Color(0.24f, 0.24f, 0.3f, 1f);
+                    block.pressedColor = new Color(0.3f, 0.3f, 0.36f, 1f);
+                    block.selectedColor = new Color(0.2f, 0.24f, 0.36f, 1f);
+                    tog.colors = block;
+                }
+                foreach (var img in list.GetComponentsInChildren<Image>(true))
+                {
+                    if (img.type != Image.Type.Sliced && img.type != Image.Type.Tiled) continue; // glyphs stay
+                    var owner = img.GetComponentInParent<Toggle>();
+                    if (owner != null && ReferenceEquals(owner.targetGraphic, img)) continue;    // tinted above
+                    var c = img.color;
+                    if (c.r > 0.45f && c.g > 0.45f && c.b > 0.45f)
+                        img.color = new Color(0.09f, 0.09f, 0.11f, 1f); // opaque: must read over level art
+                }
+                foreach (var t in list.GetComponentsInChildren<TextMeshProUGUI>(true))
+                    if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
+                        t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
+                foreach (var t in list.GetComponentsInChildren<Text>(true))
+                    if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
+                        t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
+            }
         }
 
         internal static void Dispose() => Restore();
@@ -90,7 +137,17 @@ namespace Sapphire
             AddRoot(roots, ed.particleEditorContainer != null ? ed.particleEditorContainer.transform : null);
             if (roots.Count == 0) return;
             _applied = true;
-            foreach (var r in roots) ApplyRoot(r);
+            _dropdowns.Clear();
+            foreach (var r in roots)
+            {
+                ApplyRoot(r);
+                try
+                {
+                    _dropdowns.AddRange(r.GetComponentsInChildren<TMP_Dropdown>(true));
+                    _dropdowns.AddRange(r.GetComponentsInChildren<Dropdown>(true));
+                }
+                catch { }
+            }
             try { if (ed.popupWindow != null) ApplyPopupButtons(ed.popupWindow.transform); } catch { }
         }
 

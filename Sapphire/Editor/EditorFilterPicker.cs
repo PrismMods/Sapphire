@@ -78,6 +78,13 @@ namespace Sapphire
 
             if (_popupGo == null) return;
             if (!inEditor || Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
+            // resizing invalidates the grid's cell metrics (positions bake in the view width)
+            var pr = (RectTransform)_popupGo.transform;
+            if ((pr.sizeDelta - _lastPanelSize).sqrMagnitude > 1f)
+            {
+                _lastPanelSize = pr.sizeDelta;
+                RebuildGrid();
+            }
             if (_target == null || (ed != null && !ed.events.Contains(_target)))
             {
                 var next = FirstFilterEventOnTile(ed);
@@ -414,21 +421,18 @@ namespace Sapphire
             _search = ""; _category = null; _scroll = 0f;
             if (_canvasGo == null) BuildCanvas();
 
+            // Floating window (user request July 16): no dim blocker — the editor stays live
+            // behind it. Drag by the title row, resize from edges/corners; geometry persists
+            // for the session.
             _popupGo = new GameObject("FilterPopup", typeof(RectTransform));
             _popupGo.transform.SetParent(_canvasGo.transform, false);
-            var blocker = (RectTransform)_popupGo.transform;
-            blocker.anchorMin = Vector2.zero; blocker.anchorMax = Vector2.one;
-            blocker.offsetMin = Vector2.zero; blocker.offsetMax = Vector2.zero;
-            var blockImg = _popupGo.AddComponent<Image>();
-            blockImg.color = new Color(0f, 0f, 0f, 0.3f);
-            blockImg.raycastTarget = true; // swallow, but do NOT close — ESC/× only
-
-            var panelGo = new GameObject("Panel", typeof(RectTransform));
-            panelGo.transform.SetParent(_popupGo.transform, false);
-            var panel = (RectTransform)panelGo.transform;
+            var panelGo = _popupGo;
+            var panel = (RectTransform)_popupGo.transform;
             panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(PanelW, PanelH);
+            panel.anchoredPosition = _mgrPos;
+            panel.sizeDelta = _mgrSize;
+            _lastPanelSize = _mgrSize;
             var bg = panelGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 12f;
             bg.color = new Color(0.06f, 0.06f, 0.08f, 0.98f);
@@ -577,9 +581,28 @@ namespace Sapphire
             _propContent.anchoredPosition = Vector2.zero;
             _propScroll = 0f;
 
+            // drag strip over the title row (added last so it wins the raycast) + resize
+            var dragGo = new GameObject("Drag", typeof(RectTransform));
+            dragGo.transform.SetParent(panelGo.transform, false);
+            var dr = (RectTransform)dragGo.transform;
+            dr.anchorMin = new Vector2(0f, 1f); dr.anchorMax = new Vector2(1f, 1f);
+            dr.pivot = new Vector2(0.5f, 1f);
+            dr.anchoredPosition = Vector2.zero;
+            dr.sizeDelta = new Vector2(-80f, 38f); // leaves the × corner clickable
+            var dImg = dragGo.AddComponent<Image>();
+            dImg.color = new Color(0f, 0f, 0f, 0.01f);
+            dImg.raycastTarget = true;
+            dragGo.AddComponent<DragHandle>();
+            ResizeHandle.AttachAll(panel, true);
+
             RebuildGrid();
             RebuildProps();
         }
+
+        // floating-window geometry (session-scoped) + resize watch
+        private static Vector2 _mgrPos = Vector2.zero;
+        private static Vector2 _mgrSize = new Vector2(PanelW, PanelH);
+        private static Vector2 _lastPanelSize;
 
         // ── tile filter sections ─────────────────────────────────────────────
         private static List<ADOFAI.LevelEvent> TileFilterEvents(scnEditor ed)
@@ -662,6 +685,10 @@ namespace Sapphire
                 y -= 30f;
                 if (!expanded) continue;
 
+                // event-level settings (enable, duration, ease, tags, …) — the manager
+                // should cover everything so the game's inspector isn't needed
+                y = BuildEventRows(e, y);
+
                 if (!legacy && cur.Length > 0)
                 {
                     var pairs = PropsPairsOf(e);
@@ -685,11 +712,6 @@ namespace Sapphire
                         MakePropField(val, y, sv => CommitProp(k, sv));
                         y -= 32f;
                     }
-                }
-                else if (legacy)
-                {
-                    MakePropLabel(Loc.T("Edited in the event panel"), y, 12f, Theme.TextMuted);
-                    y -= 24f;
                 }
                 MakePropButton(Loc.T("Delete event"), y, () => DeleteEvent(e));
                 y -= 40f;
@@ -829,6 +851,243 @@ namespace Sapphire
                 ed.levelEventsPanel.ShowPanel(evt.eventType, idx);
             }
             catch (Exception ex) { SapphireLog.Log("FilterPicker: prop edit failed: " + ex.Message); }
+        }
+
+        /* Generic event-level rows: every key of a fresh default event (∪ the live one),
+           minus the filter choice (that's the grid) and the flattened filter_* params.
+           Bools toggle, enums cycle (right-click backwards), Ease opens the shared curve
+           grid, everything else edits as text coerced to the default value's type. Being
+           key-driven keeps the manager complete across game updates. */
+        private static float BuildEventRows(ADOFAI.LevelEvent evt, float y)
+        {
+            Dictionary<string, object> defaults = null;
+            try { defaults = EditorEvents.EventData(new ADOFAI.LevelEvent(evt.floor, evt.eventType)); } catch { }
+            var live = EditorEvents.EventData(evt);
+            var keys = new List<string>();
+            if (defaults != null) foreach (var k2 in defaults.Keys) keys.Add(k2);
+            if (live != null) foreach (var k2 in live.Keys) if (!keys.Contains(k2)) keys.Add(k2);
+
+            // the game's own property registry: exact localization keys, plus which
+            // properties are informational (Note — the warning banner) or invisible
+            ADOFAI.LevelEventInfo info = null;
+            try { GCS.levelEventsInfo.TryGetValue(evt.eventType.ToString(), out info); } catch { }
+
+            foreach (var key in keys)
+            {
+                if (key == "filter" || key == "filterProperties" || key.StartsWith("filter_")) continue;
+
+                ADOFAI.PropertyInfo pi = null;
+                try { if (info != null) info.propertiesInfo.TryGetValue(key, out pi); } catch { }
+                if (pi != null)
+                {
+                    try { if (pi.controlType.ToString() == "Note") continue; } catch { }
+                    try { if (pi.invisible) continue; } catch { }
+                }
+
+                object val = null;
+                if (live != null && live.TryGetValue(key, out var lv) && lv != null) val = lv;
+                if (val == null && defaults != null) defaults.TryGetValue(key, out val);
+                // valueless keys are informational banners (the "warning" Note) — nothing to edit
+                if (val == null) continue;
+
+                string lbl = key;
+                try
+                {
+                    string lockey = null;
+                    try { if (pi != null) lockey = pi.customLocalizationKey; } catch { }
+                    if (string.IsNullOrEmpty(lockey)) lockey = "editor." + key;
+                    bool ex2;
+                    var loc = RDString.GetWithCheck(lockey, out ex2, null);
+                    lbl = ex2 && !string.IsNullOrEmpty(loc) ? loc : Loc.T(key); // our table last
+                }
+                catch { }
+
+                string k = key;
+                var e2 = evt;
+                string[] strOpts = null; // enum-typed STRING properties (targetType, plane…) cycle
+                try
+                {
+                    if (val is string && pi != null && pi.enumType != null)
+                        strOpts = Enum.GetNames(pi.enumType);
+                }
+                catch { }
+                if (val is bool bv)
+                {
+                    MakePropToggle(lbl, bv, y, v => CommitEventValue(e2, k, v));
+                    y -= 32f;
+                }
+                else if (val is DG.Tweening.Ease ez)
+                {
+                    MakePropLabel(lbl, y, 12f, Theme.TextMuted);
+                    y -= 18f;
+                    MakePropCell(LocEnum("Ease", ez.ToString()), y, go =>
+                        EditorEasePicker.Open(Loc.T("Ease"), ez, (Vector2)go.transform.position,
+                            nv => CommitEventValue(e2, k, nv)), null);
+                    y -= 32f;
+                }
+                else if (val is Enum en)
+                {
+                    MakePropLabel(lbl, y, 12f, Theme.TextMuted);
+                    y -= 18f;
+                    MakePropCell(LocEnum(en.GetType().Name, en.ToString()), y,
+                        _ => CommitEventValue(e2, k, StepEnum(en, +1)),
+                        () => CommitEventValue(e2, k, StepEnum(en, -1)));
+                    y -= 32f;
+                }
+                else if (strOpts != null && strOpts.Length > 0)
+                {
+                    string sv2 = (string)val;
+                    string typeName = null;
+                    try { typeName = pi.enumType.Name; } catch { }
+                    int cur2 = Mathf.Max(0, Array.IndexOf(strOpts, sv2));
+                    var opts = strOpts;
+                    MakePropLabel(lbl, y, 12f, Theme.TextMuted);
+                    y -= 18f;
+                    MakePropCell(LocEnum(typeName, sv2), y,
+                        _ => CommitEventValue(e2, k, opts[(cur2 + 1) % opts.Length]),
+                        () => CommitEventValue(e2, k, opts[(cur2 - 1 + opts.Length) % opts.Length]));
+                    y -= 32f;
+                }
+                else
+                {
+                    MakePropLabel(lbl, y, 12f, Theme.TextMuted);
+                    y -= 18f;
+                    object defVal = null;
+                    if (defaults != null) defaults.TryGetValue(k, out defVal);
+                    var defType = (val ?? defVal) != null ? (val ?? defVal).GetType() : typeof(string);
+                    MakePropField(FormatVal(val), y, sv => CommitEventText(e2, k, sv, defType, defVal));
+                    y -= 32f;
+                }
+            }
+            y -= 4f;
+            return y;
+        }
+
+        // enum values shown the way the game shows them in dropdowns; raw name when unmapped
+        private static string LocEnum(string enumType, string value)
+        {
+            if (!string.IsNullOrEmpty(enumType))
+                try
+                {
+                    bool ex;
+                    var loc = RDString.GetWithCheck("enum." + enumType + "." + value, out ex, null);
+                    if (ex && !string.IsNullOrEmpty(loc)) return loc;
+                }
+                catch { }
+            return Loc.T(value); // our table covers the game's unmapped enum names
+        }
+
+        private static object StepEnum(Enum cur, int dir)
+        {
+            var vals = Enum.GetValues(cur.GetType());
+            int idx = Array.IndexOf(vals, cur);
+            return vals.GetValue(((idx + dir) % vals.Length + vals.Length) % vals.Length);
+        }
+
+        private static void CommitEventValue(ADOFAI.LevelEvent evt, string key, object v)
+        {
+            var ed = scnEditor.instance;
+            if (ed == null || evt == null) return;
+            try
+            {
+                using (new SaveStateScope(ed))
+                    evt[key] = v;
+                RefreshGamePanel(ed, evt);
+            }
+            catch (Exception ex) { SapphireLog.Log("FilterPicker: event edit failed: " + ex.Message); }
+            RebuildProps(); // toggles/enums show state — redraw
+        }
+
+        private static void CommitEventText(ADOFAI.LevelEvent evt, string key, string raw, Type defType, object defVal)
+        {
+            var ed = scnEditor.instance;
+            if (ed == null || evt == null) return;
+            try
+            {
+                using (new SaveStateScope(ed))
+                {
+                    if (string.IsNullOrWhiteSpace(raw) && defVal != null)
+                        evt[key] = defVal;                  // empty = back to the default
+                    else
+                        evt[key] = CoerceTo(raw, defType);
+                }
+                RefreshGamePanel(ed, evt);
+            }
+            catch (Exception ex) { SapphireLog.Log("FilterPicker: event edit failed: " + ex.Message); }
+        }
+
+        private static void RefreshGamePanel(scnEditor ed, ADOFAI.LevelEvent evt)
+        {
+            int idx = 0;
+            foreach (var e in ed.events)
+            {
+                if (e == null || e.floor != evt.floor || e.eventType != evt.eventType) continue;
+                if (ReferenceEquals(e, evt)) break;
+                idx++;
+            }
+            try { ed.levelEventsPanel.ShowPanel(evt.eventType, idx); } catch { }
+        }
+
+        // [label ......... On/Off] — full-width toggle cell, accent-tinted while on
+        private static void MakePropToggle(string label, bool on, float y, Action<bool> commit)
+        {
+            var go = new GameObject("PT", typeof(RectTransform));
+            go.transform.SetParent(_propContent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(-20f, 26f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            var a = Theme.Accent;
+            bg.color = on ? new Color(a.r, a.g, a.b, 0.35f) : new Color(1f, 1f, 1f, 0.06f);
+            bg.raycastTarget = true;
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-8f, 0f);
+            var lt = UIBuilder.Tmp(lGo, label, 12f, TextAnchor.MiddleLeft, Theme.Text);
+            lt.textWrappingMode = TextWrappingModes.NoWrap;
+            lt.overflowMode = TextOverflowModes.Ellipsis;
+            lt.raycastTarget = false;
+            var vGo = new GameObject("V", typeof(RectTransform));
+            vGo.transform.SetParent(go.transform, false);
+            var vr = (RectTransform)vGo.transform;
+            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
+            vr.offsetMin = new Vector2(8f, 0f); vr.offsetMax = new Vector2(-8f, 0f);
+            var vt = UIBuilder.Tmp(vGo, Loc.T(on ? "On" : "Off"), 12f, TextAnchor.MiddleRight,
+                on ? Theme.Text : Theme.TextMuted);
+            vt.raycastTarget = false;
+            UI.ClickHandler.Attach(go, () => commit(!on));
+        }
+
+        // value cell: left-click = primary action (cycle/open picker), right-click optional
+        private static void MakePropCell(string text, float y, Action<GameObject> onClick, Action onRight)
+        {
+            var go = new GameObject("PC", typeof(RectTransform));
+            go.transform.SetParent(_propContent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(-20f, 26f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = new Color(1f, 1f, 1f, 0.07f);
+            bg.raycastTarget = true;
+            var tGo = new GameObject("T", typeof(RectTransform));
+            tGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)tGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = new Vector2(7f, 0f); tr.offsetMax = new Vector2(-7f, 0f);
+            var txt = UIBuilder.Tmp(tGo, text, 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+            txt.textWrappingMode = TextWrappingModes.NoWrap;
+            txt.overflowMode = TextOverflowModes.Ellipsis;
+            txt.raycastTarget = false;
+            var ch = UI.ClickHandler.Attach(go, () => onClick(go));
+            if (onRight != null) ch.OnRightClick = onRight;
         }
 
         private static void DeleteEvent(ADOFAI.LevelEvent evt)
@@ -1067,7 +1326,17 @@ namespace Sapphire
 
         private static void Close()
         {
-            if (_popupGo != null) UnityEngine.Object.Destroy(_popupGo);
+            if (_popupGo != null)
+            {
+                try
+                {
+                    var r = (RectTransform)_popupGo.transform;
+                    _mgrPos = r.anchoredPosition;
+                    _mgrSize = r.sizeDelta;
+                }
+                catch { }
+                UnityEngine.Object.Destroy(_popupGo);
+            }
             _popupGo = null; _target = null; _gridContent = null; _gridView = null;
             _railContent = null; _railView = null; _paramInfo = null;
             _propView = null; _propContent = null;
