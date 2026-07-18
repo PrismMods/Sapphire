@@ -156,6 +156,9 @@ namespace Sapphire
         public bool EditorTimeline = false;
         // Tweaks tab → Editor: dark reskin of the game's own editor menus.
         public bool EditorDarkTheme = false;
+        // Editor tab → Editor UI: Sapphire-native event inspector window replacing the
+        // game's event settings panel (the game panel stays alive invisibly as the model).
+        public bool EditorNativeInspector = false;
         // Editor tab → Editor UI: Sapphire file chip + menu replacing the game's file bar.
         public bool EditorFileChip = false;
         // Editor tab → Editor UI: play/rewind + clock docked in the timeline strip.
@@ -636,6 +639,7 @@ namespace Sapphire
             // only gate now, so every suite feature is forced on (stale saved falses migrate).
             EditorTileAngle = EditorShowEvents = EditorTimeline = EditorDarkTheme = true;
             EditorFileChip = EditorTransport = EditorPanelRail = EditorEventDock = true;
+            EditorNativeInspector = true;
             EditorEventInspector = EditorPopupBox = EditorTopToolbar = EditorTileActions = true;
             EditorPitchOverlay = true;
 

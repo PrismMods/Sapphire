@@ -767,8 +767,10 @@ namespace Sapphire
                 }
             }
 
-            if (_viewDirty)
+            if (_viewDirty && (!playing || (Time.frameCount & 3) == 0))
             {
+                // play mode scrolls the view every frame — a full marker-texture repaint per
+                // frame is the single biggest cost, and 15Hz is indistinguishable there
                 RenderMarkers();
                 _viewDirty = false;
             }
@@ -781,6 +783,33 @@ namespace Sapphire
             if (showHead) _playhead.anchoredPosition = new Vector2(px, 0f);
 
             TickCamDrag(ed, floors, mouse);
+
+            /* Cam-mode lane-label expand — MANUAL hit test like every other strip
+               interaction. EventSystem clicks on the labels kept dying: pointer-down and
+               pointer-up must land on the same object, and structure rebuilds destroy the
+               label objects between the two. */
+            if (CamMode && !playing && Input.GetMouseButtonDown(0) && _laneLabelHost != null
+                && RectTransformUtility.RectangleContainsScreenPoint(_laneLabelHost, mouse, null))
+            {
+                Vector2 ll;
+                if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_laneLabelHost, mouse, null, out ll))
+                {
+                    float fromTop = _laneLabelHost.rect.yMax - ll.y;
+                    int idx = -1;
+                    for (int li = 0; li < _lanes.Count; li++)
+                    {
+                        float top = li * LaneHEff + (_expandedLane >= 0 && li > _expandedLane ? SubRowH : 0f);
+                        if (fromTop >= top && fromTop < top + LaneHEff) { idx = li; break; }
+                    }
+                    if (idx >= 0)
+                    {
+                        _expandedLane = _expandedLane == idx ? -1 : idx;
+                        _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                        SapphireLog.Log("Lane expand: " + idx + " → " + (_expandedLane >= 0 ? "open" : "closed"));
+                        return;
+                    }
+                }
+            }
 
             // Hover: nearest marker in the lane under the mouse (not while scrubbing).
             if (tip != null || _laneEvents == null || _draggingHead) return;

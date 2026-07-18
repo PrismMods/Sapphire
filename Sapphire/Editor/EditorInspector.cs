@@ -36,6 +36,20 @@ namespace Sapphire
 
         internal static void Tick()
         {
+            // the native event inspector replaces the whole tab column — the icon rail
+            // (grid preview of event types) is redundant beside its tree view
+            try
+            {
+                var ns = MainClass.Settings;
+                if (ns != null && ns.EditorNativeInspector && MainClass.EditorSuiteOn)
+                {
+                    HideRail();
+                    RestoreTabs();
+                    return;
+                }
+            }
+            catch { }
+
             var s = MainClass.Settings;
             bool enabled = s != null && MainClass.EditorSuiteOn && s.EditorEventInspector;
             scnEditor ed = null;

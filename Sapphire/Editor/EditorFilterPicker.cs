@@ -74,6 +74,15 @@ namespace Sapphire
                     evt = ed.levelEventsPanel.selectedEvent;
             }
             catch { }
+            // native inspector hides the game panel the chip rides on — and hosts its own
+            // Filter manager button — so the chip stands down there
+            try
+            {
+                var st = MainClass.Settings;
+                if (evt != null && st != null && st.EditorNativeInspector && MainClass.EditorSuiteOn)
+                    evt = null;
+            }
+            catch { }
             SyncBrowseButton(ed, evt);
 
             if (_popupGo == null) return;

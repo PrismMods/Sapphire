@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,7 +17,13 @@ namespace Sapphire
        - Near-black text flips to light; colored text (links, accents) is left alone.
 
        Everything touched is recorded so toggling the setting off restores the originals.
-       Sliders are skipped (their fills carry meaning), as is anything already dark. */
+       Sliders are skipped (their fills carry meaning), as is anything already dark.
+
+       The game rewrites colors directly at runtime (tab selection, dropdown captions…).
+       Those writes are intercepted AT THE SETTER (Harmony prefixes on Graphic.color /
+       TMP_Text.color below) and remapped for graphics the skin owns — event-driven, no
+       per-frame polling. Dropdown lists/captions are styled from TMP_Dropdown.Show /
+       RefreshShownValue postfixes for the same reason. */
     internal static class EditorSkin
     {
         private static readonly Color ButtonBg = new Color(0.13f, 0.13f, 0.16f, 1f);
@@ -28,10 +35,11 @@ namespace Sapphire
         private static readonly Dictionary<Graphic, Color> _origColors = new Dictionary<Graphic, Color>();
         private static readonly Dictionary<Selectable, ColorBlock> _origBlocks = new Dictionary<Selectable, ColorBlock>();
         private static readonly Dictionary<Image, Sprite> _origSprites = new Dictionary<Image, Sprite>();
-        // Images whose color the GAME rewrites at runtime (tab selection = direct .color
-        // writes). A per-frame guard re-maps bright → dark, keeping the game's
-        // selected(white)/unselected(grey) distinction as two dark shades.
-        private static readonly List<Image> _guarded = new List<Image>();
+        // Graphics the skin OWNS: the setter interception remaps the game's direct color
+        // writes on exactly these (bright → dark for plates, dark → light for labels),
+        // keeping the game's selected/unselected distinction as two themed shades.
+        private static readonly HashSet<int> _ownedImages = new HashSet<int>();
+        private static readonly HashSet<int> _ownedTexts = new HashSet<int>();
         private static readonly HashSet<int> _seen = new HashSet<int>();
         private static readonly HashSet<int> _popupSeen = new HashSet<int>();
         private static int _cooldown;
@@ -49,57 +57,171 @@ namespace Sapphire
                 if (_applied) Restore();
                 return;
             }
-            GuardTick(); // cheap per-frame re-assert against the game's direct color writes
-            try { StyleOpenDropdownLists(); } catch { }
             if (--_cooldown > 0) return;
             _cooldown = 30;
-            try { Apply(ed); } catch (System.Exception e) { SapphireLog.Debug("[skin] " + e.Message); }
+            try
+            {
+                // Full sweeps are expensive (whole-tree GetComponentsInChildren × several
+                // passes) — only re-sweep when the UI actually grew/changed shape.
+                int sig = HierarchySig(ed);
+                if (sig != _lastHierarchySig)
+                {
+                    _lastHierarchySig = sig;
+                    Apply(ed);
+                }
+            }
+            catch (System.Exception e) { SapphireLog.Debug("[skin] " + e.Message); }
         }
 
-        /* Dropdown option lists spawn FRESH on every open, restyled by the game — after the
-           dark sweep that can land same-on-same (white option labels over the white list box
-           = the invisible dropdown text). While a list is open, force it coherent every
-           frame: dark plates, dark item tint-blocks, light labels; glyphs (checkmark) and
-           already-light text stay. Dropdowns are cached by the 30-frame sweep. */
-        private static readonly List<Component> _dropdowns = new List<Component>();
+        private static int _lastHierarchySig;
 
-        private static void StyleOpenDropdownLists()
+        // O(roots): hierarchyCount is maintained by Unity, no traversal happens here.
+        private static int HierarchySig(scnEditor ed)
         {
-            for (int i = 0; i < _dropdowns.Count; i++)
+            int sig = 17;
+            void Add(Transform t)
             {
-                var dd = _dropdowns[i];
-                if (dd == null) continue;
-                Transform list = dd.transform.Find("Dropdown List");
-                if (list == null || !list.gameObject.activeInHierarchy) continue;
-
-                foreach (var tog in list.GetComponentsInChildren<Toggle>(true))
-                {
-                    var g = tog.targetGraphic;
-                    if (g == null) continue;
-                    g.color = Color.white;
-                    var block = tog.colors;
-                    block.normalColor = new Color(0.11f, 0.11f, 0.14f, 1f);
-                    block.highlightedColor = new Color(0.24f, 0.24f, 0.3f, 1f);
-                    block.pressedColor = new Color(0.3f, 0.3f, 0.36f, 1f);
-                    block.selectedColor = new Color(0.2f, 0.24f, 0.36f, 1f);
-                    tog.colors = block;
-                }
-                foreach (var img in list.GetComponentsInChildren<Image>(true))
-                {
-                    if (img.type != Image.Type.Sliced && img.type != Image.Type.Tiled) continue; // glyphs stay
-                    var owner = img.GetComponentInParent<Toggle>();
-                    if (owner != null && ReferenceEquals(owner.targetGraphic, img)) continue;    // tinted above
-                    var c = img.color;
-                    if (c.r > 0.45f && c.g > 0.45f && c.b > 0.45f)
-                        img.color = new Color(0.09f, 0.09f, 0.11f, 1f); // opaque: must read over level art
-                }
-                foreach (var t in list.GetComponentsInChildren<TextMeshProUGUI>(true))
-                    if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
-                        t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
-                foreach (var t in list.GetComponentsInChildren<Text>(true))
-                    if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
-                        t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
+                if (t == null) return;
+                var c = t.GetComponentInParent<Canvas>(true);
+                if (c != null) sig = sig * 31 + c.rootCanvas.transform.hierarchyCount;
             }
+            try
+            {
+                Add(ed.fileActionsPanel != null ? ed.fileActionsPanel.transform : null);
+                Add(ed.inspectorTabs != null ? ed.inspectorTabs.transform : null);
+                Add(ed.settingsPanel != null ? ed.settingsPanel.transform : null);
+                Add(ed.levelEventsPanel != null ? ed.levelEventsPanel.transform : null);
+                Add(ed.prefsContainer != null ? ed.prefsContainer.transform : null);
+            }
+            catch { }
+            return sig;
+        }
+
+        /* The game's dropdown items go through localizedValue, which wraps values in
+           <color=#…> rich-text tags — a dark tag color stays dark no matter what TMP.color
+           says, so the caption reads as an empty box on the dark theme. Strip the tags and
+           force a readable color. Called from the RefreshShownValue/Show postfixes (the
+           exact moments the game writes these), not per frame. */
+        private static readonly System.Text.RegularExpressions.Regex ColorTags =
+            new System.Text.RegularExpressions.Regex("</?color[^>]*>",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        private static void FixDdText(TMP_Text t)
+        {
+            if (t == null) return;
+            var s = t.text;
+            if (!string.IsNullOrEmpty(s) && s.IndexOf("<color") >= 0) // game emits lowercase tags
+                t.text = ColorTags.Replace(s, "");
+            if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
+                t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
+        }
+
+        /* The inspector's dropdowns are the game's OWN control (TweakableDropdown): a
+           searchable TMP_InputField caption + a ScrollRect list. It paints items from its
+           public state-color fields, so rebasing THOSE keeps the game's hover/select logic
+           correct with zero polling; the list chrome is forced opaque dark (the generic
+           frame pass left it a translucent ghost = "no background"); the caption is fixed
+           where the game writes it (UpdateInputFieldText postfix — localizedValue wraps it
+           in <color=#…> tags that TMP.color can't override). */
+        private static readonly Dictionary<TweakableDropdown, Color[]> _origDdColors =
+            new Dictionary<TweakableDropdown, Color[]>();
+
+        private static void ApplyTweakableDropdowns(Transform root)
+        {
+            foreach (var dd in root.GetComponentsInChildren<TweakableDropdown>(true))
+            {
+                if (dd == null || _origDdColors.ContainsKey(dd)) continue;
+                _origDdColors[dd] = new[] { dd.normalItemBGColor, dd.hoveredItemBGColor, dd.selectedItemBGColor };
+                dd.normalItemBGColor = new Color(0.11f, 0.11f, 0.14f, 1f);
+                dd.hoveredItemBGColor = new Color(0.24f, 0.24f, 0.3f, 1f);
+                dd.selectedItemBGColor = new Color(0.2f, 0.24f, 0.36f, 1f);
+                try
+                {
+                    if (dd.dropdownScroll != null)
+                        foreach (var img in dd.dropdownScroll.GetComponentsInChildren<Image>(true))
+                        {
+                            if (img.GetComponentInParent<TweakableDropdownItem>(true) != null) continue; // items = state colors
+                            if (!_origColors.ContainsKey(img)) _origColors[img] = img.color;
+                            img.color = new Color(0.09f, 0.09f, 0.11f, 1f); // opaque: must read over anything
+                        }
+                }
+                catch { }
+                try { if (dd.inputField != null) FixDdText(dd.inputField.textComponent); } catch { }
+            }
+        }
+
+        // UpdateInputFieldText postfix: the game just rewrote the searchable caption
+        internal static void OnTweakableCaption(TweakableDropdown dd)
+        {
+            if (!_applied || dd == null || dd.inputField == null) return;
+            var f = dd.inputField;
+            var s = f.text;
+            if (!string.IsNullOrEmpty(s) && s.IndexOf("<color") >= 0)
+                f.SetTextWithoutNotify(ColorTags.Replace(s, "")); // WithoutNotify: don't trigger its search
+            FixDdText(f.textComponent);
+        }
+
+        // ShowList postfix: items spawn game-styled — labels may carry tag colors
+        internal static void OnTweakableShow(TweakableDropdown dd)
+        {
+            if (!_applied || dd == null || dd.dropdownScroll == null) return;
+            foreach (var t in dd.dropdownScroll.GetComponentsInChildren<TMP_Text>(true))
+                FixDdText(t);
+        }
+
+        // RefreshShownValue postfix: the game just rewrote the caption (tags included)
+        internal static void OnDropdownRefresh(Component dd)
+        {
+            if (!_applied || dd == null) return;
+            try
+            {
+                var tmpDd = dd as TMP_Dropdown;
+                if (tmpDd != null) { FixDdText(tmpDd.captionText); return; }
+                var uDd = dd as Dropdown;
+                if (uDd != null && uDd.captionText != null
+                    && !(uDd.captionText.color.r > 0.7f && uDd.captionText.color.g > 0.7f && uDd.captionText.color.b > 0.7f))
+                    uDd.captionText.color = new Color(TextLight.r, TextLight.g, TextLight.b, uDd.captionText.color.a);
+            }
+            catch { }
+        }
+
+        /* Show postfix: the option list spawns fresh inside Show, game-styled — after the
+           dark sweep that lands same-on-same (white labels over the white list box). Style
+           it once right after it's built: dark plates, dark item tint-blocks, light labels;
+           glyphs (checkmark) and already-light text stay. */
+        internal static void OnDropdownShow(Component dd)
+        {
+            if (!_applied || dd == null) return;
+            Transform list = null;
+            try { list = dd.transform.Find("Dropdown List"); } catch { }
+            if (list == null) return;
+
+            foreach (var tog in list.GetComponentsInChildren<Toggle>(true))
+            {
+                var g = tog.targetGraphic;
+                if (g == null) continue;
+                g.color = Color.white;
+                var block = tog.colors;
+                block.normalColor = new Color(0.11f, 0.11f, 0.14f, 1f);
+                block.highlightedColor = new Color(0.24f, 0.24f, 0.3f, 1f);
+                block.pressedColor = new Color(0.3f, 0.3f, 0.36f, 1f);
+                block.selectedColor = new Color(0.2f, 0.24f, 0.36f, 1f);
+                tog.colors = block;
+            }
+            foreach (var img in list.GetComponentsInChildren<Image>(true))
+            {
+                if (img.type != Image.Type.Sliced && img.type != Image.Type.Tiled) continue; // glyphs stay
+                var owner = img.GetComponentInParent<Toggle>();
+                if (owner != null && ReferenceEquals(owner.targetGraphic, img)) continue;    // tinted above
+                var c = img.color;
+                if (c.r > 0.45f && c.g > 0.45f && c.b > 0.45f)
+                    img.color = new Color(0.09f, 0.09f, 0.11f, 1f); // opaque: must read over level art
+            }
+            foreach (var t in list.GetComponentsInChildren<TextMeshProUGUI>(true))
+                FixDdText(t);
+            foreach (var t in list.GetComponentsInChildren<Text>(true))
+                if (!(t.color.r > 0.7f && t.color.g > 0.7f && t.color.b > 0.7f))
+                    t.color = new Color(TextLight.r, TextLight.g, TextLight.b, t.color.a);
         }
 
         internal static void Dispose() => Restore();
@@ -137,14 +259,17 @@ namespace Sapphire
             AddRoot(roots, ed.particleEditorContainer != null ? ed.particleEditorContainer.transform : null);
             if (roots.Count == 0) return;
             _applied = true;
-            _dropdowns.Clear();
             foreach (var r in roots)
             {
                 ApplyRoot(r);
+                try { ApplyTweakableDropdowns(r); } catch { }
+                // captions written BEFORE the theme applied need one pass; afterwards the
+                // RefreshShownValue/UpdateInputFieldText postfixes own them
                 try
                 {
-                    _dropdowns.AddRange(r.GetComponentsInChildren<TMP_Dropdown>(true));
-                    _dropdowns.AddRange(r.GetComponentsInChildren<Dropdown>(true));
+                    foreach (var dd in r.GetComponentsInChildren<TweakableDropdown>(true)) OnTweakableCaption(dd);
+                    foreach (var dd in r.GetComponentsInChildren<TMP_Dropdown>(true)) OnDropdownRefresh(dd);
+                    foreach (var dd in r.GetComponentsInChildren<Dropdown>(true)) OnDropdownRefresh(dd);
                 }
                 catch { }
             }
@@ -231,7 +356,7 @@ namespace Sapphire
                 {
                     if (!_origColors.ContainsKey(g)) _origColors[g] = g.color;
                     var gi = g as Image;
-                    if (gi != null) _guarded.Add(gi);
+                    if (gi != null) _ownedImages.Add(gi.GetInstanceID());
                     g.color = MapDark(g.color);
                     Square(g);
                 }
@@ -263,7 +388,7 @@ namespace Sapphire
                     // and a child handle — a false "plate") are content, not chrome.
                     if (img.GetComponentInParent<CUIColorPicker>(true) != null) continue;
                     _origColors[img] = img.color;
-                    _guarded.Add(img);
+                    _ownedImages.Add(img.GetInstanceID());
                     img.color = MapDark(img.color);
                     Square(img);
                 }
@@ -280,7 +405,7 @@ namespace Sapphire
                 if (!mapped.HasValue) continue;
                 _origColors[t] = t.color;
                 t.color = mapped.Value;
-                _guardedTexts.Add(t);
+                _ownedTexts.Add(t.GetInstanceID());
             }
             var tmps = root.GetComponentsInChildren<TextMeshProUGUI>(true);
             for (int i = 0; i < tmps.Length; i++)
@@ -291,7 +416,7 @@ namespace Sapphire
                 if (!mapped.HasValue) continue;
                 _origColors[t] = t.color;
                 t.color = mapped.Value;
-                _guardedTexts.Add(t);
+                _ownedTexts.Add(t.GetInstanceID());
             }
         }
 
@@ -308,26 +433,25 @@ namespace Sapphire
                 ? new Color(SelectedBg.r, SelectedBg.g, SelectedBg.b, c.a)
                 : new Color(ButtonBg.r, ButtonBg.g, ButtonBg.b, c.a);
 
-        private static void GuardTick()
+        /* Setter interception (called from the Harmony prefixes below): remap the game's
+           direct color writes on owned graphics the moment they happen. Our own writes
+           already carry mapped colors, which no predicate matches — self-terminating. */
+        internal static void InterceptColor(Graphic g, ref Color value)
         {
-            for (int i = _guarded.Count - 1; i >= 0; i--)
+            if (!_applied || g == null) return;
+            int id = g.GetInstanceID();
+            if (_ownedTexts.Contains(id))
             {
-                var img = _guarded[i];
-                if (img == null) { _guarded.RemoveAt(i); continue; }
-                if (BrightGrey(img.color)) img.color = MapDark(img.color);
+                var mapped = MapTextColor(value);
+                if (mapped.HasValue) value = mapped.Value;
             }
-            // The game rewrites label colors on state changes (selected toggle text → black on
-            // our dark plates); hold every swept text at its mapped color.
-            for (int i = _guardedTexts.Count - 1; i >= 0; i--)
+            else if (_ownedImages.Contains(id))
             {
-                var t = _guardedTexts[i];
-                if (t == null) { _guardedTexts.RemoveAt(i); continue; }
-                var mapped = MapTextColor(t.color);
-                if (mapped.HasValue) t.color = mapped.Value;
+                if (BrightGrey(value)) value = MapDark(value);
             }
         }
 
-        private static readonly List<Graphic> _guardedTexts = new List<Graphic>();
+        internal static bool Applied => _applied;
 
         // Drop the rounded sprite for a plain square quad (the sprite is remembered for
         // Restore). Only used on fills we've already rebased — never on border sprites,
@@ -342,7 +466,16 @@ namespace Sapphire
 
         private static void Restore()
         {
-            _guardedTexts.Clear();
+            _lastHierarchySig = 0; // re-enable must re-sweep even if the UI didn't change
+            foreach (var kv in _origDdColors)
+                if (kv.Key != null)
+                {
+                    kv.Key.normalItemBGColor = kv.Value[0];
+                    kv.Key.hoveredItemBGColor = kv.Value[1];
+                    kv.Key.selectedItemBGColor = kv.Value[2];
+                }
+            _origDdColors.Clear();
+            _ownedTexts.Clear();
             foreach (var kv in _origColors)
                 if (kv.Key != null) kv.Key.color = kv.Value;
             foreach (var kv in _origBlocks)
@@ -352,11 +485,90 @@ namespace Sapphire
             _origColors.Clear();
             _origBlocks.Clear();
             _origSprites.Clear();
-            _guarded.Clear();
+            _ownedImages.Clear();
             _seen.Clear();
             _popupSeen.Clear();
             _applied = false;
             _cooldown = 0;
+        }
+    }
+
+    /* Event-driven dark theme (no per-frame polling): the game's direct color writes are
+       remapped AT THE SETTER for graphics the skin owns. TMP_Text overrides Graphic.color
+       with its own backing field, so both setters need the hook. Cost when the theme is
+       off or the graphic isn't owned: one HashSet lookup per write. */
+    [HarmonyPatch(typeof(UnityEngine.UI.Graphic), "color", MethodType.Setter)]
+    internal static class SkinGraphicColorPatch
+    {
+        private static void Prefix(UnityEngine.UI.Graphic __instance, ref Color value)
+        {
+            try { EditorSkin.InterceptColor(__instance, ref value); } catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(TMP_Text), "color", MethodType.Setter)]
+    internal static class SkinTmpColorPatch
+    {
+        private static void Prefix(TMP_Text __instance, ref Color value)
+        {
+            try { EditorSkin.InterceptColor(__instance, ref value); } catch { }
+        }
+    }
+
+    // Captions are rewritten (rich-text tags included) inside RefreshShownValue; option
+    // lists spawn inside Show — style each at its source instead of scanning per frame.
+    [HarmonyPatch(typeof(TMP_Dropdown), "RefreshShownValue")]
+    internal static class SkinTmpDropdownRefreshPatch
+    {
+        private static void Postfix(TMP_Dropdown __instance)
+        {
+            try { EditorSkin.OnDropdownRefresh(__instance); } catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(TMP_Dropdown), "Show")]
+    internal static class SkinTmpDropdownShowPatch
+    {
+        private static void Postfix(TMP_Dropdown __instance)
+        {
+            try { EditorSkin.OnDropdownShow(__instance); } catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(UnityEngine.UI.Dropdown), "RefreshShownValue")]
+    internal static class SkinDropdownRefreshPatch
+    {
+        private static void Postfix(UnityEngine.UI.Dropdown __instance)
+        {
+            try { EditorSkin.OnDropdownRefresh(__instance); } catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(UnityEngine.UI.Dropdown), "Show")]
+    internal static class SkinDropdownShowPatch
+    {
+        private static void Postfix(UnityEngine.UI.Dropdown __instance)
+        {
+            try { EditorSkin.OnDropdownShow(__instance); } catch { }
+        }
+    }
+
+    // The game's own searchable dropdown control (the inspector's dropdowns).
+    [HarmonyPatch(typeof(TweakableDropdown), "UpdateInputFieldText")]
+    internal static class SkinTweakableCaptionPatch
+    {
+        private static void Postfix(TweakableDropdown __instance)
+        {
+            try { EditorSkin.OnTweakableCaption(__instance); } catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(TweakableDropdown), "ShowList")]
+    internal static class SkinTweakableShowPatch
+    {
+        private static void Postfix(TweakableDropdown __instance)
+        {
+            try { EditorSkin.OnTweakableShow(__instance); } catch { }
         }
     }
 }

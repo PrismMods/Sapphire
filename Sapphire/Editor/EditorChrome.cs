@@ -83,7 +83,9 @@ namespace Sapphire
                 bool master = MainClass.EditorSuiteOn;
                 chipWant = inEd && master && s != null && s.EditorFileChip;
                 railWant = inEd && master && s != null && s.EditorPanelRail;
-                dockWant = inEd && master && s != null && s.EditorEventDock;
+                // superseded July 18 by EditorEventSelector (native searchable palette) —
+                // the proxy dock stays as dead code until the selector has proven itself
+                dockWant = false;
             }
             catch { }
             if (!chipWant && !railWant && !dockWant)
@@ -660,8 +662,20 @@ namespace Sapphire
                 break;
             }
             if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
-                && !FieldFocusedRecently)
+                && !FieldFocusedRecently && !ArbitraryAngleInputOpen(ed))
                 EditorToolbar.StampOnSelectedTile();
+        }
+
+        // The game's arbitrary-angle entry confirms on the SAME Enter — stamping the armed
+        // event tool on top of it double-fires (tester: angle placement also pressed Twirl).
+        private static bool ArbitraryAngleInputOpen(scnEditor ed)
+        {
+            try
+            {
+                return ed.floorButtonArbitraryContainer != null
+                    && ed.floorButtonArbitraryContainer.activeInHierarchy;
+            }
+            catch { return false; }
         }
 
         private static List<Button> ActiveButtons(Transform root)

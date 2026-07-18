@@ -136,38 +136,83 @@ namespace Sapphire
         {
             private int _esFrame;
 
+            /* Per-module tick timing: accumulated and debug-logged every ~15s so lag
+               reports point at a module instead of "the mod". Overhead is one Stopwatch
+               restart per module per frame. */
+            private static readonly string[] PerfNames =
+            {
+                "Tweaks", "EditorEvents", "EditorSkin", "EditorUiLayout", "EditorChrome",
+                "EditorInspector", "EditorPopups", "EditorToolbar", "EditorTileMenu",
+                "EditorCopyPanel", "EditorCameraPath", "EditorPitch", "EditorLevelMenu",
+                "EditorGameSettings", "EditorVfxPreview", "EditorHelp", "EditorPresets",
+                "EditorEasePicker", "EditorBezier", "EditorGraph", "EditorFilterPicker",
+                "EditorMagicShape", "EditorTrackTools", "EditorDecoTools", "EditorMasterSwitch",
+                "EditorEventPanel", "EditorEventSelector",
+            };
+            private static readonly double[] _perfMs = new double[27];
+            private static readonly double[] _perfMax = new double[27];
+            private static int _perfFrames;
+            private static readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
+
+            // lap timer: banks the elapsed slice into module i and restarts (no allocations)
+            private static void Acc(int i)
+            {
+                double ms = _sw.Elapsed.TotalMilliseconds;
+                _perfMs[i] += ms;
+                if (ms > _perfMax[i]) _perfMax[i] = ms;
+                _sw.Restart();
+            }
+
             private void Update()
             {
                 // Keep exactly one EventSystem alive (a stray DDOL one breaks carets/typing).
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); }
 
-                Tweaks.TickTileAngle();
-                Tweaks.TickEditorMode();
-                Tweaks.TickWasdPan();
-                EditorEvents.Tick();
-                EditorSkin.Tick();
-                EditorUiLayout.Tick();
-                EditorChrome.Tick();
-                EditorInspector.Tick();
-                EditorPopups.Tick();
-                EditorToolbar.Tick();
-                EditorTileMenu.Tick();
-                EditorCopyPanel.Tick();
-                EditorCameraPath.Tick();
-                EditorPitch.Tick();
-                EditorLevelMenu.Tick();
-                EditorGameSettings.Tick();
-                EditorVfxPreview.Tick();
-                EditorHelp.Tick();
-                EditorPresets.Tick();
-                EditorEasePicker.Tick();
-                EditorBezier.Tick();
-                EditorGraph.Tick();
-                EditorFilterPicker.Tick();
-                EditorMagicShape.Tick();
-                EditorTrackTools.Tick();
-                EditorDecoTools.Tick();
-                EditorMasterSwitch.Tick();
+                _sw.Restart();
+                Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Acc(0);
+                EditorEvents.Tick(); Acc(1);
+                EditorSkin.Tick(); Acc(2);
+                EditorUiLayout.Tick(); Acc(3);
+                EditorChrome.Tick(); Acc(4);
+                EditorInspector.Tick(); Acc(5);
+                EditorPopups.Tick(); Acc(6);
+                EditorToolbar.Tick(); Acc(7);
+                EditorTileMenu.Tick(); Acc(8);
+                EditorCopyPanel.Tick(); Acc(9);
+                EditorCameraPath.Tick(); Acc(10);
+                EditorPitch.Tick(); Acc(11);
+                EditorLevelMenu.Tick(); Acc(12);
+                EditorGameSettings.Tick(); Acc(13);
+                EditorVfxPreview.Tick(); Acc(14);
+                EditorHelp.Tick(); Acc(15);
+                EditorPresets.Tick(); Acc(16);
+                EditorEasePicker.Tick(); Acc(17);
+                EditorBezier.Tick(); Acc(18);
+                EditorGraph.Tick(); Acc(19);
+                EditorFilterPicker.Tick(); Acc(20);
+                EditorMagicShape.Tick(); Acc(21);
+                EditorTrackTools.Tick(); Acc(22);
+                EditorDecoTools.Tick(); Acc(23);
+                EditorEventPanel.Tick(); Acc(25);
+                EditorEventSelector.Tick(); Acc(26);
+                EditorMasterSwitch.Tick(); Acc(24);
+
+                if (++_perfFrames >= 900) // ≈15s at 60fps
+                {
+                    var sb = new System.Text.StringBuilder();
+                    for (int i = 0; i < _perfMs.Length; i++)
+                    {
+                        double avg = _perfMs[i] / _perfFrames;
+                        if (avg < 0.15 && _perfMax[i] < 8.0) continue; // only report offenders
+                        if (sb.Length > 0) sb.Append("  ");
+                        sb.Append(PerfNames[i]).Append(" avg=").Append(avg.ToString("0.00"))
+                          .Append("ms max=").Append(_perfMax[i].ToString("0.0")).Append("ms");
+                    }
+                    if (sb.Length > 0) SapphireLog.Debug("[perf] " + sb);
+                    System.Array.Clear(_perfMs, 0, _perfMs.Length);
+                    System.Array.Clear(_perfMax, 0, _perfMax.Length);
+                    _perfFrames = 0;
+                }
             }
         }
 
@@ -235,6 +280,8 @@ namespace Sapphire
             EditorMagicShape.Dispose();
             EditorTrackTools.Dispose();
             EditorDecoTools.Dispose();
+            EditorEventPanel.Dispose();
+            EditorEventSelector.Dispose();
             EditorMasterSwitch.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();

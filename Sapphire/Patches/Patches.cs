@@ -120,7 +120,8 @@ namespace Sapphire
         private static class EditorZoomBlockPatch
         {
             public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
-                && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen;
+                && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
+                && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered;
         }
 
         /* Editor Mode hides the autoplay status label. Disabling the Text directly is the

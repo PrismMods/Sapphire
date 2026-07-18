@@ -13,6 +13,9 @@ namespace Sapphire.UI
 
         public const float MinWidth = 480f;
         public const float MinHeight = 320f;
+        // per-panel minimums (small palettes must be shrinkable below the settings-panel floor)
+        public float MinW = MinWidth;
+        public float MinH = MinHeight;
 
         // Hit zones are larger than visual cues so users can grab edges without precise aim.
         // No cursor change on hover (would need bundled cursor textures); thresholds compensate.
@@ -45,29 +48,33 @@ namespace Sapphire.UI
             Vector2 d = cur - _startMouse;
             float w = _startSize.x, h = _startSize.y;
             Vector2 p = _startPos;
+            // Pivot-aware: the dragged edge follows the mouse, the OPPOSITE edge stays put.
+            // (The old math hardcoded the settings panel's center pivot — top-left-pivot
+            // panels drifted while resizing, and clamped ticks made the knob feel dead.)
+            Vector2 pv = Panel.pivot;
 
             if (Edge == ResizeEdge.Right || Edge == ResizeEdge.TopRight || Edge == ResizeEdge.BottomRight)
             {
-                float nw = Mathf.Max(MinWidth, _startSize.x + d.x);
-                p.x += (nw - _startSize.x) * 0.5f;
+                float nw = Mathf.Max(MinW, _startSize.x + d.x);
+                p.x += (nw - _startSize.x) * pv.x;
                 w = nw;
             }
             if (Edge == ResizeEdge.Left || Edge == ResizeEdge.TopLeft || Edge == ResizeEdge.BottomLeft)
             {
-                float nw = Mathf.Max(MinWidth, _startSize.x - d.x);
-                p.x -= (nw - _startSize.x) * 0.5f;
+                float nw = Mathf.Max(MinW, _startSize.x - d.x);
+                p.x -= (nw - _startSize.x) * (1f - pv.x);
                 w = nw;
             }
             if (Edge == ResizeEdge.Top || Edge == ResizeEdge.TopLeft || Edge == ResizeEdge.TopRight)
             {
-                float nh = Mathf.Max(MinHeight, _startSize.y + d.y);
-                p.y += (nh - _startSize.y) * 0.5f;
+                float nh = Mathf.Max(MinH, _startSize.y + d.y);
+                p.y += (nh - _startSize.y) * pv.y;
                 h = nh;
             }
             if (Edge == ResizeEdge.Bottom || Edge == ResizeEdge.BottomLeft || Edge == ResizeEdge.BottomRight)
             {
-                float nh = Mathf.Max(MinHeight, _startSize.y - d.y);
-                p.y -= (nh - _startSize.y) * 0.5f;
+                float nh = Mathf.Max(MinH, _startSize.y - d.y);
+                p.y -= (nh - _startSize.y) * (1f - pv.y);
                 h = nh;
             }
 
@@ -75,10 +82,11 @@ namespace Sapphire.UI
             Panel.anchoredPosition = p;
         }
 
-        public static void AttachAll(RectTransform panel, bool grip = false)
+        public static void AttachAll(RectTransform panel, bool grip = false,
+            float minW = MinWidth, float minH = MinHeight)
         {
             foreach (ResizeEdge edge in System.Enum.GetValues(typeof(ResizeEdge)))
-                Make(panel, edge);
+                Make(panel, edge, minW, minH);
             if (grip) BuildGrip(panel);
         }
 
@@ -118,7 +126,8 @@ namespace Sapphire.UI
             }
         }
 
-        private static void Make(RectTransform panel, ResizeEdge edge)
+        private static void Make(RectTransform panel, ResizeEdge edge,
+            float minW = MinWidth, float minH = MinHeight)
         {
             var go = new GameObject("Resize_" + edge, typeof(RectTransform));
             go.transform.SetParent(panel, false);
@@ -179,6 +188,8 @@ namespace Sapphire.UI
             var h = go.AddComponent<ResizeHandle>();
             h.Edge = edge;
             h.Panel = panel;
+            h.MinW = minW;
+            h.MinH = minH;
         }
     }
 }

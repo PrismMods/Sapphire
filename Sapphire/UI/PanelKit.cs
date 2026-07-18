@@ -28,6 +28,46 @@ namespace Sapphire.UI
         internal bool Built => CanvasGo != null && PanelGo != null;
         internal bool Visible => PanelGo != null && PanelGo.activeSelf;
 
+        // fired when a header drag releases — hook SnapDockOnDragEnd for edge docking
+        internal Action OnDragEnd;
+
+        /* Adobe-style edge docking. DockSide is a persistent STATE (0 float · 1 left ·
+           2 right): the owner calls TickDock each frame with the chrome insets (below the
+           file row/toolbar, above the timeline) and the docked panel keeps following them
+           — timeline grows, panel shrinks. Releasing a header drag near an edge docks;
+           releasing anywhere else undocks. Width stays user-resizable while docked. */
+        internal int DockSide;
+        private DragHandle _drag;
+
+        internal bool HeaderDragging => _drag != null && _drag.Dragging;
+
+        internal void SnapDockOnDragEnd(float threshold = 28f)
+        {
+            if (PanelGo == null || CanvasGo == null) return;
+            var r = (RectTransform)PanelGo.transform;
+            var c = (RectTransform)CanvasGo.transform;
+            float cw = c.rect.width;
+            float w = r.sizeDelta.x;
+            var p = r.anchoredPosition;
+            if (p.x <= threshold) DockSide = 1;
+            else if (p.x + w >= cw - threshold) DockSide = 2;
+            else DockSide = 0;
+        }
+
+        internal void TickDock(float topMargin, float bottomInset, float margin = 8f)
+        {
+            if (DockSide == 0 || PanelGo == null || CanvasGo == null || HeaderDragging) return;
+            var r = (RectTransform)PanelGo.transform;
+            var c = (RectTransform)CanvasGo.transform;
+            float cw = c.rect.width, ch = c.rect.height;
+            float w = r.sizeDelta.x;
+            float x = DockSide == 1 ? margin : cw - w - margin;
+            float h = Mathf.Max(200f, ch - topMargin - bottomInset - margin);
+            var want = new Vector2(x, -topMargin);
+            if ((r.anchoredPosition - want).sqrMagnitude > 0.01f) r.anchoredPosition = want;
+            if (Mathf.Abs(r.sizeDelta.y - h) > 0.5f) r.sizeDelta = new Vector2(w, h);
+        }
+
         internal void Show(bool on)
         {
             if (PanelGo != null && PanelGo.activeSelf != on) PanelGo.SetActive(on);
@@ -73,7 +113,8 @@ namespace Sapphire.UI
             headBg.Radius = 10f;
             headBg.color = new Color(1f, 1f, 1f, 0.04f);
             headBg.raycastTarget = true;
-            headGo.AddComponent<DragHandle>();
+            _drag = headGo.AddComponent<DragHandle>();
+            _drag.DragEnd = () => OnDragEnd?.Invoke();
             var titleGo = new GameObject("T", typeof(RectTransform));
             titleGo.transform.SetParent(headGo.transform, false);
             var tr = (RectTransform)titleGo.transform;

@@ -1186,6 +1186,7 @@ namespace Sapphire
 
         internal static bool InspectorActive => _inspectorTool;
         internal static bool PseudoToolOn => _pseudoTool || _zipTool;   // their digits set the key count
+        internal static int CurrentEventTool => _eventTool;             // -1 = none (selector highlight)
 
         // ESC is "owned" by the toolbar while any of these are up: it disarms the tool, and the
         // game's own ESC keybinds (deselect floors etc.) must not fire on the same press.
@@ -2422,8 +2423,13 @@ namespace Sapphire
                         }
                         int after = mid + 1; // course resumes here (exact return)
                         double baseF = after < floors.Count ? F(after) : F(s - 1);
+                        // keep the pseudo's SIDE: taps aim base + sign·(180 − X·k), sign read
+                        // off the existing first tap (down-side pseudos must stay down)
+                        int sign = SignedDelta(F(s) - baseF) >= 0 ? 1 : -1;
                         for (int k = 1; k <= taps.Count; k++)
-                            angleData[taps[k - 1] - 1] = (float)Norm360(baseF + 180.0 - x * k);
+                            angleData[taps[k - 1] - 1] = (float)Norm360(baseF + sign * (180.0 - x * k));
+                        SapphireLog.Log("Retune: midspin group @" + s + " taps=" + taps.Count
+                            + " base=" + baseF.ToString("0.#") + " sign=" + sign);
                         changed++;
                     }
                     else if (s >= 2 && s + 1 < floors.Count && !IsMid(s + 1) && !IsMid(s - 1))

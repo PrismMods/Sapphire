@@ -84,6 +84,12 @@ namespace Sapphire
                 if (ed.playMode) return false;
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return false;
                 if (ed.userIsEditingAnInputField) return false;
+                // Sapphire's own TMP fields (event selector search etc.) don't set the
+                // game's flag — typing WASD there must not pan
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                var sel = es != null ? es.currentSelectedGameObject : null;
+                if (sel != null && (sel.GetComponent<TMPro.TMP_InputField>() != null
+                                 || sel.GetComponent<UnityEngine.UI.InputField>() != null)) return false;
                 if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
                     || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)) return false;
             }

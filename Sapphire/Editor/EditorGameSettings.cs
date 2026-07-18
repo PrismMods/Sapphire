@@ -99,7 +99,9 @@ namespace Sapphire
             try { onSettings = _pm.settingsMenu != null && _pm.settingsMenu.gameObject.activeInHierarchy; }
             catch { }
             if (!onSettings) { Close(); return; }
-            HideSapphireUi(); // catch canvases built while the menu is open
+            // catch canvases built while the menu is open — the sweep walks every canvas,
+            // so once a second is plenty
+            if (Time.frameCount % 60 == 0) HideSapphireUi();
         }
 
         internal static void Dispose()
