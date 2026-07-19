@@ -81,6 +81,7 @@ namespace Sapphire
             ["Foreground"] = "전경",
             ["Background"] = "배경",
             ["(no events on this tile)"] = "(이 타일에 이벤트 없음)",
+            ["(settings unavailable)"] = "(설정을 불러올 수 없음)",
             ["Search events"] = "이벤트 검색",
             ["Favorites"] = "즐겨찾기",
             ["Style"] = "스타일",

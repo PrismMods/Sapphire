@@ -44,6 +44,12 @@ namespace Sapphire
         private static readonly HashSet<int> _popupSeen = new HashSet<int>();
         private static int _cooldown;
         private static bool _applied;
+        /* Read by the two global color-setter prefixes as their FIRST instruction. Those
+           setters fire on every Graphic/TMP_Text color write in the WHOLE game, so the
+           fast path (theme not applied → all of menus + gameplay + editor-with-theme-off)
+           must be a single static-bool read: no try/catch frame, no method call. Mirrors
+           _applied but lives here as a plain field so the JIT emits a bare ldsfld. */
+        internal static bool InterceptActive;
 
         internal static void Tick()
         {
@@ -259,6 +265,7 @@ namespace Sapphire
             AddRoot(roots, ed.particleEditorContainer != null ? ed.particleEditorContainer.transform : null);
             if (roots.Count == 0) return;
             _applied = true;
+            InterceptActive = true;   // arm the color-setter fast-path guard
             foreach (var r in roots)
             {
                 ApplyRoot(r);
@@ -489,19 +496,26 @@ namespace Sapphire
             _seen.Clear();
             _popupSeen.Clear();
             _applied = false;
+            InterceptActive = false;  // disarm — the global setter prefixes now cost one bool read
             _cooldown = 0;
         }
     }
 
     /* Event-driven dark theme (no per-frame polling): the game's direct color writes are
        remapped AT THE SETTER for graphics the skin owns. TMP_Text overrides Graphic.color
-       with its own backing field, so both setters need the hook. Cost when the theme is
-       off or the graphic isn't owned: one HashSet lookup per write. */
+       with its own backing field, so both setters need the hook.
+
+       These setters fire on EVERY color write in the whole game (menus, HUD, gameplay,
+       tweens) — so the fast path must be as close to free as a patched method gets. When
+       the dark theme isn't applied (all non-editor time), the prefix is a single static
+       bool read + return: no try/catch frame, no method call. Only when actively theming
+       the editor does it pay the HashSet lookups. */
     [HarmonyPatch(typeof(UnityEngine.UI.Graphic), "color", MethodType.Setter)]
     internal static class SkinGraphicColorPatch
     {
         private static void Prefix(UnityEngine.UI.Graphic __instance, ref Color value)
         {
+            if (!EditorSkin.InterceptActive) return;
             try { EditorSkin.InterceptColor(__instance, ref value); } catch { }
         }
     }
@@ -511,6 +525,7 @@ namespace Sapphire
     {
         private static void Prefix(TMP_Text __instance, ref Color value)
         {
+            if (!EditorSkin.InterceptActive) return;
             try { EditorSkin.InterceptColor(__instance, ref value); } catch { }
         }
     }

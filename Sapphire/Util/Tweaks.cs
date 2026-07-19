@@ -67,11 +67,21 @@ namespace Sapphire
         // tiles when one is), nothing being typed, and no ctrl/cmd chords (save/select-all).
         // True while A means PAN (pan-eligible + A held): a Harmony prefix swallows the
         // editor's ToggleAuto for the duration (see Patches.PanAutoGuardPatch).
+        private static int _wasdPanFrame = -10; // last frame a WASD pan actually moved the camera
+
         internal static bool SuppressAutoToggle
         {
             get
             {
-                try { return PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A); }
+                try
+                {
+                    // A is the pan-left key while pan-eligible (no selection etc.) — never let
+                    // it toggle autoplay. Two conditions so it's robust to Update-order skew
+                    // between the game's key handling and ours: (1) A held now in a pan context,
+                    // (2) a real pan moved the camera this frame or last.
+                    if (Time.frameCount - _wasdPanFrame <= 1) return true;
+                    return PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A);
+                }
                 catch { return false; }
             }
         }
@@ -115,6 +125,7 @@ namespace Sapphire
                 // zoom-proportional speed so panning feels the same at any zoom
                 float speed = cam.orthographicSize * 1.6f;
                 cam.transform.position += (Vector3)(dir.normalized * speed * Time.unscaledDeltaTime);
+                _wasdPanFrame = Time.frameCount; // latch: the autoplay-toggle guard reads this
             }
             catch { }
         }
@@ -245,11 +256,20 @@ namespace Sapphire
             var fl = ed.selectedFloors[ed.selectedFloors.Count - 1];
             if (fl == null) return;
             float deg = (float)(fl.angleLength * Mathf.Rad2Deg);
-            string txt = ed.selectedFloors.Count > 1
-                ? $"Angle: {deg:0.##}°  ({ed.selectedFloors.Count} tiles)"
-                : $"Angle: {deg:0.##}°";
-            if (_angleText != null && _angleText.text != txt) _angleText.text = txt;
+            int count = ed.selectedFloors.Count;
+            // Only build the label string when the value actually changes: the interpolation
+            // boxes a float + allocs a string every frame otherwise, in the default select state.
+            if (_angleText != null && (!Mathf.Approximately(deg, _lastAngleDeg) || count != _lastAngleCount))
+            {
+                _lastAngleDeg = deg; _lastAngleCount = count;
+                _angleText.text = count > 1
+                    ? $"Angle: {deg:0.##}°  ({count} tiles)"
+                    : $"Angle: {deg:0.##}°";
+            }
         }
+
+        private static float _lastAngleDeg = float.NaN;
+        private static int _lastAngleCount = -1;
 
         private static void BuildAngleDisplay()
         {

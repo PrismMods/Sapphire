@@ -98,7 +98,8 @@ namespace Sapphire
         {
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
-            bool want = _open && ed != null && !ed.playMode && MainClass.EditorSuiteOn;
+            bool want = _open && ed != null && !ed.playMode && MainClass.EditorSuiteOn
+                       && MainClass.Settings != null && MainClass.Settings.FeatToolsMods;
             if (!want) { K.Show(false); return; }
             string sig = _tab + "|" + (_lyAsDeco ? 1 : 0) + "|" + (_lyDis ? 1 : 0) + "|" + (_fbWindowOn ? 1 : 0);
             if (!K.Built || sig != _layoutSig)

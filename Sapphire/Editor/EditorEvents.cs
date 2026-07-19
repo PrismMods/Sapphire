@@ -780,7 +780,10 @@ namespace Sapphire
             float px = (selFrac - _viewStart) * _zoom * areaW;
             bool showHead = selFrac >= 0f && px >= -1f && px <= areaW + 1f;
             if (_playhead.gameObject.activeSelf != showHead) _playhead.gameObject.SetActive(showHead);
-            if (showHead) _playhead.anchoredPosition = new Vector2(px, 0f);
+            // Only move on real change: an unconditional write re-batches the whole strip
+            // canvas every frame (invisible to the Tick profiler; scales with visible UI).
+            if (showHead && !Mathf.Approximately(_playhead.anchoredPosition.x, px))
+                _playhead.anchoredPosition = new Vector2(px, 0f);
 
             TickCamDrag(ed, floors, mouse);
 

@@ -38,9 +38,12 @@ namespace Sapphire
             if (!want)
             {
                 if (_panelGo != null && _panelGo.activeSelf) { _panelGo.SetActive(false); _renameIdx = -1; }
+                // idle the canvas too so its raycaster/batch stop costing while hidden
+                if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 return;
             }
             if (_canvasGo == null) EnsureCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
             int count = s.EventPresets.Count;
             if (_panelGo == null || count != _shownCount) Rebuild(s);
             if (!_panelGo.activeSelf) _panelGo.SetActive(true);

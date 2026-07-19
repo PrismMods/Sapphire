@@ -82,6 +82,7 @@ namespace Sapphire
         private static void OpenMenu(Vector3 screenPos)
         {
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             _menuGo = new GameObject("TileMenu", typeof(RectTransform));
             _menuGo.transform.SetParent(_canvasGo.transform, false);
@@ -179,6 +180,7 @@ namespace Sapphire
         {
             if (_menuGo != null) UnityEngine.Object.Destroy(_menuGo);
             _menuGo = null;
+            if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
         }
 
         private static void BuildCanvas()

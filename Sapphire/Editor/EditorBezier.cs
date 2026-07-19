@@ -96,6 +96,7 @@ namespace Sapphire
             Close();
             _target = evt;
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             const float w = CurveW + 40f, h = CurveH + 150f;
             _popupGo = new GameObject("BezierPopup", typeof(RectTransform));
@@ -476,6 +477,7 @@ namespace Sapphire
             if (_curveTex != null) UnityEngine.Object.Destroy(_curveTex);
             _popupGo = null; _target = null; _curveTex = null;
             _curveImg = null; _curveArea = null; _h1 = null; _h2 = null; _segField = null; _status = null;
+            if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
         }
 
         private static void BuildCanvas()

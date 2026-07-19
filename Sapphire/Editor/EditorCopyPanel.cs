@@ -36,7 +36,8 @@ namespace Sapphire
         private static readonly List<KeyValuePair<List<int>, RoundedRectGraphic>> _catRows = new List<KeyValuePair<List<int>, RoundedRectGraphic>>();
 
         private static long _selSig = long.MinValue;
-        private static string _layoutSig;
+        private const long LayoutSigDirty = long.MinValue;
+        private static long _layoutSig = LayoutSigDirty;
         private static bool _inspMode;         // inspector tool active: panel = its PASTE FILTER
         private static int _inspVerSeen = -1;
 
@@ -57,7 +58,7 @@ namespace Sapphire
                         || (inspector && EditorToolbar.InspectorVersion > 0));
             if (!want) { if (_panelGo != null && _panelGo.activeSelf) _panelGo.SetActive(false); _inspMode = inspector; return; }
 
-            if (inspector != _inspMode) { _inspMode = inspector; _layoutSig = null; }
+            if (inspector != _inspMode) { _inspMode = inspector; _layoutSig = LayoutSigDirty; }
             if (_inspMode)
             {
                 if (_inspVerSeen != EditorToolbar.InspectorVersion)
@@ -65,7 +66,7 @@ namespace Sapphire
                     _inspVerSeen = EditorToolbar.InspectorVersion;
                     _types.Clear(); _types.AddRange(EditorToolbar.InspectorTypes());
                     foreach (var t in _types) if (_seen.Add(t)) _on.Add(t);
-                    _layoutSig = null;
+                    _layoutSig = LayoutSigDirty;
                 }
             }
             else
@@ -74,7 +75,7 @@ namespace Sapphire
                 if (selSig != _selSig) { _selSig = selSig; GatherTypes(ed); }
             }
 
-            string layoutSig = LayoutSig();
+            long layoutSig = LayoutSig();
             if (_canvasGo == null || _panelGo == null || layoutSig != _layoutSig)
             {
                 _layoutSig = layoutSig;
@@ -110,13 +111,14 @@ namespace Sapphire
             foreach (var t in _types) if (_seen.Add(t)) _on.Add(t); // new types default included
         }
 
-        private static string LayoutSig()
+        // Integer signature (was a per-frame StringBuilder+ToString while multi-select is active).
+        private static long LayoutSig()
         {
-            var sb = new System.Text.StringBuilder();
-            sb.Append(_inspMode ? 'I' : 'S');
-            sb.Append(_eventsMaster ? 'E' : 'e');
-            if (_eventsMaster) foreach (var t in _types) { sb.Append(t); sb.Append(','); }
-            return sb.ToString();
+            long h = 17;
+            h = h * 31 + (_inspMode ? 1 : 0);
+            h = h * 31 + (_eventsMaster ? 1 : 0);
+            if (_eventsMaster) foreach (var t in _types) h = h * 31 + (t + 1);
+            return h;
         }
 
         private static void EnsureTypeCat(scnEditor ed)
@@ -297,7 +299,7 @@ namespace Sapphire
             Label(Loc.T(_inspMode ? "Paste filter" : "Copy"), Pad, y, 120f, 16f, Theme.TextMuted, TextAnchor.MiddleLeft); y -= 18f;
             const float allW = 40f, noneW = 46f;
             float togW = PanelW - Pad * 2f - allW - noneW - Gap * 2f;
-            _masterBg = Cell(Loc.T("Events"), Pad, y, togW, RowH, () => { _eventsMaster = !_eventsMaster; _layoutSig = null; }, false, TextAnchor.MiddleLeft);
+            _masterBg = Cell(Loc.T("Events"), Pad, y, togW, RowH, () => { _eventsMaster = !_eventsMaster; _layoutSig = LayoutSigDirty; }, false, TextAnchor.MiddleLeft);
             Cell(Loc.T("All"), Pad + togW + Gap, y, allW, RowH, () => SetAll(true), true);
             Cell(Loc.T("None"), Pad + togW + Gap + allW + Gap, y, noneW, RowH, () => SetAll(false), true);
             y -= RowH + Gap;

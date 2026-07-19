@@ -1,468 +1,384 @@
 using System;
-using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using Sapphire.UI;
 
 namespace Sapphire
 {
-    /* Hosts the game's OWN level-settings inspector (scnEditor.settingsPanel, an
-       ADOFAI.InspectorPanel) inside a Sapphire popup — the file-row "Level settings" chip toggles
-       it. Ctrl+E-style layout: a labeled tab rail down the left (icon + name, proxying the game's
-       own tab clicks) with the game panel WIDENED on the right (its rows anchor-stretch, so they
-       follow); the game's icon-only tab strip is faded while hosted. The panel's transform is
-       captured on open and fully restored on close; the game keeps owning all fields/logic. */
+    /* Sapphire-native LEVEL SETTINGS panel — replaces the game's settings inspector VISUALS
+       the same way EditorEventPanel replaces the event inspector. The level settings are just
+       LevelEvents on LevelData (songSettings / levelSettings / trackSettings / … one per tab,
+       eventTypes SongSettings..DecorationSettings); each is rendered by the shared EventRows
+       engine from the game's own PropertyInfo registry. The game's settingsPanel stays alive
+       INVISIBLY as the model — commits write its LevelEvent data + call
+       UpdateSongAndLevelSettings(), so save/load and every other consumer stay in sync.
+
+       This removes the old approach of REHOSTING the game panel inside a Sapphire card (moving
+       its transform, fighting its per-frame relayout) — no more game-UI override, less lag. */
     internal static class EditorLevelMenu
     {
-        private static GameObject _canvasGo;
-        private static GameObject _popupGo;
-        private static RectTransform _cardRect;
-        private static RectTransform _hostRect;
-        private static RectTransform _railRect;
+        private static readonly PanelKit K = new PanelKit("SapphireLevelMenu", 902, PanelW);
+        private const float PanelW = 560f, RailW = 170f, HeaderH = 28f;
+        private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
+
+        private static Vector2 _size = new Vector2(PanelW, 720f);
+        private static RectTransform _viewport, _content, _railHost;
+        private static float _scroll;
+        private static int _tab;
+        private static long _sig;
+        private static int _scanCd;
         private static bool _open;
+        private static bool _dockInited;
+        private static CanvasGroup _panelCg;   // the hidden game settings panel
 
-        // rail rows (built per open)
-        private static readonly List<RoundedRectGraphic> _rowBgs = new List<RoundedRectGraphic>();
-        private static readonly List<ADOFAI.InspectorTab> _rowTabs = new List<ADOFAI.InspectorTab>();
-        private static int _rowSelected = -2;
-
-        // captured game-panel transform state (for a clean restore)
-        private static RectTransform _panelRect;
-        private static Transform _origParent;
-        private static int _origSibling;
-        private static Vector2 _origAnchorMin, _origAnchorMax, _origPivot, _origAnchoredPos, _origSizeDelta;
-        private static CanvasGroup _tabsCg;   // the game's own tab strip, faded while hosted
-
-        // Persistent hide of the game's level-settings panel (so it stops eating the left of the
-        // screen): a CanvasGroup we drive to alpha 0 while the popup is closed.
-        private static CanvasGroup _panelCg;
-
-        // Vertical proportions, matching the game's own side-panel silhouette: a narrow tall
-        // window (rail + roughly native panel width). Grow it by resizing if a session calls
-        // for it.
-        private const float RailW = 160f, PanelW = 410f, PanelH = 780f, Pad = 10f, HeaderH = 26f;
-
-        // floating-window geometry, session-scoped (captured on Close)
-        private static Vector2 _floatPos = Vector2.zero;
-        private static Vector2 _floatSize = new Vector2(Pad + RailW + Pad + PanelW + Pad, PanelH + Pad * 2f + HeaderH);
-        private static readonly Vector2 MinSize = new Vector2(520f, 480f);
+        private struct TabDef { public string Field; public ADOFAI.LevelEventType Type; }
+        private static readonly TabDef[] Tabs =
+        {
+            new TabDef { Field = "songSettings",       Type = ADOFAI.LevelEventType.SongSettings },
+            new TabDef { Field = "levelSettings",      Type = ADOFAI.LevelEventType.LevelSettings },
+            new TabDef { Field = "trackSettings",      Type = ADOFAI.LevelEventType.TrackSettings },
+            new TabDef { Field = "backgroundSettings", Type = ADOFAI.LevelEventType.BackgroundSettings },
+            new TabDef { Field = "cameraSettings",     Type = ADOFAI.LevelEventType.CameraSettings },
+            new TabDef { Field = "miscSettings",       Type = ADOFAI.LevelEventType.MiscSettings },
+            new TabDef { Field = "decorationSettings", Type = ADOFAI.LevelEventType.DecorationSettings },
+        };
 
         internal static bool IsOpen => _open;
-        // True while we're keeping the game panel off-screen — the Sapphire settings rail suppresses
-        // itself then (the panel is reached only through the popup).
+        // EditorChrome suppresses its own settings rail while we manage the game panel.
         internal static bool ManagesPanel { get; private set; }
 
-        internal static void Toggle() { if (_open) Close(); else Open(); }
+        internal static void Toggle() { _open = !_open; if (!_open) _sig = 0; }
+        internal static void Open() { _open = true; }
+        internal static void Close() { _open = false; _sig = 0; }
 
-        internal static void Open()
+        private static readonly EventRows.Ctx _ctx = new EventRows.Ctx
         {
-            scnEditor ed = null;
-            try { ed = scnEditor.instance; } catch { }
-            var panel = ed != null ? ed.settingsPanel : null;
-            if (panel == null) { SapphireLog.Log("LevelMenu: no settingsPanel"); return; }
-            _panelRect = panel.GetComponent<RectTransform>();
-            if (_panelRect == null) { SapphireLog.Log("LevelMenu: settingsPanel has no RectTransform"); return; }
+            PanelW = PanelW - RailW,
+            MarkDirty = () => _sig = 0,
+            AfterCommit = SettingsAfterCommit,
+        };
 
-            try { panel.ShowInspector(true, true); } catch { } // enable contents (skip the slide)
-
-            EnsureCanvas();
-            BuildPopup();
-
-            // capture the panel's current transform so Close can put it back exactly
-            _origParent = _panelRect.parent;
-            _origSibling = _panelRect.GetSiblingIndex();
-            _origAnchorMin = _panelRect.anchorMin; _origAnchorMax = _panelRect.anchorMax;
-            _origPivot = _panelRect.pivot; _origAnchoredPos = _panelRect.anchoredPosition;
-            _origSizeDelta = _panelRect.sizeDelta;
-
-            _panelRect.SetParent(_hostRect, false);
-            _panelRect.anchorMin = _panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _panelRect.pivot = new Vector2(0.5f, 0.5f);
-            _panelRect.anchoredPosition = Vector2.zero;
-            _panelRect.sizeDelta = new Vector2(PanelW, PanelH);
-            ShowPanelInPlace();   // un-hide it now that it lives in the popup
-
-            // Our labeled rail replaces the game's icon strip while hosted.
-            BuildRail(panel);
-            try
-            {
-                if (panel.tabs != null)
-                {
-                    var go = panel.tabs.gameObject;
-                    _tabsCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
-                    _tabsCg.alpha = 0f; _tabsCg.blocksRaycasts = false;
-                }
-            }
-            catch { }
-
-            _open = true;
-        }
-
-        internal static void Close()
+        private static void SettingsAfterCommit(scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi)
         {
-            if (_tabsCg != null)
-            {
-                try { _tabsCg.alpha = 1f; _tabsCg.blocksRaycasts = true; } catch { }
-                _tabsCg = null;
-            }
-            if (_panelRect != null && _origParent != null)
-            {
-                try
-                {
-                    _panelRect.SetParent(_origParent, false);
-                    _panelRect.SetSiblingIndex(_origSibling);
-                    _panelRect.anchorMin = _origAnchorMin; _panelRect.anchorMax = _origAnchorMax;
-                    _panelRect.pivot = _origPivot;
-                    _panelRect.sizeDelta = _origSizeDelta;
-                    _panelRect.anchoredPosition = _origAnchoredPos;
-                    var ed = scnEditor.instance;
-                    if (ed != null && ed.settingsPanel != null) ed.settingsPanel.ShowInspector(false, true);
-                }
-                catch (Exception ex) { SapphireLog.Log("LevelMenu: restore failed: " + ex.Message); }
-            }
-            if (_popupGo != null)
-            {
-                try { _floatPos = _cardRect.anchoredPosition; _floatSize = _cardRect.sizeDelta; } catch { }
-                UnityEngine.Object.Destroy(_popupGo);
-            }
-            _popupGo = null; _cardRect = null; _hostRect = null; _railRect = null;
-            _panelRect = null; _origParent = null;
-            _rowBgs.Clear(); _rowTabs.Clear(); _rowSelected = -2;
-            _helpSeen.Clear(); _helpCooldown = 0;
-            _open = false;
+            try { if (pi != null && pi.affectsPath) ed.RemakePath(true, true); } catch { }
+            try { ed.UpdateSongAndLevelSettings(); } catch { } // settings' ApplyEventsToFloors analog
         }
 
         internal static void Tick()
         {
+            var s = MainClass.Settings;
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
+            bool inEditor = ed != null && !ed.playMode && s != null && MainClass.EditorSuiteOn;
 
-            if (_open)
+            // The game's settings panel is redundant now — keep it off-screen whenever we're in
+            // the editor (ESC-raising it would flash phantom UI). We own it → ManagesPanel.
+            if (inEditor && ed.settingsPanel != null)
             {
-                if (ed == null || ed.playMode || _panelRect == null || ed.settingsPanel == null
-                    || !MainClass.EditorSuiteOn)
-                { Close(); return; }
-                if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
-                // Hold it in our card against the game's own slide/relayout; enforce the
-                // resize floor, then size the game panel to the (resizable) host.
-                if (_cardRect != null)
-                {
-                    var sz = _cardRect.sizeDelta;
-                    if (sz.x < MinSize.x || sz.y < MinSize.y)
-                        _cardRect.sizeDelta = new Vector2(Mathf.Max(sz.x, MinSize.x), Mathf.Max(sz.y, MinSize.y));
-                }
-                if (_hostRect != null && _panelRect.parent != _hostRect)
-                    _panelRect.SetParent(_hostRect, false);
-                _panelRect.anchoredPosition = Vector2.zero;
-                var want = _hostRect != null ? _hostRect.rect.size : new Vector2(PanelW, PanelH);
-                if ((_panelRect.sizeDelta - want).sqrMagnitude > 0.5f) _panelRect.sizeDelta = want;
-                if (--_helpCooldown <= 0) { _helpCooldown = 20; ShrinkHelpButtons(); }
-                SyncRailHighlight(ed.settingsPanel);
+                HideGamePanel(ed);
                 ManagesPanel = true;
-                return;
-            }
-
-            // Popup closed: keep the game's level-settings panel off-screen. The Level-settings
-            // chip (→ this popup) is the only way to reach it. Vanilla ESC toggles this panel —
-            // that would "open" invisible UI (the phantom the user keeps hitting), so shut it
-            // the moment the game raises it.
-            bool inEditor = ed != null && !ed.playMode && ed.settingsPanel != null && MainClass.EditorSuiteOn;
-            if (inEditor)
-            {
-                HidePanelInPlace(ed);
-                ManagesPanel = true;
-                try
-                {
-                    if (ed.settingsPanel.showInspector) ed.settingsPanel.ShowInspector(false, true);
-                }
-                catch { }
             }
             else
             {
-                ShowPanelInPlace();
-                RestorePanelGeometry();
+                ShowGamePanel();
                 ManagesPanel = false;
             }
-        }
 
-        // Belt-and-braces: if our wide hosted size ever survives a hand-back (mod toggled
-        // off mid-layout, exception during Close), re-assert the captured vanilla geometry.
-        private static void RestorePanelGeometry()
-        {
-            if (_panelRect == null || _origParent == null) return;
-            try
+            if (!_open || !inEditor)
             {
-                if (_panelRect.parent != _origParent) return; // still hosted → Close() owns it
-                if ((_panelRect.sizeDelta - _origSizeDelta).sqrMagnitude > 1f)
-                {
-                    _panelRect.anchorMin = _origAnchorMin; _panelRect.anchorMax = _origAnchorMax;
-                    _panelRect.pivot = _origPivot;
-                    _panelRect.sizeDelta = _origSizeDelta;
-                    _panelRect.anchoredPosition = _origAnchoredPos;
-                }
+                K.Show(false);
+                if (!inEditor) _sig = 0;
+                return;
             }
-            catch { }
-        }
+            if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
 
-        private static void HidePanelInPlace(scnEditor ed)
-        {
-            var go = ed.settingsPanel.gameObject;
-            if (_panelCg == null || _panelCg.gameObject != go)
-                _panelCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
-            if (_panelCg.alpha != 0f) { _panelCg.alpha = 0f; _panelCg.blocksRaycasts = false; }
-        }
+            // same per-frame throttle as the event panel — Sig hashes the tab's settings data,
+            // so only recompute on a tab click (_sig=0), first build, or a periodic rescan
+            bool dirty = _sig == 0 || !K.Built;
+            if (--_scanCd <= 0) { _scanCd = 12; dirty = true; }
+            if (dirty)
+            {
+                bool rebuild = false;
+                if (!K.Built) { BuildShell(); rebuild = true; }
+                long sig = Sig(ed);
+                if (sig != _sig) { _sig = sig; rebuild = true; }
+                if (rebuild) BuildContent(ed);
+            }
 
-        private static void ShowPanelInPlace()
-        {
-            if (_panelCg != null) { _panelCg.alpha = 1f; _panelCg.blocksRaycasts = true; }
+            K.Show(true);
+            ClampIntoView();
+            TickScroll();
+            TickResize();
         }
 
         internal static void Dispose()
         {
-            if (_open) Close();
-            ShowPanelInPlace();   // leave the game panel visible if the mod is turned off
-            _panelCg = null; ManagesPanel = false;
-            if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
-            _canvasGo = null;
+            ShowGamePanel();
+            ManagesPanel = false;
+            K.Dispose();
+            _viewport = null; _content = null; _railHost = null; _panelCg = null;
+            _open = false; _sig = 0;
         }
 
-        private static void EnsureCanvas()
+        // ── game panel hide (visuals only — it stays the model) ──────────────
+
+        private static void HideGamePanel(scnEditor ed)
         {
-            if (_canvasGo != null) return;
-            _canvasGo = new GameObject("SapphireLevelMenu", typeof(RectTransform));
-            UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
-            var canvas = _canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 909; // above the tile menu / popups
-            var scaler = _canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            _canvasGo.AddComponent<GraphicRaycaster>();
-        }
-
-        /* Floating window (user request July 16): no modal blocker — the editor stays live
-           behind it. Drag by the header, resize from edges/corners (ResizeHandle); geometry
-           survives close/reopen within the session. The hosted game panel follows the host
-           rect, which stretches with the card. */
-        private static void BuildPopup()
-        {
-            _popupGo = new GameObject("Card", typeof(RectTransform));
-            _popupGo.transform.SetParent(_canvasGo.transform, false);
-            _cardRect = (RectTransform)_popupGo.transform;
-            _cardRect.anchorMin = _cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-            _cardRect.pivot = new Vector2(0.5f, 0.5f);
-            _cardRect.anchoredPosition = _floatPos;
-            _cardRect.sizeDelta = _floatSize;
-            var cardBg = _popupGo.AddComponent<RoundedRectGraphic>();
-            cardBg.Radius = 14f;
-            cardBg.color = new Color(0.07f, 0.07f, 0.09f, 0.98f);
-            cardBg.BorderWidth = 1f;
-            cardBg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
-            cardBg.raycastTarget = true;
-
-            // header: title + drag handle + close
-            var headGo = new GameObject("Head", typeof(RectTransform));
-            headGo.transform.SetParent(_popupGo.transform, false);
-            var hr = (RectTransform)headGo.transform;
-            hr.anchorMin = new Vector2(0f, 1f); hr.anchorMax = new Vector2(1f, 1f);
-            hr.pivot = new Vector2(0.5f, 1f);
-            hr.anchoredPosition = Vector2.zero;
-            hr.sizeDelta = new Vector2(0f, HeaderH);
-            var headBg = headGo.AddComponent<RoundedRectGraphic>();
-            headBg.Radius = 14f;
-            headBg.color = new Color(1f, 1f, 1f, 0.04f);
-            headBg.raycastTarget = true;
-            headGo.AddComponent<DragHandle>();
-            var titleGo = new GameObject("T", typeof(RectTransform));
-            titleGo.transform.SetParent(headGo.transform, false);
-            var tr = (RectTransform)titleGo.transform;
-            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(Pad, 0f); tr.offsetMax = new Vector2(-34f, 0f);
-            var title = UIBuilder.Tmp(titleGo, Loc.T("Level settings"), 13.5f, TextAnchor.MiddleLeft, Theme.Text);
-            title.raycastTarget = false;
-            var xGo = new GameObject("Close", typeof(RectTransform));
-            xGo.transform.SetParent(_popupGo.transform, false);
-            var xr = (RectTransform)xGo.transform;
-            xr.anchorMin = xr.anchorMax = new Vector2(1f, 1f);
-            xr.pivot = new Vector2(1f, 1f);
-            xr.anchoredPosition = new Vector2(-6f, -4f);
-            xr.sizeDelta = new Vector2(22f, 22f);
-            var xBg = xGo.AddComponent<RoundedRectGraphic>();
-            xBg.Radius = 5f;
-            xBg.color = new Color(1f, 1f, 1f, 0.07f);
-            xBg.raycastTarget = true;
-            var xLGo = new GameObject("L", typeof(RectTransform));
-            xLGo.transform.SetParent(xGo.transform, false);
-            var xlr = (RectTransform)xLGo.transform;
-            xlr.anchorMin = Vector2.zero; xlr.anchorMax = Vector2.one;
-            xlr.offsetMin = xlr.offsetMax = Vector2.zero;
-            var xTmp = UIBuilder.Tmp(xLGo, "×", 13f, TextAnchor.MiddleCenter, Theme.Text);
-            xTmp.raycastTarget = false;
-            UI.ClickHandler.Attach(xGo, Close);
-
-            var railGo = new GameObject("Rail", typeof(RectTransform));
-            railGo.transform.SetParent(_popupGo.transform, false);
-            _railRect = (RectTransform)railGo.transform;
-            _railRect.anchorMin = new Vector2(0f, 0f); _railRect.anchorMax = new Vector2(0f, 1f);
-            _railRect.pivot = new Vector2(0f, 1f);
-            _railRect.anchoredPosition = new Vector2(Pad, -(Pad + HeaderH));
-            _railRect.sizeDelta = new Vector2(RailW, -(Pad * 2f + HeaderH));
-
-            // host stretches with the card; the game panel is resized to it every tick
-            var hostGo = new GameObject("Host", typeof(RectTransform));
-            hostGo.transform.SetParent(_popupGo.transform, false);
-            _hostRect = (RectTransform)hostGo.transform;
-            _hostRect.anchorMin = new Vector2(0f, 0f); _hostRect.anchorMax = new Vector2(1f, 1f);
-            _hostRect.pivot = new Vector2(0.5f, 0.5f);
-            _hostRect.offsetMin = new Vector2(Pad + RailW + Pad, Pad);
-            _hostRect.offsetMax = new Vector2(-Pad, -(Pad + HeaderH));
-
-            ResizeHandle.AttachAll(_cardRect, true);
-        }
-
-        // ── labeled tab rail (Ctrl+E style) ─────────────────────────────────
-        private static void BuildRail(ADOFAI.InspectorPanel panel)
-        {
-            _rowBgs.Clear(); _rowTabs.Clear(); _rowSelected = -2;
-            RectTransform tabsRt = null;
-            try { tabsRt = panel.tabs; } catch { }
-            if (tabsRt == null || _railRect == null) return;
-
-            const float rowH = 34f, rowGap = 4f;
-            float y = 0f;
-            for (int i = 0; i < tabsRt.childCount; i++)
-            {
-                var tabTr = tabsRt.GetChild(i);
-                if (!tabTr.gameObject.activeSelf) continue;
-                var tab = tabTr.GetComponent<ADOFAI.InspectorTab>();
-                if (tab == null) continue;
-
-                var rowGo = new GameObject("Row", typeof(RectTransform));
-                rowGo.transform.SetParent(_railRect, false);
-                var rr = (RectTransform)rowGo.transform;
-                rr.anchorMin = new Vector2(0f, 1f); rr.anchorMax = new Vector2(1f, 1f);
-                rr.pivot = new Vector2(0.5f, 1f);
-                rr.offsetMin = new Vector2(0f, 0f); rr.offsetMax = new Vector2(0f, 0f);
-                rr.anchoredPosition = new Vector2(0f, y);
-                rr.sizeDelta = new Vector2(0f, rowH);
-                var bg = rowGo.AddComponent<RoundedRectGraphic>();
-                bg.Radius = 9f;
-                bg.color = new Color(1f, 1f, 1f, 0.05f);
-                bg.raycastTarget = true;
-                _rowBgs.Add(bg);
-                _rowTabs.Add(tab);
-
-                var sprite = FindIcon(tabTr);
-                if (sprite != null)
-                {
-                    var iconGo = new GameObject("Icon", typeof(RectTransform));
-                    iconGo.transform.SetParent(rowGo.transform, false);
-                    var ir = (RectTransform)iconGo.transform;
-                    ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
-                    ir.pivot = new Vector2(0f, 0.5f);
-                    ir.anchoredPosition = new Vector2(8f, 0f);
-                    ir.sizeDelta = new Vector2(20f, 20f);
-                    var img = iconGo.AddComponent<Image>();
-                    img.sprite = sprite;
-                    img.preserveAspect = true;
-                    img.raycastTarget = false;
-                }
-
-                var lblGo = new GameObject("Label", typeof(RectTransform));
-                lblGo.transform.SetParent(rowGo.transform, false);
-                var lr = (RectTransform)lblGo.transform;
-                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = new Vector2(34f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
-                var lbl = UIBuilder.Tmp(lblGo, TabName(tab), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
-                lbl.raycastTarget = false;
-
-                var tabGo = tabTr.gameObject;
-                UI.ClickHandler.Attach(rowGo, () => EditorChrome.ProxyClick(tabGo));
-
-                y -= rowH + rowGap;
-            }
-        }
-
-        private static void SyncRailHighlight(ADOFAI.InspectorPanel panel)
-        {
-            ADOFAI.InspectorTab sel = null;
-            try { sel = panel.GetSelectedEventTab(); } catch { }
-            int idx = sel != null ? _rowTabs.IndexOf(sel) : -1;
-            if (idx == _rowSelected) return;
-            _rowSelected = idx;
-            for (int i = 0; i < _rowBgs.Count; i++)
-            {
-                if (_rowBgs[i] == null) continue;
-                _rowBgs[i].color = i == idx
-                    ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
-                    : new Color(1f, 1f, 1f, 0.05f);
-            }
-        }
-
-        // The game's "?" help buttons render oversized in the widened panel and sit on top of
-        // the fields. Shrink any button whose visible label is just "?" to a row-sized square.
-        // Throttled re-sweep: rows rebuild when tabs switch.
-        private static int _helpCooldown;
-        private static readonly HashSet<int> _helpSeen = new HashSet<int>();
-
-        private static void ShrinkHelpButtons()
-        {
-            if (_panelRect == null) return;
             try
             {
-                foreach (var b in _panelRect.GetComponentsInChildren<Button>(true))
-                {
-                    if (b == null || !_helpSeen.Add(b.GetInstanceID())) continue;
-                    string label = null;
-                    var tmp = b.GetComponentInChildren<TMPro.TMP_Text>(true);
-                    if (tmp != null) label = tmp.text;
-                    else
-                    {
-                        var txt = b.GetComponentInChildren<Text>(true);
-                        if (txt != null) label = txt.text;
-                    }
-                    if (label == null || label.Trim() != "?") continue;
-                    var rt = (RectTransform)b.transform;
-                    rt.sizeDelta = new Vector2(24f, 24f);
-                }
+                var go = ed.settingsPanel.gameObject;
+                if (_panelCg == null || _panelCg.gameObject != go)
+                    _panelCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+                if (_panelCg.alpha != 0f) { _panelCg.alpha = 0f; _panelCg.blocksRaycasts = false; }
+                if (ed.settingsPanel.showInspector) ed.settingsPanel.ShowInspector(false, true);
             }
             catch { }
         }
 
-        private static Sprite FindIcon(Transform root)
+        private static void ShowGamePanel()
+        {
+            if (_panelCg != null) { try { _panelCg.alpha = 1f; _panelCg.blocksRaycasts = true; } catch { } }
+        }
+
+        // ── data ─────────────────────────────────────────────────────────────
+
+        private static ADOFAI.LevelEvent SettingsEvent(scnEditor ed, string field)
         {
             try
             {
-                foreach (var img in root.GetComponentsInChildren<Image>(true))
-                    if (img != null && img.sprite != null) return img.sprite;
+                var ld = ed.levelData;
+                if (ld == null) return null;
+                var fi = ld.GetType().GetField(field);
+                return fi != null ? fi.GetValue(ld) as ADOFAI.LevelEvent : null;
+            }
+            catch { return null; }
+        }
+
+        private static ADOFAI.LevelEventInfo InfoOf(ADOFAI.LevelEventType type)
+        {
+            try
+            {
+                ADOFAI.LevelEventInfo info;
+                var key = type.ToString();
+                if (GCS.levelEventsInfo != null && GCS.levelEventsInfo.TryGetValue(key, out info)) return info;
+                if (GCS.settingsInfo != null && GCS.settingsInfo.TryGetValue(key, out info)) return info;
             }
             catch { }
             return null;
         }
 
-        // Localized tab names — the game's own panel titles use RDString.Get("editor." + type)
-        // (e.g. "editor.SongSettings" → "곡 설정"); fall back to the prettified enum name.
-        private static string TabName(ADOFAI.InspectorTab tab)
+        private static string TabLabel(ADOFAI.LevelEventType type)
         {
-            string s;
-            try { s = tab.levelEventType.ToString(); }
-            catch { s = tab.name; }
             try
             {
-                string loc = RDString.Get("editor." + s);
-                if (!string.IsNullOrEmpty(loc) && loc != "editor." + s) return loc;
+                bool ex;
+                var loc = RDString.GetWithCheck("editor." + type, out ex, null);
+                if (ex && !string.IsNullOrEmpty(loc)) return loc;
             }
             catch { }
-            if (s.EndsWith("Settings") && s.Length > 8) s = s.Substring(0, s.Length - 8);
-            var sb = new System.Text.StringBuilder();
-            for (int i = 0; i < s.Length; i++)
+            return type.ToString();
+        }
+
+        private static Sprite TabIcon(ADOFAI.LevelEventType type)
+        {
+            try
             {
-                if (i > 0 && char.IsUpper(s[i]) && !char.IsUpper(s[i - 1])) sb.Append(' ');
-                sb.Append(s[i]);
+                Sprite sp;
+                if (GCS.levelEventIcons.TryGetValue(type, out sp)) return sp;
             }
-            return sb.ToString();
+            catch { }
+            return null;
+        }
+
+        private static long Sig(scnEditor ed)
+        {
+            long h = 17;
+            h = h * 31 + _tab;
+            var evt = SettingsEvent(ed, Tabs[_tab].Field);
+            // showIf gating depends on other values → hash the visible data so toggling a
+            // parent setting redraws dependent rows
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                if (d != null) foreach (var kv in d) h = h * 31 + (kv.Key?.GetHashCode() ?? 0)
+                                                        + (kv.Value?.GetHashCode() ?? 0);
+            }
+            catch { }
+            return h;
+        }
+
+        // ── UI: shell built once, content rebuilds on tab/value change ───────
+
+        private static void BuildShell()
+        {
+            K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -40f));
+            var panel = (RectTransform)K.PanelGo.transform;
+            panel.sizeDelta = _size;
+            ResizeHandle.AttachAll(panel, true, 440f, 320f);
+            K.OnDragEnd = () => K.SnapDockOnDragEnd();
+            if (!_dockInited) { _dockInited = true; }
+
+            // left tab rail
+            var railGo = new GameObject("Rail", typeof(RectTransform));
+            railGo.transform.SetParent(K.PanelGo.transform, false);
+            _railHost = (RectTransform)railGo.transform;
+            _railHost.anchorMin = new Vector2(0f, 0f); _railHost.anchorMax = new Vector2(0f, 1f);
+            _railHost.pivot = new Vector2(0f, 1f);
+            _railHost.offsetMin = new Vector2(Pad, Pad);
+            _railHost.offsetMax = new Vector2(Pad + RailW, -HeaderH - 2f);
+
+            // right scroll viewport
+            var vpGo = new GameObject("View", typeof(RectTransform));
+            vpGo.transform.SetParent(K.PanelGo.transform, false);
+            _viewport = (RectTransform)vpGo.transform;
+            _viewport.anchorMin = new Vector2(0f, 0f);
+            _viewport.anchorMax = new Vector2(1f, 1f);
+            _viewport.offsetMin = new Vector2(Pad + RailW + Pad, Pad);
+            _viewport.offsetMax = new Vector2(-Pad, -HeaderH - 2f);
+            vpGo.AddComponent<RectMask2D>();
+            var vpImg = vpGo.AddComponent<Image>();
+            vpImg.color = new Color(0f, 0f, 0f, 0.01f);
+            vpImg.raycastTarget = true;
+
+            var cGo = new GameObject("Content", typeof(RectTransform));
+            cGo.transform.SetParent(vpGo.transform, false);
+            _content = (RectTransform)cGo.transform;
+            _content.anchorMin = new Vector2(0f, 1f);
+            _content.anchorMax = new Vector2(1f, 1f);
+            _content.pivot = new Vector2(0.5f, 1f);
+            _content.anchoredPosition = new Vector2(0f, _scroll);
+        }
+
+        private static void BuildContent(scnEditor ed)
+        {
+            BuildRail();
+            if (_content == null) return;
+            for (int i = _content.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.Destroy(_content.GetChild(i).gameObject);
+
+            _ctx.Content = _content;
+            _ctx.PanelW = _viewport != null ? _viewport.rect.width : PanelW - RailW;
+
+            var evt = SettingsEvent(ed, Tabs[_tab].Field);
+            var info = InfoOf(Tabs[_tab].Type);
+            float y = -2f;
+            if (evt == null || info == null)
+            {
+                EventRows.Label(_content, Loc.T("(settings unavailable)"), Pad, y, _ctx.PanelW - Pad * 2f, RowH, Theme.TextMuted);
+                y -= RowH + Gap;
+            }
+            else y = EventRows.Render(_ctx, ed, info, evt, y);
+            _content.sizeDelta = new Vector2(0f, -y + 6f);
+            ClampScroll();
+        }
+
+        private static void BuildRail()
+        {
+            if (_railHost == null) return;
+            for (int i = _railHost.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.Destroy(_railHost.GetChild(i).gameObject);
+
+            const float rowH = 34f, gap = 4f;
+            float y = 0f;
+            for (int i = 0; i < Tabs.Length; i++)
+            {
+                int idx = i;
+                var go = new GameObject("Tab", typeof(RectTransform));
+                go.transform.SetParent(_railHost, false);
+                var r = (RectTransform)go.transform;
+                r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+                r.pivot = new Vector2(0.5f, 1f);
+                r.anchoredPosition = new Vector2(0f, y);
+                r.sizeDelta = new Vector2(0f, rowH);
+                var bg = go.AddComponent<RoundedRectGraphic>();
+                bg.Radius = 6f;
+                bg.color = i == _tab
+                    ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
+                    : new Color(1f, 1f, 1f, 0.05f);
+                bg.raycastTarget = true;
+
+                var icon = TabIcon(Tabs[i].Type);
+                if (icon != null)
+                {
+                    var iGo = new GameObject("I", typeof(RectTransform));
+                    iGo.transform.SetParent(go.transform, false);
+                    var ir = (RectTransform)iGo.transform;
+                    ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
+                    ir.pivot = new Vector2(0f, 0.5f);
+                    ir.anchoredPosition = new Vector2(8f, 0f);
+                    ir.sizeDelta = new Vector2(20f, 20f);
+                    var img = iGo.AddComponent<Image>();
+                    img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
+                }
+                var lGo = new GameObject("L", typeof(RectTransform));
+                lGo.transform.SetParent(go.transform, false);
+                var lr = (RectTransform)lGo.transform;
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = new Vector2(icon != null ? 34f : 10f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
+                var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+                lt.textWrappingMode = TextWrappingModes.NoWrap;
+                lt.overflowMode = TextOverflowModes.Ellipsis;
+                lt.raycastTarget = false;
+
+                UI.ClickHandler.Attach(go, () => { _tab = idx; _scroll = 0f; _sig = 0; });
+                y -= rowH + gap;
+            }
+        }
+
+        // ── scroll / resize / clamp ─────────────────────────────────────────
+
+        private static void TickScroll()
+        {
+            if (_viewport == null || _content == null) return;
+            float wheel = MainClass.WheelY;
+            if (Mathf.Abs(wheel) < 0.01f) return;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(_viewport, Input.mousePosition, null)) return;
+            _scroll = Mathf.Clamp(_scroll + wheel * 60f, 0f,
+                Mathf.Max(0f, _content.sizeDelta.y - _viewport.rect.height));
+            _content.anchoredPosition = new Vector2(0f, _scroll);
+        }
+
+        private static void ClampScroll()
+        {
+            if (_viewport == null || _content == null) return;
+            _scroll = Mathf.Clamp(_scroll, 0f, Mathf.Max(0f, _content.sizeDelta.y - _viewport.rect.height));
+            _content.anchoredPosition = new Vector2(0f, _scroll);
+        }
+
+        internal static bool Hovered
+        {
+            get
+            {
+                try
+                {
+                    return K.Visible && RectTransformUtility.RectangleContainsScreenPoint(
+                        (RectTransform)K.PanelGo.transform, Input.mousePosition, null);
+                }
+                catch { return false; }
+            }
+        }
+
+        private static void TickResize()
+        {
+            if (!K.Built) return;
+            var r = (RectTransform)K.PanelGo.transform;
+            if ((r.sizeDelta - _size).sqrMagnitude > 1f)
+            {
+                _size = r.sizeDelta;
+                _sig = 0;  // width changed → rows re-lay to the new content width
+            }
+        }
+
+        private static void ClampIntoView()
+        {
+            if (!K.Built) return;
+            var r = (RectTransform)K.PanelGo.transform;
+            var canvas = (RectTransform)K.CanvasGo.transform;
+            var p = r.anchoredPosition;
+            p.x = Mathf.Clamp(p.x, 0f, Mathf.Max(0f, canvas.rect.width - 80f));
+            p.y = Mathf.Clamp(p.y, -(canvas.rect.height - 40f), 0f);
+            if ((p - r.anchoredPosition).sqrMagnitude > 0.01f) r.anchoredPosition = p;
         }
     }
 }

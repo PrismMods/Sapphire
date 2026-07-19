@@ -81,6 +81,7 @@ namespace Sapphire
             _target = null; // event path re-sets it after OpenCore; generic path must not inherit one
             _onPick = onPick;
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             var eases = EaseList();
             int cellCount = eases.Count + (showCustom ? 1 : 0); // +1: the Custom bezier cell
@@ -298,6 +299,7 @@ namespace Sapphire
             _popupGo = null; _onPick = null;
             foreach (var t in _curveTex) if (t != null) UnityEngine.Object.Destroy(t);
             _curveTex.Clear();
+            if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
         }
 
         private static void BuildCanvas()

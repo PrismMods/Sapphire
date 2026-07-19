@@ -208,6 +208,28 @@ namespace Sapphire
                         sb.Append(PerfNames[i]).Append(" avg=").Append(avg.ToString("0.00"))
                           .Append("ms max=").Append(_perfMax[i].ToString("0.0")).Append("ms");
                     }
+                    // UI census: the Tick timers above miss Unity's own per-frame UI cost
+                    // (draw calls + EventSystem raycasting), which scales with element count.
+                    // Count active graphics/raycast-targets under Sapphire canvases so a steady
+                    // fps drop that isn't in any Tick can be attributed to UI bloat.
+                    try
+                    {
+                        int canvases = 0, graphics = 0, rc = 0;
+                        foreach (var cv in UnityEngine.Object.FindObjectsOfType<UnityEngine.Canvas>())
+                        {
+                            if (cv == null || !cv.isRootCanvas || !cv.name.StartsWith("Sapphire")) continue;
+                            if (!cv.gameObject.activeInHierarchy) continue;
+                            canvases++;
+                            foreach (var g in cv.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+                            {
+                                graphics++;
+                                if (g.raycastTarget) rc++;
+                            }
+                        }
+                        sb.Append(sb.Length > 0 ? "  " : "").Append("ui canvases=").Append(canvases)
+                          .Append(" graphics=").Append(graphics).Append(" raycast=").Append(rc);
+                    }
+                    catch { }
                     if (sb.Length > 0) SapphireLog.Debug("[perf] " + sb);
                     System.Array.Clear(_perfMs, 0, _perfMs.Length);
                     System.Array.Clear(_perfMax, 0, _perfMax.Length);

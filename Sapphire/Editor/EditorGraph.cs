@@ -150,6 +150,8 @@ namespace Sapphire
             _infoText = null; _tabBgs.Clear(); _keys.Clear(); _linkBg = null;
             _yLabels.Clear(); _xLabels.Clear();
             _sel = null; _drag = null; _panning = false;
+            // Idle the canvas so its render batch + raycaster stop costing while closed.
+            if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
         }
 
         // ── per-component access (0=posX 1=posY 2=rotation 3=zoom) ──────────
@@ -568,6 +570,7 @@ namespace Sapphire
         {
             Close();
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             _panelGo = new GameObject("GraphPanel", typeof(RectTransform));
             _panelGo.transform.SetParent(_canvasGo.transform, false);

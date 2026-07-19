@@ -124,6 +124,7 @@ namespace Sapphire
 
         private static void ShowChip(bool show)
         {
+            K.ChipAlive = show; // keeps the panel's canvas alive for the chip while the panel is hidden
             if (!show)
             {
                 if (_chipGo != null && _chipGo.activeSelf) _chipGo.SetActive(false);

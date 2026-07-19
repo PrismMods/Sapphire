@@ -354,6 +354,15 @@ namespace Sapphire
             catch (Exception ex) { SapphireLog.Log("FilterPicker: apply failed: " + ex.Message); }
         }
 
+        /* Canvas is shared by the browse button and the picker popup; keep it (and its
+           raycaster) live only while one of them is actually shown. */
+        private static void SyncCanvasActive()
+        {
+            if (_canvasGo == null) return;
+            bool need = (_browseBtnGo != null && _browseBtnGo.activeSelf) || _popupGo != null;
+            if (_canvasGo.activeSelf != need) _canvasGo.SetActive(need);
+        }
+
         // ── browse chip riding the game panel ───────────────────────────────
         private static void SyncBrowseButton(scnEditor ed, ADOFAI.LevelEvent evt)
         {
@@ -361,9 +370,11 @@ namespace Sapphire
             if (!want)
             {
                 if (_browseBtnGo != null && _browseBtnGo.activeSelf) _browseBtnGo.SetActive(false);
+                SyncCanvasActive();
                 return;
             }
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
             if (_browseBtnGo == null) BuildBrowseButton();
             if (!_browseBtnGo.activeSelf) _browseBtnGo.SetActive(true);
             // park at the panel's top-left corner, just outside it
@@ -429,6 +440,7 @@ namespace Sapphire
             SyncCatNames();
             _search = ""; _category = null; _scroll = 0f;
             if (_canvasGo == null) BuildCanvas();
+            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             // Floating window (user request July 16): no dim blocker — the editor stays live
             // behind it. Drag by the title row, resize from edges/corners; geometry persists
@@ -1350,6 +1362,7 @@ namespace Sapphire
             _railContent = null; _railView = null; _paramInfo = null;
             _propView = null; _propContent = null;
             _searchField = null; _catBgs.Clear();
+            SyncCanvasActive(); // idle the canvas unless the browse button is still up
         }
 
         private static void BuildCanvas()

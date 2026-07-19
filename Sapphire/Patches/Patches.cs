@@ -121,7 +121,7 @@ namespace Sapphire
         {
             public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
                 && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
-                && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered;
+                && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered;
         }
 
         /* Editor Mode hides the autoplay status label. Disabling the Text directly is the

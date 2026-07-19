@@ -148,36 +148,38 @@ namespace Sapphire
         public int UiLanguage = 0;
         // Flips the wheel direction on Sapphire's scroll surfaces (timeline, graph, docks).
         public bool InvertScroll = false;
-        // Tweaks tab → Editor: on-screen angle readout for the selected editor tile.
-        public bool EditorTileAngle = false;
-        // Tweaks tab → Editor: chips listing the selected tile's events (hover = details).
-        public bool EditorShowEvents = false;
-        // Tweaks tab → Editor: event timeline strip across the top of the editor.
-        public bool EditorTimeline = false;
-        // Tweaks tab → Editor: dark reskin of the game's own editor menus.
+
+        /* ── Feature categories (July 18) ──────────────────────────────────────────────
+           The settings model is now four categories, all default ON and all gated behind
+           the in-editor master switch (EditorSuiteOn). The many granular Editor* flags
+           below are kept as READ-ONLY FACADES over these categories, so every module's
+           existing gate keeps working unchanged. To turn a feature group off, flip its
+           category here (the Ctrl+E panel exposes exactly these). */
+        public bool FeatTimeline = true;      // event timeline strip + transport + pitch + chips
+        public bool FeatEventPanels = true;   // native event inspector + selector
+        public bool FeatToolsSapphire = true; // toolbar's native tools + tile actions + presets
+        public bool FeatToolsMods = true;     // MSM & MH tools (magic shape, track, deco)
+        public bool FeatFileBar = true;       // Sapphire file chip / menu bar
+
+        // Dark reskin of the game's own editor menus. STANDALONE + transitional — as the
+        // native panels replace hidden game UI this is being retired, so it isn't in a
+        // category. Default off going forward (the native panels are already dark).
         public bool EditorDarkTheme = false;
-        // Editor tab → Editor UI: Sapphire-native event inspector window replacing the
-        // game's event settings panel (the game panel stays alive invisibly as the model).
-        public bool EditorNativeInspector = false;
-        // Editor tab → Editor UI: Sapphire file chip + menu replacing the game's file bar.
-        public bool EditorFileChip = false;
-        // Editor tab → Editor UI: play/rewind + clock docked in the timeline strip.
-        public bool EditorTransport = false;
-        // Editor tab → Editor UI: Sapphire rail replacing the inspector's tab strip.
-        public bool EditorPanelRail = false;
-        // Editor tab → Editor UI: Sapphire event palette replacing the game's bottom bar.
-        public bool EditorEventDock = false;
-        // Editor tab → Editor UI: Sapphire rail replacing the event inspector's tab column.
-        public bool EditorEventInspector = false;
-        // Editor tab → Editor UI: Sapphire messagebox replacing the editor's popups.
-        public bool EditorPopupBox = false;
-        // Editor tab → Editor UI: top tool toolbar (circular-path generator, free angle).
-        public bool EditorTopToolbar = false;
-        // Editor tab → Editor UI: right-click tile menu + free-angle rebind (hold right-Alt
-        // instead of right-mouse, freeing right-click for the menu). Off = vanilla right-drag.
-        public bool EditorTileActions = false;
-        // Editor tab → Editor UI: pitch modifier overlay (bottom-left, above the timeline).
-        public bool EditorPitchOverlay = false;
+
+        // ── granular facades over the categories (do not assign; read only) ──
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTileAngle => FeatToolsSapphire;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorShowEvents => FeatTimeline;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTimeline => FeatTimeline;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTransport => FeatTimeline;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorPitchOverlay => FeatTimeline;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorNativeInspector => FeatEventPanels;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorEventDock => FeatEventPanels;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorEventInspector => FeatEventPanels;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTopToolbar => FeatToolsSapphire;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTileActions => FeatToolsSapphire;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorPopupBox => FeatToolsSapphire;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorFileChip => FeatFileBar;
+        [System.Xml.Serialization.XmlIgnore] public bool EditorPanelRail => FeatFileBar;
         // Editor tab: clean-screen charting mode — while in the editor, Sapphire overlays
         // and the key viewer stand down, and the game's difficulty/no-fail/autoplay
         // icons, autoplay text and hit error meter hide (see EditorModeActive / the OR'd
@@ -637,11 +639,9 @@ namespace Sapphire
 
             // July 11: per-feature toggles removed from the panel — the master switch is the
             // only gate now, so every suite feature is forced on (stale saved falses migrate).
-            EditorTileAngle = EditorShowEvents = EditorTimeline = EditorDarkTheme = true;
-            EditorFileChip = EditorTransport = EditorPanelRail = EditorEventDock = true;
-            EditorNativeInspector = true;
-            EditorEventInspector = EditorPopupBox = EditorTopToolbar = EditorTileActions = true;
-            EditorPitchOverlay = true;
+            // categories default ON; the granular Editor* flags are facades over them now.
+            // (A pre-July-18 config has no <Feat*> nodes → the XML deserializer leaves the
+            // field defaults, which are already true, so old users get everything on.)
 
             // July 11: Sapphire's accent is blue now — migrate settings still on the old
             // Bismuth-red default.

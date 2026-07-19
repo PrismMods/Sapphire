@@ -166,9 +166,16 @@ namespace Sapphire
         // chip replaces it — an ESC press would open INVISIBLE UI (and eat the next ESC to
         // close it). Shut it the moment it shows.
         private static System.Reflection.FieldInfo _showingFileActionsFi;
+        private static int _ghostWatch;
 
         private static void CloseGhostFileActions(scnEditor ed)
         {
+            // The ghost panel can only open via the game's ESC toggle (the file button is faded
+            // out under the chip), so only probe the private flag for a few frames after an ESC
+            // press instead of reflecting + boxing a bool every single frame.
+            if (Input.GetKeyDown(KeyCode.Escape)) _ghostWatch = 4;
+            if (_ghostWatch <= 0) return;
+            _ghostWatch--;
             try
             {
                 if (_showingFileActionsFi == null)

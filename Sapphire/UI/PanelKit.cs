@@ -17,6 +17,13 @@ namespace Sapphire.UI
         private readonly int _sortingOrder;
         internal readonly float W;
         internal GameObject CanvasGo, PanelGo;
+        private Canvas _canvas;
+        private GraphicRaycaster _raycaster;
+
+        /* Set by owners that keep a widget (e.g. the selector's reopen chip) parented to the
+           canvas while the panel itself is hidden — keeps the canvas rendering/raycasting for
+           that widget even though PanelGo is inactive. */
+        internal bool ChipAlive;
 
         internal PanelKit(string canvasName, int sortingOrder, float width)
         {
@@ -64,13 +71,30 @@ namespace Sapphire.UI
             float x = DockSide == 1 ? margin : cw - w - margin;
             float h = Mathf.Max(200f, ch - topMargin - bottomInset - margin);
             var want = new Vector2(x, -topMargin);
-            if ((r.anchoredPosition - want).sqrMagnitude > 0.01f) r.anchoredPosition = want;
-            if (Mathf.Abs(r.sizeDelta.y - h) > 0.5f) r.sizeDelta = new Vector2(w, h);
+            // deadbands (2px pos, 3px height): a resize marks the whole panel + its RectMask2D
+            // layout dirty, forcing Unity to reclip ALL masked content that frame. If the dock
+            // target jitters sub-pixel (timeline height, canvas rect), that would rebuild the
+            // panel every frame — invisible to the Tick profiler. Only move on a real change.
+            if ((r.anchoredPosition - want).sqrMagnitude > 4f) r.anchoredPosition = want;
+            if (Mathf.Abs(r.sizeDelta.y - h) > 3f) r.sizeDelta = new Vector2(w, h);
         }
 
         internal void Show(bool on)
         {
             if (PanelGo != null && PanelGo.activeSelf != on) PanelGo.SetActive(on);
+            SyncCanvasActive();
+        }
+
+        /* Disable the Canvas + GraphicRaycaster while nothing on this canvas is visible: an
+           idle-but-active overlay canvas is still a render batch and a raycaster the EventSystem
+           walks every pointer frame. Disabling the components (vs SetActive) skips rendering and
+           raycasting without tearing down the built hierarchy, so re-showing is churn-free. */
+        internal void SyncCanvasActive()
+        {
+            if (CanvasGo == null) return;
+            bool need = (PanelGo != null && PanelGo.activeSelf) || ChipAlive;
+            if (_canvas != null && _canvas.enabled != need) _canvas.enabled = need;
+            if (_raycaster != null && _raycaster.enabled != need) _raycaster.enabled = need;
         }
 
         internal void Dispose()
@@ -122,7 +146,31 @@ namespace Sapphire.UI
             tr.offsetMin = new Vector2(Pad, 0f); tr.offsetMax = new Vector2(-30f, 0f);
             var titleTmp = UIBuilder.Tmp(titleGo, title, 13.5f, TextAnchor.MiddleLeft, Theme.Text);
             titleTmp.raycastTarget = false;
-            Cell("×", W - 26f, -4f, 20f, 20f, onClose, true);
+
+            // Close × anchored to the panel's TOP-RIGHT so it rides the right edge when the
+            // panel is resized wider than the template width W (Cell anchors top-left, which
+            // left the × stranded mid-header on resizable panels).
+            var xGo = new GameObject("Close", typeof(RectTransform));
+            xGo.transform.SetParent(PanelGo.transform, false);
+            var xr = (RectTransform)xGo.transform;
+            xr.anchorMin = xr.anchorMax = new Vector2(1f, 1f);
+            xr.pivot = new Vector2(1f, 1f);
+            xr.anchoredPosition = new Vector2(-6f, -4f);
+            xr.sizeDelta = new Vector2(20f, 20f);
+            var xbg = xGo.AddComponent<RoundedRectGraphic>();
+            xbg.Radius = 5f;
+            xbg.color = new Color(1f, 1f, 1f, 0.08f);
+            xbg.BorderWidth = 1f;
+            xbg.BorderColor = new Color(1f, 1f, 1f, 0.1f);
+            xbg.raycastTarget = true;
+            var xlGo = new GameObject("L", typeof(RectTransform));
+            xlGo.transform.SetParent(xGo.transform, false);
+            var xlr = (RectTransform)xlGo.transform;
+            xlr.anchorMin = Vector2.zero; xlr.anchorMax = Vector2.one;
+            xlr.offsetMin = xlr.offsetMax = Vector2.zero;
+            var xtmp = UIBuilder.Tmp(xlGo, "×", 12f, TextAnchor.MiddleCenter, Theme.Text);
+            xtmp.raycastTarget = false;
+            ClickHandler.Attach(xGo, onClose);
         }
 
         internal void SetHeight(float yEnd)
@@ -405,15 +453,15 @@ namespace Sapphire.UI
             if (CanvasGo != null) return;
             CanvasGo = new GameObject(_canvasName, typeof(RectTransform));
             UnityEngine.Object.DontDestroyOnLoad(CanvasGo);
-            var canvas = CanvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = _sortingOrder;
+            _canvas = CanvasGo.AddComponent<Canvas>();
+            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _canvas.sortingOrder = _sortingOrder;
             var scaler = CanvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
-            CanvasGo.AddComponent<GraphicRaycaster>();
+            _raycaster = CanvasGo.AddComponent<GraphicRaycaster>();
         }
     }
 }

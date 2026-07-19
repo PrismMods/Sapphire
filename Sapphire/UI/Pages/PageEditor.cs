@@ -3,9 +3,11 @@ using UnityEngine;
 
 namespace Sapphire.UI.Pages
 {
-    /* "Editor" tab — behavior preferences only. The per-feature toggles are gone (July 11):
-       every suite feature ships ON and the in-editor master switch is the single gate. What
-       remains: language, Editor mode, the autoplay pause key, and the layout tools. */
+    /* "Editor" tab — language, feature-category toggles, Editor mode, the autoplay pause
+       key, and the layout tools. Feature toggles (July 18) are four categories, all ON by
+       default and all gated behind the in-editor master switch (top-right power button):
+       Timeline, Event panels, Tools (Sapphire + MSM/MH), File bar. They're facades that
+       drive the granular Editor* flags via Settings. */
     internal static class PageEditor
     {
         private static readonly string[] LangLabels = { "Auto (follow game)", "English", "한국어" };
@@ -29,6 +31,21 @@ namespace Sapphire.UI.Pages
 
             UIBuilder.Collapsible(content, "Invert scroll direction", s.InvertScroll,
                 v => { s.InvertScroll = v; notify?.Invoke(); }, null);
+
+            UIBuilder.Spacer(content);
+            UIBuilder.SectionHeaderWithHelp(content, "Features",
+                "Turn whole feature groups on or off. The in-editor master\nswitch (top-right power " +
+                "button in the level editor) gates all\nof them together; these choose which groups it enables.");
+            UIBuilder.Collapsible(content, "Event timeline", s.FeatTimeline,
+                v => { s.FeatTimeline = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Event panels (inspector + selector)", s.FeatEventPanels,
+                v => { s.FeatEventPanels = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Sapphire tools", s.FeatToolsSapphire,
+                v => { s.FeatToolsSapphire = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "MSM & MH tools", s.FeatToolsMods,
+                v => { s.FeatToolsMods = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "File menu bar", s.FeatFileBar,
+                v => { s.FeatFileBar = v; notify?.Invoke(); }, null);
 
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Editor mode",

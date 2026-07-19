@@ -123,6 +123,7 @@
         <Compile Include="Editor\EditorTrackTools.cs" />
         <Compile Include="Editor\DecoToolsEngine.cs" />
         <Compile Include="Editor\EditorDecoTools.cs" />
+        <Compile Include="Editor\EventRows.cs" />
         <Compile Include="Editor\EditorEventPanel.cs" />
         <Compile Include="Editor\EditorEventSelector.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
