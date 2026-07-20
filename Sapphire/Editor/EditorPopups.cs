@@ -298,7 +298,7 @@ namespace Sapphire
             UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 907;
+            canvas.sortingOrder = 955; // confirm/prompt dialogs above windows/toolbar
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);

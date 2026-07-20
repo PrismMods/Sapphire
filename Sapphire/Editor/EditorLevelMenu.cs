@@ -18,8 +18,8 @@ namespace Sapphire
        its transform, fighting its per-frame relayout) — no more game-UI override, less lag. */
     internal static class EditorLevelMenu
     {
-        private static readonly PanelKit K = new PanelKit("SapphireLevelMenu", 902, PanelW);
-        private const float PanelW = 560f, RailW = 170f, HeaderH = 28f;
+        private static readonly PanelKit K = new PanelKit("SapphireLevelMenu", 902, PanelW, focusable: true);
+        private const float PanelW = 560f, RailW = 146f, HeaderH = 28f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
         private static Vector2 _size = new Vector2(PanelW, 720f);
@@ -279,7 +279,7 @@ namespace Sapphire
             for (int i = _railHost.childCount - 1; i >= 0; i--)
                 UnityEngine.Object.Destroy(_railHost.GetChild(i).gameObject);
 
-            const float rowH = 34f, gap = 4f;
+            const float rowH = 26f, gap = 3f; // match the compact row scale of the other panels
             float y = 0f;
             for (int i = 0; i < Tabs.Length; i++)
             {
@@ -306,8 +306,8 @@ namespace Sapphire
                     var ir = (RectTransform)iGo.transform;
                     ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
                     ir.pivot = new Vector2(0f, 0.5f);
-                    ir.anchoredPosition = new Vector2(8f, 0f);
-                    ir.sizeDelta = new Vector2(20f, 20f);
+                    ir.anchoredPosition = new Vector2(7f, 0f);
+                    ir.sizeDelta = new Vector2(18f, 18f);
                     var img = iGo.AddComponent<Image>();
                     img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
                 }
@@ -315,8 +315,8 @@ namespace Sapphire
                 lGo.transform.SetParent(go.transform, false);
                 var lr = (RectTransform)lGo.transform;
                 lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = new Vector2(icon != null ? 34f : 10f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
-                var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+                lr.offsetMin = new Vector2(icon != null ? 29f : 8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
+                var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
                 lt.textWrappingMode = TextWrappingModes.NoWrap;
                 lt.overflowMode = TextOverflowModes.Ellipsis;
                 lt.raycastTarget = false;

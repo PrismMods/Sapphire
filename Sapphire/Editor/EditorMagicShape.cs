@@ -16,7 +16,7 @@ namespace Sapphire
        (Sprout34), integrated with permission. */
     internal static class EditorMagicShape
     {
-        private static readonly PanelKit K = new PanelKit("SapphireMagicShape", 943, PanelW);
+        private static readonly PanelKit K = new PanelKit("SapphireMagicShape", 943, PanelW, focusable: true);
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;

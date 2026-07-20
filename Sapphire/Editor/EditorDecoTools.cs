@@ -14,7 +14,7 @@ namespace Sapphire
        Based on AdofaiMappingHelper by Sprout34, integrated with permission. */
     internal static class EditorDecoTools
     {
-        private static readonly PanelKit K = new PanelKit("SapphireDecoTools", 941, PanelW);
+        private static readonly PanelKit K = new PanelKit("SapphireDecoTools", 941, PanelW, focusable: true);
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;

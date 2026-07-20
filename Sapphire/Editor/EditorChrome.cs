@@ -998,7 +998,7 @@ namespace Sapphire
             UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 905;
+            canvas.sortingOrder = 952; // top chrome: file menu/rail/dock stays above floating windows
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);

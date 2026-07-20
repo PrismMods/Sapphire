@@ -189,7 +189,7 @@ namespace Sapphire
             UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 908; // above chrome/toolbar/popups
+            canvas.sortingOrder = 954; // right-click context menu above windows/toolbar
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);

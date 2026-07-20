@@ -55,7 +55,7 @@ namespace Sapphire
             Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 910; // above everything of Sapphire's
+            canvas.sortingOrder = 958; // above everything of Sapphire's (incl. top chrome)
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);

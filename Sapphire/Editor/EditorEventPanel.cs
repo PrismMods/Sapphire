@@ -18,7 +18,7 @@ namespace Sapphire
        un-hides the game panel — decoration editing still lives there for now. */
     internal static class EditorEventPanel
     {
-        private static readonly PanelKit K = new PanelKit("SapphireEventPanel", 902, PanelW);
+        private static readonly PanelKit K = new PanelKit("SapphireEventPanel", 902, PanelW, focusable: true);
         private const float PanelW = 370f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
         private const float HeaderH = 28f;
@@ -93,7 +93,6 @@ namespace Sapphire
             else if (!K.Built) { K.Show(false); return; } // nothing to show until first scan
 
             K.Show(true);
-            K.TickDock(TopMargin(), BottomInset());
             ClampIntoView();
             TickScroll();
             TickResize();
@@ -239,7 +238,7 @@ namespace Sapphire
             panel.sizeDelta = _size;
             ResizeHandle.AttachAll(panel, true, 280f, 240f);
             K.OnDragEnd = () => K.SnapDockOnDragEnd(); // Adobe-style edge docking
-            if (!_dockInited) { _dockInited = true; K.DockSide = 2; } // docked right by default
+            if (!_dockInited) { _dockInited = true; K.SetDock(2); } // docked right by default
 
             // masked scroll viewport between header and bottom pad
             var vpGo = new GameObject("View", typeof(RectTransform));

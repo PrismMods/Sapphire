@@ -23,7 +23,7 @@ namespace Sapphire
        edge docks it Adobe-style. */
     internal static class EditorEventSelector
     {
-        private static readonly PanelKit K = new PanelKit("SapphireEventSelector", 905, PanelW);
+        private static readonly PanelKit K = new PanelKit("SapphireEventSelector", 905, PanelW, focusable: true);
         private const float PanelW = 264f;
         private const float Pad = PanelKit.Pad, RowH = 26f, Gap = 3f;
         private const float RailW = 34f;
@@ -81,7 +81,7 @@ namespace Sapphire
             if (!K.Built)
             {
                 BuildShell();
-                if (!_dockInited) { _dockInited = true; K.DockSide = 1; } // docked left by default
+                if (!_dockInited) { _dockInited = true; K.SetDock(1); } // docked left by default
                 _listDirty = true;
             }
             int armed = EditorToolbar.CurrentEventTool;
@@ -89,7 +89,6 @@ namespace Sapphire
             if (_listDirty) { _listDirty = false; BuildList(); }
 
             K.Show(true);
-            K.TickDock(TopMargin(), BottomInset());
             ClampIntoView();
             TickKeys(ed);
             TickScroll();

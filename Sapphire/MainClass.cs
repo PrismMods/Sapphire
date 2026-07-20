@@ -196,6 +196,13 @@ namespace Sapphire
                 EditorEventPanel.Tick(); Acc(25);
                 EditorEventSelector.Tick(); Acc(26);
                 EditorMasterSwitch.Tick(); Acc(24);
+                UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
+                if (EditorSuiteOn)       // central multi-window sidebar dock layout
+                {
+                    float strip = 0f;
+                    try { strip = EditorEvents.BottomStripTop; } catch { }
+                    UI.PanelKit.TickDocks(56f, strip > 0f ? strip + 100f : 12f);
+                }
 
                 if (++_perfFrames >= 900) // ≈15s at 60fps
                 {

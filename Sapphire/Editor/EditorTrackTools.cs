@@ -15,7 +15,7 @@ namespace Sapphire
        ghost preview). Based on AdofaiMappingHelper by Sprout34, integrated with permission. */
     internal static class EditorTrackTools
     {
-        private static readonly PanelKit K = new PanelKit("SapphireTrackTools", 942, PanelW);
+        private static readonly PanelKit K = new PanelKit("SapphireTrackTools", 942, PanelW, focusable: true);
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;

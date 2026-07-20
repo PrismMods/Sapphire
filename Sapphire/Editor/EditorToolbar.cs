@@ -136,10 +136,11 @@ namespace Sapphire
                 if (_canvasGo != null && _canvasGo.activeSelf) { _canvasGo.SetActive(false); CloseDialog(); }
                 return;
             }
-            // rebuild if the mod-tools category toggled (adds/removes the MSM/MH cells)
+            // rebuild if either tool category toggled (adds/removes the Sapphire or MSM/MH cells)
             bool modsNow = s.FeatToolsMods;
-            if (_canvasGo != null && modsNow != _builtWithMods) { Dispose(); }
-            if (_canvasGo == null) { _builtWithMods = modsNow; Build(); }
+            bool sapNow = s.FeatToolsSapphire;
+            if (_canvasGo != null && (modsNow != _builtWithMods || sapNow != _builtWithSapphire)) { Dispose(); }
+            if (_canvasGo == null) { _builtWithMods = modsNow; _builtWithSapphire = sapNow; Build(); }
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             // ESC deselects an active tool (and closes the dialog) — but the ESC that exits
@@ -367,7 +368,7 @@ namespace Sapphire
             UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 906; // above chrome (905), below popups (907)
+            canvas.sortingOrder = 953; // toolbar + its submenus stay above floating windows
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
@@ -378,15 +379,13 @@ namespace Sapphire
 
             const float cell = 32f, gap = 4f, pad = 5f, groupGap = 6f; // extra px between groups
             bool mods = _builtWithMods;      // MSM/MH cells present this build?
-            int tools = mods ? 10 : 7;       // 7 Sapphire cells + 3 mod cells
-            int groups = mods ? 4 : 3;       // the generate group (track/deco) drops without mods
+            bool sap = _builtWithSapphire;   // Sapphire's native tool cells present this build?
             _barGo = new GameObject("ToolBar", typeof(RectTransform));
             _barGo.transform.SetParent(_canvasGo.transform, false);
             var r = (RectTransform)_barGo.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.pivot = new Vector2(0.5f, 1f);
             r.anchoredPosition = new Vector2(0f, -10f);
-            r.sizeDelta = new Vector2(tools * (cell + gap) - gap + pad * 2f + (groups - 1) * groupGap, cell + pad * 2f);
             var bg = _barGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 7f;   // flatter, Adobe-suite look
             bg.color = new Color(0.10f, 0.10f, 0.12f, 0.96f);
@@ -394,24 +393,42 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.09f);
             bg.raycastTarget = true; // toolbar swallows clicks under it
 
-            // grouped by function: build [+ MSM/MH] → events → view (hotkeys 1..0 follow).
-            // magic ends the build group; track/deco are the "generate" group — all three
-            // gate together on FeatToolsMods.
+            // Grouped by function: build [Sapphire] + magic → generate [track/deco] → events →
+            // view. Sapphire cells gate on FeatToolsSapphire, MSM/MH on FeatToolsMods; each cell
+            // advances cx (gap within a group, gap+groupGap across a group boundary), and the bar
+            // width is taken from the final right edge so any subset lays out tightly.
             float cx = pad;
-            MakeToolCell("ToolCircle", Loc.T("Circular path"), cx, cell, DrawCircleIcon, OpenDialog); cx += cell + gap;
-            _freeAngleCellBg = MakeToolCell("ToolFreeAngle", Loc.T("Free angle"), cx, cell, DrawAngleIcon, ToggleFreeAngle); cx += cell + gap;
-            _pseudoCellBg = MakeToolCell("ToolPseudo", Loc.T("Pseudo"), cx, cell, DrawPseudoIcon, TogglePseudo); cx += cell + gap;
-            _zipCellBg = MakeToolCell("ToolZip", Loc.T("Zip (redirect through tiny angles)"), cx, cell, DrawZipIcon, ToggleZip); cx += cell + gap;
+            int prevGroup = -1;
+            Func<int, string, string, Action<GameObject>, Action, RoundedRectGraphic> Place =
+                (group, name, tip, draw, click) =>
+                {
+                    if (prevGroup != -1) cx += gap + (group != prevGroup ? groupGap : 0f);
+                    var cbg = MakeToolCell(name, tip, cx, cell, draw, click);
+                    cx += cell;
+                    prevGroup = group;
+                    return cbg;
+                };
+
+            if (sap)
+            {
+                Place(0, "ToolCircle", Loc.T("Circular path"), DrawCircleIcon, OpenDialog);
+                _freeAngleCellBg = Place(0, "ToolFreeAngle", Loc.T("Free angle"), DrawAngleIcon, ToggleFreeAngle);
+                _pseudoCellBg = Place(0, "ToolPseudo", Loc.T("Pseudo"), DrawPseudoIcon, TogglePseudo);
+                _zipCellBg = Place(0, "ToolZip", Loc.T("Zip (redirect through tiny angles)"), DrawZipIcon, ToggleZip);
+            }
             if (mods)
             {
-                _magicCellBg = MakeToolCell("ToolMagic", Loc.T("Magic shape (multiply / create / rotate)"), cx, cell, DrawMagicIcon, EditorMagicShape.Toggle); cx += cell + gap + groupGap;
-                _trackCellBg = MakeToolCell("ToolTrack", Loc.T("Track tools (fades / explode / copies / generate)"), cx, cell, DrawTrackIcon, EditorTrackTools.Toggle); cx += cell + gap;
-                _decoCellBg = MakeToolCell("ToolDeco", Loc.T("Deco tools (flipbook / video / 3D / lyrics)"), cx, cell, DrawDecoIcon, EditorDecoTools.Toggle); cx += cell + gap + groupGap;
+                _magicCellBg = Place(0, "ToolMagic", Loc.T("Magic shape (multiply / create / rotate)"), DrawMagicIcon, EditorMagicShape.Toggle);
+                _trackCellBg = Place(1, "ToolTrack", Loc.T("Track tools (fades / explode / copies / generate)"), DrawTrackIcon, EditorTrackTools.Toggle);
+                _decoCellBg = Place(1, "ToolDeco", Loc.T("Deco tools (flipbook / video / 3D / lyrics)"), DrawDecoIcon, EditorDecoTools.Toggle);
             }
-            else cx += groupGap; // build group ends at zip
-            _inspCellBg = MakeToolCell("ToolInspector", Loc.T("Inspector (copy tile events)"), cx, cell, DrawDropperIcon, ToggleInspector); cx += cell + gap + groupGap;
-            _cameraCellBg = MakeToolCell("ToolCamera", Loc.T("Camera path"), cx, cell, DrawCameraIcon, ToggleCameraPath); cx += cell + gap;
-            MakeToolCell("ToolVfx", Loc.T("VFX preview (ESC exits)"), cx, cell, DrawEyeOffIcon, EditorVfxPreview.Toggle);
+            if (sap)
+            {
+                _inspCellBg = Place(2, "ToolInspector", Loc.T("Inspector (copy tile events)"), DrawDropperIcon, ToggleInspector);
+                _cameraCellBg = Place(3, "ToolCamera", Loc.T("Camera path"), DrawCameraIcon, ToggleCameraPath);
+                Place(3, "ToolVfx", Loc.T("VFX preview (ESC exits)"), DrawEyeOffIcon, EditorVfxPreview.Toggle);
+            }
+            r.sizeDelta = new Vector2(cx + pad, cell + pad * 2f);
             SyncInspectorHighlight();
             SyncZipHighlight();
             SyncMagicShapeHighlight();
@@ -422,7 +439,7 @@ namespace Sapphire
             SyncCameraHighlight();
             BuildToolLabel();
             BuildToolTip();
-            if (_pseudoTool) ShowPseudoMenu();
+            if (sap && _pseudoTool) ShowPseudoMenu();
         }
 
         // With NO tile selected (and no tool owning digits), number keys pick the nth toolbar
@@ -438,16 +455,16 @@ namespace Sapphire
                 if (ed.userIsEditingAnInputField) return;
             }
             catch { return; }
-            if (Input.GetKeyDown(KeyCode.Alpha1)) OpenDialog();
-            else if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleFreeAngle();
-            else if (Input.GetKeyDown(KeyCode.Alpha3)) TogglePseudo();
-            else if (Input.GetKeyDown(KeyCode.Alpha4)) ToggleZip();
+            if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha1)) OpenDialog();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha2)) ToggleFreeAngle();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha3)) TogglePseudo();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha4)) ToggleZip();
             else if (_builtWithMods && Input.GetKeyDown(KeyCode.Alpha5)) EditorMagicShape.Toggle();
             else if (_builtWithMods && Input.GetKeyDown(KeyCode.Alpha6)) EditorTrackTools.Toggle();
             else if (_builtWithMods && Input.GetKeyDown(KeyCode.Alpha7)) EditorDecoTools.Toggle();
-            else if (Input.GetKeyDown(KeyCode.Alpha8)) ToggleInspector();
-            else if (Input.GetKeyDown(KeyCode.Alpha9)) ToggleCameraPath();
-            else if (Input.GetKeyDown(KeyCode.Alpha0)) EditorVfxPreview.Toggle();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha8)) ToggleInspector();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha9)) ToggleCameraPath();
+            else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha0)) EditorVfxPreview.Toggle();
         }
 
         // Small hover-hint text just below the toolbar (Adobe-style).
@@ -1062,6 +1079,7 @@ namespace Sapphire
 
         private static RoundedRectGraphic _magicCellBg;
         private static bool _builtWithMods = true; // whether the current bar includes MSM/MH cells
+        private static bool _builtWithSapphire = true; // whether the current bar includes Sapphire's native tool cells
 
         internal static void SyncMagicShapeHighlight()
         {

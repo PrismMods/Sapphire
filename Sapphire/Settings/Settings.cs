@@ -167,7 +167,9 @@ namespace Sapphire
         public bool EditorDarkTheme = false;
 
         // ── granular facades over the categories (do not assign; read only) ──
-        [System.Xml.Serialization.XmlIgnore] public bool EditorTileAngle => FeatToolsSapphire;
+        // Passive tile-angle readout: NOT a tool — stays up whenever the suite is on (its
+        // caller already gates on EditorSuiteOn), so disabling Sapphire tools keeps it.
+        [System.Xml.Serialization.XmlIgnore] public bool EditorTileAngle => true;
         [System.Xml.Serialization.XmlIgnore] public bool EditorShowEvents => FeatTimeline;
         [System.Xml.Serialization.XmlIgnore] public bool EditorTimeline => FeatTimeline;
         [System.Xml.Serialization.XmlIgnore] public bool EditorTransport => FeatTimeline;
