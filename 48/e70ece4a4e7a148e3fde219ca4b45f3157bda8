@@ -1,0 +1,19 @@
+PERF.md
+  s_eb41f82aa32f71::t_648755c7ee0946 1-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "48e70ece4a4e7a148e3fde219ca4b45f3157bda8",
+  "prompts": {},
+  "sessions": {
+    "s_eb41f82aa32f71": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d19eb0fc-5bd9-41b7-bdef-6c1dcd975ad0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "koren <131921956+kkorenn@users.noreply.github.com>"
+    }
+  }
+}
