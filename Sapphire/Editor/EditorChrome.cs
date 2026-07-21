@@ -197,11 +197,17 @@ namespace Sapphire
         {
             try
             {
-                var bar = ed.buttonFileActionDropdown != null
-                    ? ed.buttonFileActionDropdown.transform.parent : null;
-                if (bar == null) return;
-                var cg = bar.GetComponent<CanvasGroup>();
-                if (cg == null) cg = bar.gameObject.AddComponent<CanvasGroup>();
+                // Reuse the resolved group: this runs unthrottled every frame, and while the
+                // alpha write below is guarded, the GetComponent lookup ahead of it was not.
+                var cg = _fadedBar;
+                if (cg == null)
+                {
+                    var bar = ed.buttonFileActionDropdown != null
+                        ? ed.buttonFileActionDropdown.transform.parent : null;
+                    if (bar == null) return;
+                    cg = bar.GetComponent<CanvasGroup>();
+                    if (cg == null) cg = bar.gameObject.AddComponent<CanvasGroup>();
+                }
                 // interactable stays TRUE: Button.OnPointerClick refuses to fire under a
                 // non-interactable group, which broke every proxied click. Alpha 0 +
                 // blocksRaycasts false hides it and stops direct clicks just fine.

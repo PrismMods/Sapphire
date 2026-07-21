@@ -20,7 +20,8 @@ namespace Sapphire
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;
-        private static string _layoutSig;
+        private static long _layoutSig = NoSig;
+        private const long NoSig = long.MinValue;   // forces a rebuild; the fold below never produces it
 
         // multiply state
         private static int _mMode;          // 0 target BPM, 1 multiplier
@@ -51,7 +52,7 @@ namespace Sapphire
             _open = !_open;
             _status = "";
             if (_open && SelectionRange(out int min, out int max) && min != max)
-            { _cStart = min; _cEnd = max; _rStart = min; _rEnd = max; _layoutSig = null; }
+            { _cStart = min; _cEnd = max; _rStart = min; _rEnd = max; _layoutSig = NoSig; }
             EditorToolbar.SyncMagicShapeHighlight();
         }
 
@@ -67,7 +68,13 @@ namespace Sapphire
                 SyncPreviewTransition(ed);
                 return;
             }
-            string sig = _tab + "|" + _mMode + "|" + (_mReshape ? 1 : 0);
+            // Integer fold, not a string: `int + string` boxes each operand and the chain
+            // compiles to string.Concat(object[]) — ~4 allocations every frame the panel is
+            // open. (See EditorCopyPanel.LayoutSig.)
+            long sig = 17;
+            sig = sig * 31 + _tab;
+            sig = sig * 31 + _mMode;
+            sig = sig * 31 + (_mReshape ? 1 : 0);
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -80,7 +87,7 @@ namespace Sapphire
         internal static void Dispose()
         {
             K.Dispose();
-            _statusTmp = null; _layoutSig = null;
+            _statusTmp = null; _layoutSig = NoSig;
             ClearFakeFloors();
         }
 
@@ -161,7 +168,7 @@ namespace Sapphire
                 using (new SaveStateScope(ed))
                     MagicShapeEngine.CreateShape(start, end, _cVerts, _cInverse);
                 _cPreview = false;
-                _layoutSig = null; // preview toggle tint refresh
+                _layoutSig = NoSig; // preview toggle tint refresh
                 SetStatus(Loc.T("Shape created"));
             }
             catch (Exception ex)
@@ -197,7 +204,7 @@ namespace Sapphire
 
         private static bool SelectionRange(out int min, out int max) => PanelKit.SelectionRange(out min, out max);
 
-        private static void Refresh() { _layoutSig = null; }
+        private static void Refresh() { _layoutSig = NoSig; }
 
         private static void SetStatus(string s)
         {

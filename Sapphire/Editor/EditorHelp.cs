@@ -25,6 +25,7 @@ namespace Sapphire
         private static RectTransform _panelRect;
         private static bool _open;
         private static readonly List<RaycastResult> _hits = new List<RaycastResult>();
+        private static PointerEventData _hoverPed;   // reused by HoverTarget (per-frame while open)
 
         internal static bool IsOpen => _open;
 
@@ -79,9 +80,13 @@ namespace Sapphire
             topicKey = null;
             var es = EventSystem.current;
             if (es == null) return null;
-            var pd = new PointerEventData(es) { position = Input.mousePosition };
+            // Reused across frames: this runs every frame while help mode is up, and a fresh
+            // PointerEventData per frame was pure garbage. (Same pattern as EditorToolbar's
+            // PointerOverSapphireUI.)
+            if (_hoverPed == null) _hoverPed = new PointerEventData(es);
+            _hoverPed.position = Input.mousePosition;
             _hits.Clear();
-            es.RaycastAll(pd, _hits);
+            es.RaycastAll(_hoverPed, _hits);
             foreach (var h in _hits)
             {
                 if (h.gameObject == null) continue;
@@ -90,7 +95,8 @@ namespace Sapphire
                 if (root == null) continue;
                 string rn = root.name;
                 if (rn == "SapphireHelp") continue;              // our own overlay
-                if (!rn.StartsWith("Sapphire")) continue;        // game UI: no topic
+                // Ordinal: the default overload takes Mono's culture-sensitive compare path.
+                if (!rn.StartsWith("Sapphire", System.StringComparison.Ordinal)) continue; // game UI: no topic
                 // specific element name first, walking up; else the canvas fallback
                 for (var t = h.gameObject.transform; t != null && t != root.transform; t = t.parent)
                 {

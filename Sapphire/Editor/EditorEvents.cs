@@ -35,6 +35,7 @@ namespace Sapphire
         private static readonly List<RectTransform> _chipRects = new List<RectTransform>();
         private static readonly List<LevelEvent> _chipEvents = new List<LevelEvent>();
         private static int _chipFloor = -2, _chipCount = -1, _chipTotal = -1;
+        private static int _chipScanCd;   // frames until the next per-floor event recount
         private const int MaxChips = 12;
 
         // ── timeline ──
@@ -465,13 +466,22 @@ namespace Sapphire
             }
             if (!_chipsRow.gameObject.activeSelf) _chipsRow.gameObject.SetActive(true);
 
-            int seq = fl.seqID, n = 0;
-            for (int i = 0; i < events.Count; i++)
-                if (events[i] != null && events[i].floor == seq) n++;
-            if (seq != _chipFloor || n != _chipCount || events.Count != _chipTotal)
+            /* Counting this floor's events is O(all level events) and ran every frame purely
+               to notice a change. A different tile or a different total already implies one,
+               and both are O(1) — the only case they miss is an event moved between floors
+               with the total unchanged, which the cadence catches. */
+            int seq = fl.seqID;
+            if (seq != _chipFloor || events.Count != _chipTotal || --_chipScanCd <= 0)
             {
-                _chipFloor = seq; _chipCount = n; _chipTotal = events.Count;
-                RebuildChips(seq, events);
+                _chipScanCd = 15;
+                int n = 0;
+                for (int i = 0; i < events.Count; i++)
+                    if (events[i] != null && events[i].floor == seq) n++;
+                if (seq != _chipFloor || n != _chipCount || events.Count != _chipTotal)
+                {
+                    _chipFloor = seq; _chipCount = n; _chipTotal = events.Count;
+                    RebuildChips(seq, events);
+                }
             }
 
             if (tip != null) return;
@@ -938,6 +948,7 @@ namespace Sapphire
         internal static int _camSelLane;
         internal static LevelEvent _camSel;   // keyframe shown in the inline inspector
         internal static bool _camSelDirty;
+        private static int _camSelCheckCd;   // frames until the next _camSel liveness check
 
         /* Inline keyframe inspector (the "expanded track"): a row of editable fields at
            the top of the strip for the clicked keyframe — duration, position, rotation,
@@ -955,7 +966,14 @@ namespace Sapphire
             }
             // ESC closes the row (before other ESC consumers is fine — it's passive UI)
             if (Input.GetKeyDown(KeyCode.Escape)) { _camSel = null; _camSelDirty = true; _tlSig = 0; _scanCooldown = 0; return; }
-            if (!ed.events.Contains(_camSel)) { _camSel = null; _camSelDirty = true; _tlSig = 0; return; }
+            /* O(all level events) with a virtual Equals per element (LevelEvent overrides
+               none) — and people park in CAM mode for whole sessions, so this ran every
+               frame for nothing. The selection only dies on an edit; check on a cadence. */
+            if (--_camSelCheckCd <= 0)
+            {
+                _camSelCheckCd = 15;
+                if (!ed.events.Contains(_camSel)) { _camSel = null; _camSelDirty = true; _tlSig = 0; return; }
+            }
             if (!_camSelDirty) return;
             _camSelDirty = false;
             BuildCamInspector(ed, _camSel);
@@ -1787,7 +1805,17 @@ namespace Sapphire
             int tlh = TexLaneHEff;
             int subH = CamMode && _expandedLane >= 0 ? (int)SubRowH : 0;
             int texH = laneCount * tlh + subH;
-            var px = new Color32[TexW * texH];
+            /* ~1 MB per repaint at the default lane height (4.3 MB with the height grip
+               maxed), and this runs every frame while wheel-panning or drag-scrubbing —
+               Boehm puts anything over 8 KB in the large-object area, so allocating fresh
+               was the mod's single biggest GC-stutter source. Reuse the buffer; SetPixels32
+               demands an exact length match, so only reallocate when the size truly changes.
+               Clear is required: the painter writes marks only and relies on a zero (fully
+               transparent) background. */
+            int need = TexW * texH;
+            if (_px == null || _px.Length != need) _px = new Color32[need];
+            else System.Array.Clear(_px, 0, need);
+            var px = _px;
             float viewEnd = _viewStart + 1f / _zoom;
 
             /* Measure grid: 4/4 measures in BEAT domain, mapped to time through the game's
@@ -1940,6 +1968,9 @@ namespace Sapphire
             _markerTex.SetPixels32(px);
             _markerTex.Apply(false);
         }
+
+        // Reused marker-texture scratch buffer (see RenderMarkers).
+        private static Color32[] _px;
 
         // sub-row diamond cache: texture-x → event (for hit-testing)
         private static readonly List<KeyValuePair<int, LevelEvent>> _subKf = new List<KeyValuePair<int, LevelEvent>>();
@@ -3117,10 +3148,14 @@ namespace Sapphire
         // Dragging the strip's top edge scales lane height; rebuilds throttled to whole
         // pixels so the texture isn't re-allocated every frame of the drag.
         private class StripHeightGrip : MonoBehaviour,
-            UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler
+            UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler,
+            UnityEngine.EventSystems.IPointerUpHandler
         {
             private float _acc;
-            public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e) { _acc = 0f; }
+            private int _lastRebuildFrame;
+            public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
+            { _acc = 0f; _lastRebuildFrame = 0; }
+
             public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
             {
                 var canvas = GetComponentInParent<Canvas>();
@@ -3132,8 +3167,22 @@ namespace Sapphire
                 _acc -= step;
                 float min = KeyframeMode ? -18f : -6f; // never below readable
                 _laneHExtra = Mathf.Clamp(_laneHExtra + step, min, 70f);
-                _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                _viewDirty = true;
+                /* Clearing _tlSig forces the full RebuildStructure — floor entry times, tempo
+                   map, time-signature detection, per-lane sorts, lane-label respawn — none of
+                   which depends on lane height; only the texture size and label placement do.
+                   Doing that on every drag frame cost 10-30 ms per frame on a big level, so
+                   the grip visibly froze. Refresh on a cadence while dragging; OnPointerUp
+                   guarantees the exact final rebuild. */
+                if (Time.frameCount - _lastRebuildFrame >= 6)
+                {
+                    _lastRebuildFrame = Time.frameCount;
+                    _tlSig = 0; _scanCooldown = 0;
+                }
             }
+
+            public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e)
+            { _tlSig = 0; _scanCooldown = 0; _viewDirty = true; }
         }
 
         private static void MakeZoomButton(Transform parent, string label, float x, UnityEngine.Events.UnityAction onClick)

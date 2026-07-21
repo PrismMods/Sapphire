@@ -223,7 +223,9 @@ namespace Sapphire.UI
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
             rect.pivot = new Vector2(0f, 1f);
 
-            SolidImage(go, Theme.Panel);
+            // Purely a backdrop, and it sits over the '?' icon that opened it — leaving it a
+            // raycast target let the tooltip swallow that icon's pointer enter/exit.
+            SolidImage(go, Theme.Panel).raycastTarget = false;
             AddBorder(go, Theme.PanelBorder, 1f);
 
             var vlg = go.AddComponent<VerticalLayoutGroup>();

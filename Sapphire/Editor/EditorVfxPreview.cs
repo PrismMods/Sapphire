@@ -13,7 +13,8 @@ namespace Sapphire
     internal static class EditorVfxPreview
     {
         private static bool _on;
-        private static readonly List<CanvasGroup> _hidden = new List<CanvasGroup>();
+        // Set, not a list: Sweep tests membership per canvas and restore order doesn't matter.
+        private static readonly HashSet<CanvasGroup> _hidden = new HashSet<CanvasGroup>();
         private static int _cooldown;
 
         internal static bool IsOn => _on;
@@ -42,11 +43,13 @@ namespace Sapphire
 
         private static void Sweep()
         {
-            foreach (var canvas in Object.FindObjectsOfType<Canvas>())
+            // Unsorted variant (no InstanceID sort we'd throw away) and an ordinal name test;
+            // _hidden is a HashSet so the membership checks aren't a linear walk per canvas.
+            foreach (var canvas in Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
             {
                 if (canvas == null || canvas.rootCanvas != canvas) continue;
                 string n = canvas.name;
-                if (!n.StartsWith("Sapphire") && n != "levelEditorScene"
+                if (!n.StartsWith("Sapphire", System.StringComparison.Ordinal) && n != "levelEditorScene"
                     && n != "UICanvas" && n != "UI Root" && n != "Canvas" && n != "PauseMenu(Clone)"
                     && canvas.GetComponentInChildren<scrUIController>(true) == null) continue;
                 var go = canvas.gameObject;
@@ -55,7 +58,7 @@ namespace Sapphire
                 {
                     cg.alpha = 0f;
                     cg.blocksRaycasts = false;
-                    if (!_hidden.Contains(cg)) _hidden.Add(cg);
+                    _hidden.Add(cg);
                 }
             }
         }

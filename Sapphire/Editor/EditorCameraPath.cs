@@ -37,6 +37,9 @@ namespace Sapphire
 
         private static bool _on;
         private static GameObject _rootGo;      // scene-local (dies with the scene; Tick rebuilds)
+        // Recycled path dots — see Rebuild. Parked (inactive) rather than destroyed between rebuilds.
+        private static readonly List<SpriteRenderer> _dotPool = new List<SpriteRenderer>();
+        private static int _dotUsed;
         private static GameObject _selGo;       // viewport box (animatable: local-space edges)
         private static Sprite _dotSprite;
         private static readonly List<Key> _keys = new List<Key>();
@@ -123,7 +126,9 @@ namespace Sapphire
 
         private static void Hide()
         {
+            // Destroying the root takes the pooled dots with it — drop the stale references.
             if (_rootGo != null) UnityEngine.Object.Destroy(_rootGo);
+            _dotPool.Clear(); _dotUsed = 0;
             _rootGo = null; _selGo = null; _playing = false;
         }
 
@@ -481,28 +486,44 @@ namespace Sapphire
         }
 
         // ── drawing ─────────────────────────────────────────────────────────
+        /* Was: Hide() → Destroy(_rootGo) → respawn every dot as a fresh GameObject +
+           SpriteRenderer. The rebuild signature folds in the camera view rect, so ANY pan
+           retriggered this — hundreds of GameObjects churned several times a second, plus
+           the SpriteRenderer registration cost. Keep the root and recycle the dots. Only the
+           path dots are pooled; the selection box (_selGo) has its own lifetime and is
+           rebuilt on selection change, not on pan. */
         private static void Rebuild(Rect view)
         {
-            Hide(); // drops the selection box too; caller re-shows it
-            if (_keys.Count == 0) return;
+            // Preserve Hide()'s side effects for callers (selection box drops, playback stops)
+            // without tearing down the dot objects.
+            if (_selGo != null) { UnityEngine.Object.Destroy(_selGo); _selGo = null; }
+            _playing = false;
+            if (_rootGo == null) _rootGo = new GameObject("SapphireCameraPath");
+            _dotUsed = 0;
 
-            _rootGo = new GameObject("SapphireCameraPath");
+            if (_keys.Count > 0)
+            {
+                var lineCol = new Color(0.35f, 0.85f, 1f, 0.9f);
+                for (int i = 1; i < _keys.Count; i++)
+                    DrawDotted(_rootGo.transform, _keys[i - 1].pos, _keys[i].pos, lineCol, false, view, true);
 
-            var lineCol = new Color(0.35f, 0.85f, 1f, 0.9f);
-            for (int i = 1; i < _keys.Count; i++)
-                DrawDotted(_rootGo.transform, _keys[i - 1].pos, _keys[i].pos, lineCol, false, view);
+                for (int i = 0; i < _keys.Count; i++)
+                    MakeDot(_rootGo.transform, _keys[i].pos, 0.28f, _keys[i].player
+                        ? new Color(1f, 0.65f, 0.25f, 0.95f)    // Player-relative: tracks the ball
+                        : new Color(0.35f, 0.85f, 1f, 0.95f), false, true);
+            }
 
-            for (int i = 0; i < _keys.Count; i++)
-                MakeDot(_rootGo.transform, _keys[i].pos, 0.28f, _keys[i].player
-                    ? new Color(1f, 0.65f, 0.25f, 0.95f)    // Player-relative: tracks the ball
-                    : new Color(0.35f, 0.85f, 1f, 0.95f), false);
+            // Park whatever this path didn't need; they stay warm for the next rebuild.
+            for (int i = _dotUsed; i < _dotPool.Count; i++)
+                if (_dotPool[i] != null && _dotPool[i].gameObject.activeSelf)
+                    _dotPool[i].gameObject.SetActive(false);
         }
 
         // Dotted run of mini-dots from a to b at FIXED world spacing (the one primitive proven to
         // render here). An optional clip rect draws only the visible slice, phase anchored to the
         // segment start so the dots don't crawl while panning.
         private static void DrawDotted(Transform parent, Vector2 a, Vector2 b, Color color, bool local,
-            Rect? clip = null)
+            Rect? clip = null, bool pooled = false)
         {
             float len = Vector2.Distance(a, b);
             if (len < 0.001f) return;
@@ -516,7 +537,7 @@ namespace Sapphire
             int count = Mathf.FloorToInt((s1 - s0) / spacing) + 1;
             if (count > 1500) spacing = (s1 - s0) / 1500f;   // safety cap at extreme zoom-outs
             for (float s = Mathf.Ceil(s0 / spacing) * spacing; s <= s1; s += spacing)
-                MakeDot(parent, Vector2.Lerp(a, b, s / len), 0.16f, color, local);
+                MakeDot(parent, Vector2.Lerp(a, b, s / len), 0.16f, color, local, pooled);
         }
 
         // Liang-Barsky segment/rect clip; returns the [t0,t1] parametric slice inside the rect.
@@ -540,17 +561,35 @@ namespace Sapphire
             return true;
         }
 
-        private static void MakeDot(Transform parent, Vector2 pos, float scale, Color color, bool local)
+        private static void MakeDot(Transform parent, Vector2 pos, float scale, Color color, bool local,
+            bool pooled = false)
         {
-            var go = new GameObject("Dot");
-            go.transform.SetParent(parent, false);
-            if (local) go.transform.localPosition = new Vector3(pos.x, pos.y, 0f);
-            else go.transform.position = new Vector3(pos.x, pos.y, 0f);
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = DotSprite();
+            SpriteRenderer sr = null;
+            if (pooled)
+            {
+                while (_dotUsed < _dotPool.Count && _dotPool[_dotUsed] == null) _dotPool.RemoveAt(_dotUsed);
+                if (_dotUsed < _dotPool.Count)
+                {
+                    sr = _dotPool[_dotUsed];
+                    if (!sr.gameObject.activeSelf) sr.gameObject.SetActive(true);
+                }
+            }
+            if (sr == null)
+            {
+                var go = new GameObject("Dot");
+                go.transform.SetParent(parent, false);
+                sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = DotSprite();
+                sr.sortingOrder = 32001;
+                if (pooled) _dotPool.Add(sr);
+            }
+            if (pooled) _dotUsed++;
+
+            var t = sr.transform;
+            if (local) t.localPosition = new Vector3(pos.x, pos.y, 0f);
+            else t.position = new Vector3(pos.x, pos.y, 0f);
+            t.localScale = Vector3.one * scale;
             sr.color = color;
-            sr.sortingOrder = 32001;
-            go.transform.localScale = Vector3.one * scale;
         }
 
         private static Sprite DotSprite()

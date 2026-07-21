@@ -92,6 +92,7 @@ namespace Sapphire
         private static bool _pseudoMidspin;          // add a trailing midspin (reverse direction)
         private static RoundedRectGraphic _pseudoMidspinBg;
         private static TMPro.TextMeshProUGUI _pseudoCounterLbl;   // level midspin count
+        private static int _spinCountCd;                          // frames until the next angleData scan
         private static TMP_InputField _fPseudoTap;               // custom tap-angle input
         private static readonly RoundedRectGraphic[] _pseudoAngleBtnBgs = new RoundedRectGraphic[5];
         private static TMP_InputField _fPseudoCustom;            // optional per-tile angles (space-sep, >2 keys)
@@ -276,12 +277,13 @@ namespace Sapphire
         // Keyboard select (single-digit numbers) + left-click a tile to convert it.
         private static void TickPseudoTool(scnEditor ed)
         {
-            for (int i = 0; i < PseudoNumbers.Length; i++)
-            {
-                int num = PseudoNumbers[i];
-                if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
-                { _pseudoN = num; SyncPseudoMenuHighlight(); }
-            }
+            if (Input.anyKeyDown)   // GetKeyDown can't be true otherwise; skips 9 ICalls/frame
+                for (int i = 0; i < PseudoNumbers.Length; i++)
+                {
+                    int num = PseudoNumbers[i];
+                    if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
+                    { _pseudoN = num; SyncPseudoMenuHighlight(); }
+                }
             int selCount = 0;
             try { selCount = ed.selectedFloors != null ? ed.selectedFloors.Count : 0; } catch { }
 
@@ -330,9 +332,15 @@ namespace Sapphire
                 _selPrevFrame = curSel;
             }
 
-            // Live midspin count for the level (999s in angleData).
-            if (_pseudoCounterLbl != null)
+            /* Live midspin count for the level (999s in angleData). angleData holds one entry
+               per tile, so this is a 20k-100k element scan on big community charts — running
+               it every frame (and re-assigning the label unconditionally, which re-dirties the
+               TMP mesh) was pure waste for a number that changes only on an edit. Scan on a
+               cadence; the text compare keeps the mesh regen to actual changes and still
+               repaints correctly if the label object is rebuilt. */
+            if (_pseudoCounterLbl != null && --_spinCountCd <= 0)
             {
+                _spinCountCd = 12;
                 int spins = 0;
                 try
                 {
@@ -340,7 +348,8 @@ namespace Sapphire
                     if (ad != null) for (int i = 0; i < ad.Count; i++) if (ad[i] == 999f) spins++;
                 }
                 catch { }
-                _pseudoCounterLbl.text = "Total: " + spins;
+                string txt = "Total: " + spins;
+                if (_pseudoCounterLbl.text != txt) _pseudoCounterLbl.text = txt;
             }
         }
 
@@ -446,6 +455,9 @@ namespace Sapphire
         // tool. With a tile selected the digits belong to the event dock instead (EditorChrome).
         private static void TickToolHotkeys(scnEditor ed)
         {
+            // Everything below is GetKeyDown, which can only fire on a frame where a key went
+            // down — so one gate skips ten ICalls plus the input-field guard's GetComponents.
+            if (!Input.anyKeyDown) return;
             try
             {
                 if (_pseudoTool || _zipTool) return; // their digits set the key count; every other tool can be
@@ -1151,12 +1163,13 @@ namespace Sapphire
         private static void TickZipTool(scnEditor ed)
         {
             // digits set the key count (zips start at 4)
-            for (int i = 0; i < ZipNumbers.Length; i++)
-            {
-                int num = ZipNumbers[i];
-                if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
-                { _zipN = num; SyncZipMenuHighlight(); }
-            }
+            if (Input.anyKeyDown)   // GetKeyDown can't be true otherwise; skips 7 ICalls/frame
+                for (int i = 0; i < ZipNumbers.Length; i++)
+                {
+                    int num = ZipNumbers[i];
+                    if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
+                    { _zipN = num; SyncZipMenuHighlight(); }
+                }
 
             // two-click guard: re-click the selected tile to zip it
             int curSel = -1;
@@ -1449,7 +1462,9 @@ namespace Sapphire
         {
             Vector2 w = ClickWorld(ed);
             scrFloor best = null;
-            float bestD = 0.7f;
+            // Squared throughout: this walks every tile in the level on each right-click, and
+            // rapid stamping is the advertised workflow — no reason to pay a sqrt per tile.
+            float bestSqr = 0.7f * 0.7f;
             try
             {
                 var floors = ed.floors;
@@ -1458,8 +1473,8 @@ namespace Sapphire
                     {
                         var f = floors[i];
                         if (f == null) continue;
-                        float d = Vector2.Distance((Vector2)f.transform.position, w);
-                        if (d < bestD) { bestD = d; best = f; }
+                        float d = ((Vector2)f.transform.position - w).sqrMagnitude;
+                        if (d < bestSqr) { bestSqr = d; best = f; }
                     }
             }
             catch { }
@@ -1755,7 +1770,10 @@ namespace Sapphire
                     if (go == null) continue;
                     var c = go.GetComponentInParent<Canvas>();
                     var rc = c != null ? c.rootCanvas : null;
-                    if (rc != null && rc.name.StartsWith("Sapphire")) { _povResult = true; break; }
+                    // Ordinal: the default StartsWith goes through Mono's culture-sensitive
+                    // CompareInfo path, and Object.name marshals a fresh string each read.
+                    if (rc != null && rc.name.StartsWith("Sapphire", System.StringComparison.Ordinal))
+                    { _povResult = true; break; }
                 }
             }
             catch { }

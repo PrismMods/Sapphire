@@ -18,7 +18,8 @@ namespace Sapphire
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;
-        private static string _layoutSig;
+        private static long _layoutSig = NoSig;
+        private const long NoSig = long.MinValue;   // forces a rebuild; the fold below never produces it
         private static int _tab; // 0 flipbook, 1 extract, 2 3d, 3 lyrics
 
         internal static bool IsOpen => _open;
@@ -89,7 +90,7 @@ namespace Sapphire
             {
                 _fbFrom = _d3From = _lyFrom = min;
                 _fbTo = _d3To = _lyTo = max;
-                _layoutSig = null;
+                _layoutSig = NoSig;
             }
             EditorToolbar.SyncDecoToolsHighlight();
         }
@@ -101,7 +102,14 @@ namespace Sapphire
             bool want = _open && ed != null && !ed.playMode && MainClass.EditorSuiteOn
                        && MainClass.Settings != null && MainClass.Settings.FeatToolsMods;
             if (!want) { K.Show(false); return; }
-            string sig = _tab + "|" + (_lyAsDeco ? 1 : 0) + "|" + (_lyDis ? 1 : 0) + "|" + (_fbWindowOn ? 1 : 0);
+            // Integer fold, not a string: `int + string` boxes each operand and the chain
+            // compiles to string.Concat(object[]) — ~5 allocations every frame the panel is
+            // open. (See EditorCopyPanel.LayoutSig.)
+            long sig = 17;
+            sig = sig * 31 + _tab;
+            sig = sig * 31 + (_lyAsDeco ? 1 : 0);
+            sig = sig * 31 + (_lyDis ? 1 : 0);
+            sig = sig * 31 + (_fbWindowOn ? 1 : 0);
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -113,7 +121,7 @@ namespace Sapphire
         internal static void Dispose()
         {
             K.Dispose();
-            _statusTmp = null; _layoutSig = null;
+            _statusTmp = null; _layoutSig = NoSig;
             TextToPng.Dispose();
         }
 
@@ -123,7 +131,7 @@ namespace Sapphire
             if (_statusTmp != null) _statusTmp.text = _status;
         }
 
-        private static void Refresh() { _layoutSig = null; }
+        private static void Refresh() { _layoutSig = NoSig; }
 
         private static Tuple<int, int> Range(int from, int to)
         {

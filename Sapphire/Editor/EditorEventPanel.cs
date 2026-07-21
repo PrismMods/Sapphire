@@ -30,6 +30,8 @@ namespace Sapphire
         private static readonly HashSet<int> _expandedTypes = new HashSet<int>();   // tree: type nodes
         private static readonly HashSet<long> _expandedInst = new HashSet<long>();   // type*1000+instance
         private static long _sig;
+        private const long EmptySig = -1L;     // _sig marker: scanned, tile has no events
+        private static bool _empty;            // last scan found nothing on this floor
         private static bool _dirty;            // a scan/rebuild is pending
         private static int _scanCd;            // frames until the next external-change rescan
         private static CanvasGroup _gameCg;    // the hidden game panel
@@ -63,7 +65,7 @@ namespace Sapphire
             if (!want)
             {
                 K.Show(false);
-                _floor = -1; _sig = 0;
+                _floor = -1; _sig = 0; _empty = false;
                 return;
             }
 
@@ -81,7 +83,15 @@ namespace Sapphire
             {
                 _dirty = false;
                 var events = FloorEvents(ed, floor);
-                if (events.Count == 0) { K.Show(false); _floor = -1; _sig = 0; return; }
+                /* Empty tile: latch it instead of clobbering _floor/_sig. Resetting those
+                   made floorChanged (and the _sig == 0 redraw request) true again on the
+                   very next frame, so FloorEvents — a list alloc plus a scan of EVERY event
+                   in the level — re-ran every frame for as long as an eventless tile stayed
+                   selected, which is most of the time while building. EmptySig is only a
+                   "scanned, nothing here" marker; floor changes, our own edits (_sig = 0)
+                   and the 12-frame external-change rescan all still force a re-scan. */
+                if (events.Count == 0) { K.Show(false); _empty = true; _sig = EmptySig; return; }
+                _empty = false;
                 // Shell (panel/header/viewport/resize) built once + on floor change; expanding
                 // a section rebuilds only the CONTENT tree.
                 bool rebuildContent = false;
@@ -90,7 +100,9 @@ namespace Sapphire
                 if (sig != _sig) { _sig = sig; rebuildContent = true; }
                 if (rebuildContent) BuildContent(ed, events);
             }
-            else if (!K.Built) { K.Show(false); return; } // nothing to show until first scan
+            // Nothing to show until the first scan, or when the latch says the tile is empty
+            // (K may still be built from a previously selected tile).
+            else if (!K.Built || _empty) { K.Show(false); return; }
 
             K.Show(true);
             ClampIntoView();
@@ -115,7 +127,7 @@ namespace Sapphire
         {
             RestoreGamePanel();
             K.Dispose();
-            _viewport = null; _content = null; _sig = 0; _floor = -1;
+            _viewport = null; _content = null; _sig = 0; _floor = -1; _empty = false;
         }
 
         // ── game panel hide/restore (visuals only — it stays the model) ─────

@@ -149,26 +149,34 @@ namespace Sapphire
                 "EditorMagicShape", "EditorTrackTools", "EditorDecoTools", "EditorMasterSwitch",
                 "EditorEventPanel", "EditorEventSelector",
             };
+            // Reused by the UI census so it doesn't allocate an array per canvas.
+            private static readonly List<UnityEngine.UI.Graphic> _censusBuf = new List<UnityEngine.UI.Graphic>();
             private static readonly double[] _perfMs = new double[27];
             private static readonly double[] _perfMax = new double[27];
             private static int _perfFrames;
-            private static readonly System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
 
-            // lap timer: banks the elapsed slice into module i and restarts (no allocations)
+            /* Lap timer: banks the elapsed slice into module i (no allocations). Reads the raw
+               timestamp once per lap instead of Elapsed + Restart (two platform timer reads,
+               54 per frame across 27 modules) and converts to ms only in the report block. */
+            private static long _lap;
+            private static readonly double TicksToMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+
             private static void Acc(int i)
             {
-                double ms = _sw.Elapsed.TotalMilliseconds;
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                double ms = (now - _lap) * TicksToMs;
+                _lap = now;
                 _perfMs[i] += ms;
                 if (ms > _perfMax[i]) _perfMax[i] = ms;
-                _sw.Restart();
             }
 
             private void Update()
             {
                 // Keep exactly one EventSystem alive (a stray DDOL one breaks carets/typing).
-                if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); }
+                // Same cadence drains the log buffer so a burst costs one write, not hundreds.
+                if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
 
-                _sw.Restart();
+                _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
                 EditorSkin.Tick(); Acc(2);
@@ -215,28 +223,38 @@ namespace Sapphire
                         sb.Append(PerfNames[i]).Append(" avg=").Append(avg.ToString("0.00"))
                           .Append("ms max=").Append(_perfMax[i].ToString("0.0")).Append("ms");
                     }
-                    // UI census: the Tick timers above miss Unity's own per-frame UI cost
-                    // (draw calls + EventSystem raycasting), which scales with element count.
-                    // Count active graphics/raycast-targets under Sapphire canvases so a steady
-                    // fps drop that isn't in any Tick can be attributed to UI bloat.
-                    try
+                    /* UI census: the Tick timers above miss Unity's own per-frame UI cost
+                       (draw calls + EventSystem raycasting), which scales with element count.
+                       Count active graphics/raycast-targets under Sapphire canvases so a steady
+                       fps drop that isn't in any Tick can be attributed to UI bloat.
+
+                       Diagnostic only, and not cheap — a whole-scene Canvas scan plus a subtree
+                       walk per canvas, which showed up as a visible hitch every 15s. Gate it on
+                       DebugMode so ordinary players never pay for it. */
+                    if (Settings != null && Settings.DebugMode)
                     {
-                        int canvases = 0, graphics = 0, rc = 0;
-                        foreach (var cv in UnityEngine.Object.FindObjectsOfType<UnityEngine.Canvas>())
+                        try
                         {
-                            if (cv == null || !cv.isRootCanvas || !cv.name.StartsWith("Sapphire")) continue;
-                            if (!cv.gameObject.activeInHierarchy) continue;
-                            canvases++;
-                            foreach (var g in cv.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+                            int canvases = 0, graphics = 0, rc = 0;
+                            // Sorted variant + per-Canvas name marshalling was needless overhead.
+                            foreach (var cv in UnityEngine.Object.FindObjectsByType<UnityEngine.Canvas>(
+                                         UnityEngine.FindObjectsSortMode.None))
                             {
-                                graphics++;
-                                if (g.raycastTarget) rc++;
+                                if (cv == null || !cv.isRootCanvas || !cv.gameObject.activeInHierarchy) continue;
+                                if (!cv.name.StartsWith("Sapphire", System.StringComparison.Ordinal)) continue;
+                                canvases++;
+                                cv.GetComponentsInChildren(false, _censusBuf);
+                                for (int gi = 0; gi < _censusBuf.Count; gi++)
+                                {
+                                    graphics++;
+                                    if (_censusBuf[gi].raycastTarget) rc++;
+                                }
                             }
+                            sb.Append(sb.Length > 0 ? "  " : "").Append("ui canvases=").Append(canvases)
+                              .Append(" graphics=").Append(graphics).Append(" raycast=").Append(rc);
                         }
-                        sb.Append(sb.Length > 0 ? "  " : "").Append("ui canvases=").Append(canvases)
-                          .Append(" graphics=").Append(graphics).Append(" raycast=").Append(rc);
+                        catch { }
                     }
-                    catch { }
                     if (sb.Length > 0) SapphireLog.Debug("[perf] " + sb);
                     System.Array.Clear(_perfMs, 0, _perfMs.Length);
                     System.Array.Clear(_perfMax, 0, _perfMax.Length);
@@ -268,6 +286,7 @@ namespace Sapphire
 
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            UICore.ArmDedup();   // a fresh scene may bring its own EventSystem
             if (!_deferredApplyPending) return;
             if (!IsEngineReady()) return;
             try { if (RDConstants.data == null) return; }
@@ -322,6 +341,7 @@ namespace Sapphire
             // Runtime-created TMP assets would otherwise pile up across hot reloads.
             FontLoader.DestroyTmpAssets(availableFonts);
             UICore.Dispose();
+            SapphireLog.Flush();   // don't lose the tail of the session's log
         }
     }
 }

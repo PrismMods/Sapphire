@@ -83,15 +83,26 @@ namespace Sapphire
             if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
         }
 
+        private static int _hicId, _hicChildren = -1;
+        private static bool _hicResult;
+
+        /* Five whole-subtree walks, and this ran every frame the popup was visible even though
+           a popup's composition is fixed once it is up. The game reuses one popup object, so
+           the cache keys on identity AND child count — swapping the popup's content changes
+           one or the other. */
         private static bool HasInteractiveContent(Transform panel)
         {
             try
             {
-                return panel.GetComponentInChildren<TMP_InputField>(false) != null
+                int id = panel.GetInstanceID(), cc = panel.childCount;
+                if (id == _hicId && cc == _hicChildren) return _hicResult;
+                _hicId = id; _hicChildren = cc;
+                _hicResult = panel.GetComponentInChildren<TMP_InputField>(false) != null
                     || panel.GetComponentInChildren<InputField>(false) != null
                     || panel.GetComponentInChildren<ScrollRect>(false) != null
                     || panel.GetComponentInChildren<Toggle>(false) != null
                     || panel.GetComponentInChildren<Slider>(false) != null;
+                return _hicResult;
             }
             catch { return true; } // when unsure, leave the game's popup alone
         }

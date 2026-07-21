@@ -259,12 +259,24 @@ namespace Sapphire.UI
 
         // Two EventSystems in one scene (ours, DDOL, + the game's editor one) makes Unity flake
         // between them — dead TMP carets, lost typing. When the game provides one, drop ours.
+        // Consecutive clean checks before we stop scanning (see below).
+        private static int _dedupClean;
+
+        // A scene load is the only thing that can introduce a second EventSystem — re-arm there.
+        internal static void ArmDedup() => _dedupClean = 0;
+
         internal static void DedupEventSystem()
         {
+            /* This solves a one-time startup race, but ran a whole-scene FindObjectsByType
+               (plus its array allocation) 1.3×/sec for the entire session. Stand down once
+               the scene has looked clean for a few consecutive checks; a scene load re-arms
+               it, which is the only time a second EventSystem can appear. */
+            if (_dedupClean >= 4) return;
             EventSystem[] all;
             try { all = UnityEngine.Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None); }
             catch { return; }
-            if (all == null || all.Length < 2) return;
+            if (all == null || all.Length < 2) { _dedupClean++; return; }
+            _dedupClean = 0;
 
             bool hasGameOwned = false;
             foreach (var e in all)
@@ -528,7 +540,8 @@ namespace Sapphire.UI
             fr.pivot = new Vector2(0.5f, 0f);
             fr.sizeDelta = new Vector2(0, footerH);
             fr.anchoredPosition = Vector2.zero;
-            UIBuilder.SolidImage(footer, Theme.TitleBar);
+            // Decorative strip, nothing on it is clickable — keep it out of the raycaster's walk.
+            UIBuilder.SolidImage(footer, Theme.TitleBar).raycastTarget = false;
 
             // Footer top divider
             var fd = UIBuilder.Rect("FooterDivider", footer.transform);

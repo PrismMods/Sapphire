@@ -19,7 +19,8 @@ namespace Sapphire
         private static bool _open;
         private static string _status = "";
         private static TextMeshProUGUI _statusTmp;
-        private static string _layoutSig;
+        private static long _layoutSig = NoSig;
+        private const long NoSig = long.MinValue;   // forces a rebuild; the fold below never produces it
         private static int _tab; // 0 fade-in, 1 fade-out, 2 explode, 3 size, 4 multi, 5 generate
 
         internal static bool IsOpen => _open;
@@ -91,7 +92,7 @@ namespace Sapphire
                 _in.From = _out.From = _ex.From = _szFrom = _muFrom = min;
                 _in.To = _out.To = _ex.To = _szTo = _muTo = max;
                 _gtAt = max;
-                _layoutSig = null;
+                _layoutSig = NoSig;
             }
             EditorToolbar.SyncTrackToolsHighlight();
         }
@@ -108,7 +109,14 @@ namespace Sapphire
                 SyncPreviewTransition(ed);
                 return;
             }
-            string sig = _tab + "|" + _muMode + "|" + (_muCentral ? 1 : 0) + "|" + (_muAppear ? 1 : 0);
+            // Integer fold, not a string: `int + string` boxes each operand and the chain
+            // compiles to string.Concat(object[]) — ~5 allocations every frame the panel is
+            // open, to detect a layout change that happens on a click. (See EditorCopyPanel.LayoutSig.)
+            long sig = 17;
+            sig = sig * 31 + _tab;
+            sig = sig * 31 + _muMode;
+            sig = sig * 31 + (_muCentral ? 1 : 0);
+            sig = sig * 31 + (_muAppear ? 1 : 0);
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -121,7 +129,7 @@ namespace Sapphire
         internal static void Dispose()
         {
             K.Dispose();
-            _statusTmp = null; _layoutSig = null;
+            _statusTmp = null; _layoutSig = NoSig;
             ClearGhosts();
         }
 
@@ -145,7 +153,7 @@ namespace Sapphire
             if (_statusTmp != null) _statusTmp.text = _status;
         }
 
-        private static void Refresh() { _layoutSig = null; }
+        private static void Refresh() { _layoutSig = NoSig; }
 
         // ── actions ──────────────────────────────────────────────────────────
 

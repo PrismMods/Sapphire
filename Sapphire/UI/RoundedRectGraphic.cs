@@ -50,6 +50,17 @@ namespace Sapphire
         private readonly List<Vector2> _inner  = new List<Vector2>(64);
         private readonly List<Vector2> _fringe = new List<Vector2>(64);
 
+        /* Geometry the cached outlines above were built for; NaN = nothing cached yet. The
+           corner centres derive from rect.xMin/yMin as well as the size, and a pivot change
+           moves those while leaving width/height alone — so the origin is part of the key. */
+        private float _cX = float.NaN, _cY, _cW, _cH, _cR, _cBw, _cFringe;
+        private int _cSegs;
+
+        private bool GeometryCached(Rect rect, float r, float bw, float fringe, int segs) =>
+            _cSegs == segs && _cX == rect.xMin && _cY == rect.yMin
+            && _cW == rect.width && _cH == rect.height
+            && _cR == r && _cBw == bw && _cFringe == fringe;
+
         protected override void OnPopulateMesh(VertexHelper vh)
         {
             vh.Clear();
@@ -76,33 +87,61 @@ namespace Sapphire
             Vector2 oBR = new Vector2(rect.xMax - r, rect.yMin + r);
             Vector2 oBL = new Vector2(rect.xMin + r, rect.yMin + r);
 
-            _outer.Clear();
-            BuildOutline(_outer, oTL, oTR, oBR, oBL, r, segs);
-
-            // Inner outline (used for fill perimeter and, when border > 0, the inside of the ring).
-            // Computed from the bw-inset rect so it stays correct even when bw > r.
-            float ixMin = rect.xMin + bw, ixMax = rect.xMax - bw;
-            float iyMin = rect.yMin + bw, iyMax = rect.yMax - bw;
-            Vector2 iTL = new Vector2(ixMin + innerR, iyMax - innerR);
-            Vector2 iTR = new Vector2(ixMax - innerR, iyMax - innerR);
-            Vector2 iBR = new Vector2(ixMax - innerR, iyMin + innerR);
-            Vector2 iBL = new Vector2(ixMin + innerR, iyMin + innerR);
-
-            _inner.Clear();
-            BuildOutline(_inner, iTL, iTR, iBR, iBL, innerR, segs);
-
             bool hasBorder = bw > 0f && _borderColor.a > 0f;
             bool hasFringe = fringe > 0f;
+
+            /* The outlines depend only on geometry, never on color — but uGUI re-runs
+               OnPopulateMesh for a plain tint change too (Graphic.color → SetVerticesDirty),
+               and hover/selection tints are the common case. Rebuild the trig only when the
+               geometry actually moved; otherwise reuse the cached outlines and just re-emit
+               verts with the new color. Cache is per-instance: a static one would thrash
+               between differently-sized graphics. */
+            if (!GeometryCached(rect, r, bw, fringe, segs))
+            {
+                _cX = rect.xMin; _cY = rect.yMin; _cW = w; _cH = h;
+                _cR = r; _cBw = bw; _cFringe = fringe; _cSegs = segs;
+
+                _outer.Clear();
+                BuildOutline(_outer, oTL, oTR, oBR, oBL, r, segs);
+
+                /* bw == 0 ⇒ the inset rect IS the rect and innerR == r, so the inner outline
+                   would come out point-for-point identical to the outer one. Skip the second
+                   (identical) trig pass — this is the common case, most shapes have no border. */
+                if (bw <= 0f)
+                {
+                    _inner.Clear();
+                }
+                else
+                {
+                    // Inner outline (fill perimeter, and the inside of the ring when border > 0).
+                    // Computed from the bw-inset rect so it stays correct even when bw > r.
+                    float ixMin = rect.xMin + bw, ixMax = rect.xMax - bw;
+                    float iyMin = rect.yMin + bw, iyMax = rect.yMax - bw;
+                    Vector2 iTL = new Vector2(ixMin + innerR, iyMax - innerR);
+                    Vector2 iTR = new Vector2(ixMax - innerR, iyMax - innerR);
+                    Vector2 iBR = new Vector2(ixMax - innerR, iyMin + innerR);
+                    Vector2 iBL = new Vector2(ixMin + innerR, iyMin + innerR);
+
+                    _inner.Clear();
+                    BuildOutline(_inner, iTL, iTR, iBR, iBL, innerR, segs);
+                }
+
+                _fringe.Clear();
+                if (hasFringe) BuildOutline(_fringe, oTL, oTR, oBR, oBL, r + fringe, segs);
+            }
+
+            // With no border the fill perimeter is the outer outline itself (see above).
+            var inner = bw <= 0f ? _outer : _inner;
 
             // Fill: triangle fan from center to the inner outline.
             Color32 fillColor = color;
             Vector2 center    = rect.center;
-            int n             = _inner.Count;
+            int n             = inner.Count;
             int centerIdx     = vh.currentVertCount;
             vh.AddVert(center, fillColor, Vector2.zero);
             int fillBase = vh.currentVertCount;
             for (int i = 0; i < n; i++)
-                vh.AddVert(_inner[i], fillColor, Vector2.zero);
+                vh.AddVert(inner[i], fillColor, Vector2.zero);
             for (int i = 0; i < n; i++)
                 vh.AddTriangle(centerIdx, fillBase + i, fillBase + ((i + 1) % n));
 
@@ -114,8 +153,8 @@ namespace Sapphire
                 for (int i = 0; i < _outer.Count; i++)
                     vh.AddVert(_outer[i], borderColor, Vector2.zero);
                 int innerBase = vh.currentVertCount;
-                for (int i = 0; i < _inner.Count; i++)
-                    vh.AddVert(_inner[i], borderColor, Vector2.zero);
+                for (int i = 0; i < inner.Count; i++)
+                    vh.AddVert(inner[i], borderColor, Vector2.zero);
                 for (int i = 0; i < n; i++)
                 {
                     int j = (i + 1) % n;
@@ -129,9 +168,6 @@ namespace Sapphire
             // staircase artifacts and gives straight edges a sub-pixel feathered edge.
             if (hasFringe)
             {
-                _fringe.Clear();
-                BuildOutline(_fringe, oTL, oTR, oBR, oBL, r + fringe, segs);
-
                 Color32 edgeColor = hasBorder ? borderColor : fillColor;
                 Color32 fadeColor = edgeColor; fadeColor.a = 0;
                 int innerEdgeBase = vh.currentVertCount;
