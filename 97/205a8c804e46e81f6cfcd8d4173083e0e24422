@@ -1,0 +1,127 @@
+Sapphire/Editor/EditorEvents.cs
+  s_eb41f82aa32f71::t_c25ed7b59e550d 969-976
+  s_eb41f82aa32f71::t_f61a6c60fabc85 3151-3152,3155-3158,3170-3181,3183-3185
+  s_eb41f82aa32f71::t_3d544bb1a10317 469-474,476-484
+  s_eb41f82aa32f71::t_113d4280a73344 1808-1818
+  s_eb41f82aa32f71::t_c5a2d53c813f5d 1972-1974
+  s_eb41f82aa32f71::t_9132c32ac683ae 951
+  s_eb41f82aa32f71::t_c957bdbfacc395 38
+Sapphire/Editor/EditorMagicShape.cs
+  s_eb41f82aa32f71::t_b49b214613c380 23-24,55,90,171,207
+  s_eb41f82aa32f71::t_8ce57092dcad22 71-77
+Sapphire/Editor/EditorChrome.cs
+  s_eb41f82aa32f71::t_2972b27d97e693 200-210
+Sapphire/Editor/EditorVfxPreview.cs
+  s_eb41f82aa32f71::t_307444523b44c4 16-17
+  s_eb41f82aa32f71::t_9b17ed8ba9b01b 46-48,52,61
+Sapphire/MainClass.cs
+  s_eb41f82aa32f71::t_563ab29af1efa0 176-177
+  s_eb41f82aa32f71::t_0e49133a91fa98 152-153
+  s_eb41f82aa32f71::t_538483f51d6c74 226-234
+  s_eb41f82aa32f71::t_3dd20126b01c07 158-163,166-168
+  s_eb41f82aa32f71::t_4a05b0e694a4e5 236
+  s_eb41f82aa32f71::t_88d72a5a2221aa 238-241,243-251,253-254,256
+  s_eb41f82aa32f71::t_9a70786b915b86 289
+  s_eb41f82aa32f71::t_285b15eec6b937 179
+  s_eb41f82aa32f71::t_62fbd22c657a02 344
+Sapphire/UI/UIBuilder.cs
+  s_eb41f82aa32f71::t_09d310dc32409b 226-228
+Sapphire/Editor/EditorCameraPath.cs
+  s_eb41f82aa32f71::t_ba1b55c9e0b09a 540
+  s_eb41f82aa32f71::t_a237adeef34ef1 40-42
+  s_eb41f82aa32f71::t_3b24aa300d31c9 129,131
+  s_eb41f82aa32f71::t_02b3be3f973618 489-494,497-502,504-514,516-519
+  s_eb41f82aa32f71::t_2e8d1a873833b9 526
+  s_eb41f82aa32f71::t_a64bc58f426778 564-565,567-591
+Sapphire/UI/PanelKit.cs
+  s_eb41f82aa32f71::t_a6714b2dca2fa9 192-203
+  s_eb41f82aa32f71::t_6792ec46503e19 217
+  s_eb41f82aa32f71::t_47ced9cd905242 266-268
+  s_eb41f82aa32f71::t_5bee52593707c7 423-425,427-433,435-436
+  s_eb41f82aa32f71::t_64603011a9031b 147-156
+  s_eb41f82aa32f71::t_d9d22694d890f7 141-143
+  s_eb41f82aa32f71::t_167dd033ef57f3 276-282
+  s_eb41f82aa32f71::t_27b67854298b96 204
+  s_eb41f82aa32f71::t_b560427c618628 354
+  s_eb41f82aa32f71::t_1623bc7cbdbfea 229-236
+  s_eb41f82aa32f71::t_f7fb49a172bf25 205-208
+Sapphire/UI/UICore.cs
+  s_eb41f82aa32f71::t_85c5a95d26362e 262-264,270-274,278-279
+  s_eb41f82aa32f71::t_e1bbee98a32db4 265-267
+  s_eb41f82aa32f71::t_39d7d7c50a50b6 543-544
+deploy.sh
+  s_eb41f82aa32f71::t_e4db874f8317c6 6-8,11,15
+Sapphire/Editor/EditorEventPanel.cs
+  s_eb41f82aa32f71::t_5f38cda3120c6d 103-105
+  s_eb41f82aa32f71::t_4a447a35956c57 86-94
+  s_eb41f82aa32f71::t_3fe1bb22f84cc2 68
+  s_eb41f82aa32f71::t_16c91c04cc857f 130
+  s_eb41f82aa32f71::t_09fe8d42f9be29 33-34
+Sapphire/Editor/EditorHelp.cs
+  s_eb41f82aa32f71::t_60f15ca9e009d8 28
+  s_eb41f82aa32f71::t_f375a014873344 83-87,89
+  s_eb41f82aa32f71::t_d6ded42ce85ab4 98-99
+Sapphire/Editor/EditorDecoTools.cs
+  s_eb41f82aa32f71::t_84b0add9655913 105-112
+  s_eb41f82aa32f71::t_b49b214613c380 21-22,93,124,134
+Sapphire/Editor/EditorMasterSwitch.cs
+  s_eb41f82aa32f71::t_92946a4528440d 40-48
+Sapphire/Editor/EditorPopups.cs
+  s_eb41f82aa32f71::t_ab25c47687c1bc 86-92,97-100,105
+Sapphire/Editor/EditorFilterPicker.cs
+  s_eb41f82aa32f71::t_e61c1f9a3a08dc 32
+  s_eb41f82aa32f71::t_535492f7c348c4 647
+  s_eb41f82aa32f71::t_58284c727a0ada 107-117
+  s_eb41f82aa32f71::t_de6084c7bf07ac 93-97,101-104
+Sapphire/Editor/EditorToolbar.cs
+  s_eb41f82aa32f71::t_de8ec452e3ce54 95
+  s_eb41f82aa32f71::t_0f90a31239b7f3 280-286
+  s_eb41f82aa32f71::t_bd8dc0434ffa2e 1166-1172
+  s_eb41f82aa32f71::t_bbaf9da24f95a8 1465-1467,1476-1477
+  s_eb41f82aa32f71::t_18bf45dfac312f 1773-1776
+  s_eb41f82aa32f71::t_c4df1a5afd092a 458-460
+  s_eb41f82aa32f71::t_951513d2cea438 335-341,343,351-352
+Sapphire/UI/RoundedRectGraphic.cs
+  s_eb41f82aa32f71::t_b42ed6041e01cb 53-56,59-62
+  s_eb41f82aa32f71::t_39ae7ea9fecc48 139,144
+  s_eb41f82aa32f71::t_8282921a8a031e 99,101-102
+  s_eb41f82aa32f71::t_efcae0a26ac94e 156-157
+  s_eb41f82aa32f71::t_1abea3d0eeb808 93-98,100,104-105,107-134
+  s_eb41f82aa32f71::t_18d480f90e448b 57-58,63
+  s_eb41f82aa32f71::t_6d4b95d88abab4 90-91
+Sapphire/Editor/EditorGraph.cs
+  s_eb41f82aa32f71::t_3b30e3c4077ea5 276-282
+  s_eb41f82aa32f71::t_e7b0b8abc5b75d 35-36
+Sapphire/Editor/EditorTileMenu.cs
+  s_eb41f82aa32f71::t_e91a764763182e 44-50
+Sapphire/Editor/EditorLevelMenu.cs
+  s_eb41f82aa32f71::t_37eff305a79681 155-162
+  s_eb41f82aa32f71::t_4aa3b06d01a023 146-147
+  s_eb41f82aa32f71::t_eaa82e43e479b0 148
+Sapphire/Util/SapphireLog.cs
+  s_eb41f82aa32f71::t_1f052826b08237 61
+  s_eb41f82aa32f71::t_dc0ebc4ac1b441 76
+  s_eb41f82aa32f71::t_afde1278c829f8 20-27,31-53
+release.sh
+  s_eb41f82aa32f71::t_a9aab8aaded92d 30
+  s_eb41f82aa32f71::t_8aa6b42413408a 23-24
+Sapphire/Editor/EditorTrackTools.cs
+  s_eb41f82aa32f71::t_9c3a1342abb9bf 22-23,95,132,156
+  s_eb41f82aa32f71::t_2a7d7dbd0022cf 112-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "97205a8c804e46e81f6cfcd8d4173083e0e24422",
+  "prompts": {},
+  "sessions": {
+    "s_eb41f82aa32f71": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d19eb0fc-5bd9-41b7-bdef-6c1dcd975ad0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "koren <131921956+kkorenn@users.noreply.github.com>"
+    }
+  }
+}
