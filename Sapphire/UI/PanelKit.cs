@@ -138,8 +138,21 @@ namespace Sapphire.UI
         internal static bool DockDragActive; // a dock divider is being dragged
         private const float SideMin = 220f, DockGap = 6f, DockMargin = 8f, DockPanelMinH = 120f, EdgeSnap = 28f;
         private static float _lastTop, _lastBottom, _lastCh, _lastCw; // for divider-drag geometry
+        private static int _lastScreenW, _lastScreenH;                // ClampFloating runs only on resize
+        // Divider components resolved once — GetComponent per divider per frame was pure overhead.
+        private static DockDivider _wDivCompL, _wDivCompR;
 
         private static System.Collections.Generic.List<PanelKit> SideList(int side) => side == 1 ? _dockL : _dockR;
+
+        /* Dragging a panel toward an edge must still raise the drop indicator even when nothing
+           is docked yet — that is exactly the dock-your-first-panel case, so the dock early-out
+           cannot key on the dock lists alone. */
+        private static bool AnyHeaderDragging()
+        {
+            for (int i = 0; i < _focusReg.Count; i++)
+                if (_focusReg[i].Focusable && _focusReg[i].HeaderDragging) return true;
+            return false;
+        }
 
         /* Floating focusable windows are user-placed by drag; nothing repositions them when the
            game window resizes, so a shrink can strand them off-screen. Clamp each so a usable
@@ -176,9 +189,23 @@ namespace Sapphire.UI
         // Central per-frame dock layout (topMargin/bottomInset clear the top chrome + timeline).
         internal static void TickDocks(float topMargin, float bottomInset)
         {
-            ClampFloating(); // keep floating windows on-screen through a window resize
-            // Lazy: don't stand up the chrome canvas until something actually docks.
-            if (_dockChromeGo == null && _dockL.Count == 0 && _dockR.Count == 0) return;
+            /* Only recovers floating windows from a window resize, so it only needs to run when
+               the screen actually changed size — it was walking every registered panel with two
+               native RectTransform.rect reads apiece, every frame. */
+            if (Screen.width != _lastScreenW || Screen.height != _lastScreenH)
+            {
+                _lastScreenW = Screen.width; _lastScreenH = Screen.height;
+                ClampFloating();
+            }
+            /* EnsureDockChrome creates _dockChromeGo once and never destroys it, so keying the
+               early-out on it meant that after ANY panel had ever docked, the whole layout path
+               ran every frame forever — even with nothing docked. Key on the dock lists and
+               idle the chrome canvas instead. */
+            if (_dockL.Count == 0 && _dockR.Count == 0 && !AnyHeaderDragging())
+            {
+                if (_dockCanvas != null && _dockCanvas.enabled) _dockCanvas.enabled = false;
+                return;
+            }
             EnsureDockChrome();
             if (_dockRoot == null) return;
             float cw = _dockRoot.rect.width, ch = _dockRoot.rect.height;
@@ -187,7 +214,7 @@ namespace Sapphire.UI
             LayoutSide(_dockL, 1, ref _sideWL, cw, ch, topMargin, bottomInset);
             LayoutSide(_dockR, 2, ref _sideWR, cw, ch, topMargin, bottomInset);
             for (int i = _hDivUsed; i < _hDivPool.Count; i++)
-                if (_hDivPool[i].activeSelf) _hDivPool[i].SetActive(false);
+                if (_hDivPool[i].gameObject.activeSelf) _hDivPool[i].gameObject.SetActive(false);
             UpdateDropIndicator(cw, ch, topMargin, bottomInset);
             // Idle the chrome canvas (its raycaster) whenever nothing on it is showing.
             bool need = _hDivUsed > 0
@@ -199,7 +226,14 @@ namespace Sapphire.UI
         private static void LayoutSide(System.Collections.Generic.List<PanelKit> list, int side,
             ref float sideW, float cw, float ch, float topMargin, float bottomInset)
         {
-            list.RemoveAll(p => p == null || p.DockSide != side || p.CanvasGo == null);
+            /* RemoveAll's lambda captures `side`, so the compiler cannot cache it: a display
+               class plus a Predicate allocated on every call, twice per frame. Manual reverse
+               sweep instead — same semantics, no allocation. */
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                var q = list[i];
+                if (q == null || q.DockSide != side || q.CanvasGo == null) list.RemoveAt(i);
+            }
             _dockTmp.Clear();
             for (int i = 0; i < list.Count; i++)
                 if (list[i].Visible && !list[i].HeaderDragging) _dockTmp.Add(list[i]);
@@ -229,9 +263,9 @@ namespace Sapphire.UI
                 if ((r.sizeDelta - wantSize).sqrMagnitude > 1f) r.sizeDelta = wantSize;
                 if (i < n - 1)
                 {
-                    var dgo = GetHDiv();
-                    dgo.GetComponent<DockDivider>().Set(side, i, false);
-                    var dr = (RectTransform)dgo.transform;
+                    var div = GetHDiv();
+                    div.Set(side, i, false);
+                    var dr = (RectTransform)div.transform;
                     dr.sizeDelta = new Vector2(sideW, DockGap + 6f);
                     dr.anchoredPosition = new Vector2(x + sideW * 0.5f, y - h - DockGap * 0.5f);
                 }
@@ -239,7 +273,13 @@ namespace Sapphire.UI
             }
             if (wDiv != null)
             {
-                wDiv.GetComponent<DockDivider>().Set(side, -1, true);
+                var wComp = side == 1 ? _wDivCompL : _wDivCompR;
+                if (wComp == null)
+                {
+                    wComp = wDiv.GetComponent<DockDivider>();
+                    if (side == 1) _wDivCompL = wComp; else _wDivCompR = wComp;
+                }
+                wComp.Set(side, -1, true);
                 var dr = (RectTransform)wDiv.transform;
                 float dx = side == 1 ? x + sideW + 3f : x - 3f;
                 dr.sizeDelta = new Vector2(12f, H); // wide hit target; the visible pill stays thin
@@ -311,7 +351,7 @@ namespace Sapphire.UI
         private static GameObject _dockChromeGo, _dropInd, _wDivL, _wDivR;
         private static Canvas _dockCanvas;
         private static RectTransform _dockRoot;
-        private static readonly System.Collections.Generic.List<GameObject> _hDivPool = new System.Collections.Generic.List<GameObject>();
+        private static readonly System.Collections.Generic.List<DockDivider> _hDivPool = new System.Collections.Generic.List<DockDivider>();
         private static int _hDivUsed;
 
         private static void EnsureDockChrome()
@@ -380,14 +420,20 @@ namespace Sapphire.UI
             return go;
         }
 
-        private static GameObject GetHDiv()
+        // Pools the DockDivider itself, not just its GameObject — the caller needed the
+        // component every frame and was re-resolving it with GetComponent each time.
+        private static DockDivider GetHDiv()
         {
-            GameObject go;
-            if (_hDivUsed < _hDivPool.Count) go = _hDivPool[_hDivUsed];
-            else { go = MakeDivider(true); _hDivPool.Add(go); } // between stacked panels → horizontal grip
+            DockDivider div;
+            if (_hDivUsed < _hDivPool.Count) div = _hDivPool[_hDivUsed];
+            else // between stacked panels → horizontal grip
+            {
+                div = MakeDivider(true).GetComponent<DockDivider>();
+                _hDivPool.Add(div);
+            }
             _hDivUsed++;
-            if (!go.activeSelf) go.SetActive(true);
-            return go;
+            if (!div.gameObject.activeSelf) div.gameObject.SetActive(true);
+            return div;
         }
 
         internal void Show(bool on)

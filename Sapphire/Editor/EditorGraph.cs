@@ -32,6 +32,8 @@ namespace Sapphire
         private static readonly List<TextMeshProUGUI> _xLabels = new List<TextMeshProUGUI>();
 
         private const int TexW = 1400, TexH = 380;
+        // Reused plot raster scratch buffer (see Repaint).
+        private static Color32[] _px;
         private const float PanelW = 1480f, PanelH = 500f, PlotH = 398f;
         // user-adjusted geometry survives reopen (drag the header / resize the edges)
         private static Vector2 _userPos = Vector2.zero;
@@ -271,7 +273,13 @@ namespace Sapphire
             }
             else { _yMin = _yMinM; _yMax = _yMaxM; }
 
-            var px = new Color32[TexW * TexH];
+            /* 2.13 MB per repaint, and Repaint() runs every frame while panning the plot —
+               reuse the buffer instead of feeding the large-object heap. TexW/TexH are const
+               so one allocation covers the process; Clear because the raster below paints
+               marks over an assumed-transparent background. */
+            if (_px == null) _px = new Color32[TexW * TexH];
+            else System.Array.Clear(_px, 0, _px.Length);
+            var px = _px;
             var grid = new Color32(255, 255, 255, 18);
             for (int gy = 1; gy < 4; gy++)
             {

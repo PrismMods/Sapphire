@@ -143,13 +143,23 @@ namespace Sapphire
 
         // ── data ─────────────────────────────────────────────────────────────
 
+        private static readonly System.Collections.Generic.Dictionary<string, System.Reflection.FieldInfo>
+            _settingsFields = new System.Collections.Generic.Dictionary<string, System.Reflection.FieldInfo>();
+
         private static ADOFAI.LevelEvent SettingsEvent(scnEditor ed, string field)
         {
             try
             {
                 var ld = ed.levelData;
                 if (ld == null) return null;
-                var fi = ld.GetType().GetField(field);
+                // Type.GetField is a name-based lookup; this is reached from Sig() on a timer
+                // while the panel is open, and the field set is fixed. Resolve each one once.
+                System.Reflection.FieldInfo fi;
+                if (!_settingsFields.TryGetValue(field, out fi))
+                {
+                    fi = ld.GetType().GetField(field);
+                    _settingsFields[field] = fi;   // cache misses too — a null stays null
+                }
                 return fi != null ? fi.GetValue(ld) as ADOFAI.LevelEvent : null;
             }
             catch { return null; }

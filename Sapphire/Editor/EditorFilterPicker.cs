@@ -29,6 +29,7 @@ namespace Sapphire
         private static float _railScroll;
         private static TMP_InputField _searchField;
         private static ADOFAI.LevelEvent _target;   // event the grid applies to (= expanded section)
+        private static int _targetCheckCd;          // frames until the next _target liveness check
         private static int _floor = -1;              // tile whose filter events are listed
         private static string _search = "";
         private static string _category = null; // null = All
@@ -89,12 +90,31 @@ namespace Sapphire
             if (!inEditor || Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
             // resizing invalidates the grid's cell metrics (positions bake in the view width)
             var pr = (RectTransform)_popupGo.transform;
+            /* RebuildGrid destroys and respawns every cell — ~300 filters × (3 GameObjects +
+               RoundedRectGraphic + 2 TMP + 2 handlers + closures). ResizeHandle writes
+               sizeDelta on EVERY drag frame, so rebuilding inline meant ~900 GameObjects per
+               frame for the whole drag. Debounce: note the new size, rebuild once the drag
+               settles. (The initial build comes from Open, not from here.) */
             if ((pr.sizeDelta - _lastPanelSize).sqrMagnitude > 1f)
             {
                 _lastPanelSize = pr.sizeDelta;
+                _gridResizeCd = 6;
+            }
+            else if (_gridResizeCd > 0 && --_gridResizeCd == 0)
+            {
                 RebuildGrid();
             }
-            if (_target == null || (ed != null && !ed.events.Contains(_target)))
+            /* LevelEvent has no Equals override, so List.Contains walks every event in the
+               level with a virtual dispatch each — 10k-50k per frame on a decorated chart,
+               purely to ask whether our target is still alive. It can only die on a user
+               edit, so a cadence check is as correct and costs ~nothing. */
+            bool targetGone = _target == null;
+            if (!targetGone && ed != null && --_targetCheckCd <= 0)
+            {
+                _targetCheckCd = 15;
+                targetGone = !ed.events.Contains(_target);
+            }
+            if (targetGone)
             {
                 var next = FirstFilterEventOnTile(ed);
                 if (next == null) { Close(); return; }
@@ -624,6 +644,7 @@ namespace Sapphire
         private static Vector2 _mgrPos = Vector2.zero;
         private static Vector2 _mgrSize = new Vector2(PanelW, PanelH);
         private static Vector2 _lastPanelSize;
+        private static int _gridResizeCd;   // frames of size-stability left before the grid rebuild
 
         // ── tile filter sections ─────────────────────────────────────────────
         private static List<ADOFAI.LevelEvent> TileFilterEvents(scnEditor ed)

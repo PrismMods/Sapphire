@@ -37,9 +37,15 @@ namespace Sapphire
             if (_knobRect != null)
             {
                 float target = _shownOn ? KnobX : -KnobX;
-                float x = Mathf.Lerp(_knobRect.anchoredPosition.x, target, Time.unscaledDeltaTime * 16f);
-                if (Mathf.Abs(x - target) < 0.25f) x = target;
-                _knobRect.anchoredPosition = new Vector2(x, 0f);
+                float cur = _knobRect.anchoredPosition.x;
+                // The knob is at rest almost always; skip the managed→native write once it has
+                // snapped, instead of re-assigning the same position every frame forever.
+                if (cur != target)
+                {
+                    float x = Mathf.Lerp(cur, target, Time.unscaledDeltaTime * 16f);
+                    if (Mathf.Abs(x - target) < 0.25f) x = target;
+                    _knobRect.anchoredPosition = new Vector2(x, 0f);
+                }
             }
         }
 
