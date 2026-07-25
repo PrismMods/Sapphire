@@ -354,6 +354,18 @@ namespace Sapphire.UI
         private static readonly System.Collections.Generic.List<DockDivider> _hDivPool = new System.Collections.Generic.List<DockDivider>();
         private static int _hDivUsed;
 
+        // Full teardown (UMM disable/unload): the dock chrome is a static not owned by any
+        // module's Dispose, so it must be torn down explicitly or it survives on screen.
+        internal static void DisposeDockChrome()
+        {
+            if (_dockChromeGo != null) UnityEngine.Object.Destroy(_dockChromeGo);
+            _dockChromeGo = null; _dockRoot = null; _dockCanvas = null;
+            _dropInd = null; _wDivL = null; _wDivR = null;
+            _hDivPool.Clear(); _hDivUsed = 0;
+            _dockL.Clear(); _dockR.Clear(); _focusReg.Clear();
+            _sideWL = 360f; _sideWR = 360f; DockDragActive = false;
+        }
+
         private static void EnsureDockChrome()
         {
             if (_dockChromeGo != null) return;

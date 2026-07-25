@@ -205,7 +205,10 @@ namespace Sapphire
                 EditorEventSelector.Tick(); Acc(26);
                 EditorMasterSwitch.Tick(); Acc(24);
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
-                if (EditorSuiteOn)       // central multi-window sidebar dock layout
+                // Run unconditionally: when the master switch turns off, the modules hide their
+                // panels this frame and TickDocks then finds nothing visible and tears its own
+                // chrome (dividers / drop indicator / canvas) down — gating it on EditorSuiteOn
+                // left that chrome stranded on screen.
                 {
                     float strip = 0f;
                     try { strip = EditorEvents.BottomStripTop; } catch { }
@@ -331,6 +334,7 @@ namespace Sapphire
             EditorEventPanel.Dispose();
             EditorEventSelector.Dispose();
             EditorMasterSwitch.Dispose();
+            UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
             if (_tickerGo != null)
