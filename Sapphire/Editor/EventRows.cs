@@ -233,10 +233,18 @@ namespace Sapphire
             raw = (raw ?? "").Trim();
             try
             {
-                if (oldVal is int) return (int)float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
                 if (oldVal is float) return float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
                 if (oldVal is double) return double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                if (oldVal is long) return (long)float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+                if (oldVal is int || oldVal is long)
+                {
+                    // Override the editor's number constraints: the game's UI caps/steps live in its
+                    // own inspector, which Sapphire's native panel bypasses (no min/max here). Keep an
+                    // explicitly-typed FRACTION as a float rather than truncating it — e.g. decimal
+                    // song pitch — while whole numbers keep their original int/long type.
+                    double d = double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+                    if (d != System.Math.Floor(d)) return (float)d;
+                    return oldVal is long ? (object)(long)d : (object)(int)d;
+                }
             }
             catch { return oldVal; }
             return raw;

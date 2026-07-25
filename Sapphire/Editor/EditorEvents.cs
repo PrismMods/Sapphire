@@ -81,6 +81,9 @@ namespace Sapphire
         private static GameObject _diffMenuGo;
         private static bool _autoShown;
         private static bool _transportOn;
+        private static long _transportSig = long.MinValue; // gates the per-frame transport string build
+        private static ADOFAI.LevelEvent _tipEvent; // hovered event the tooltip text was built for
+        private static string _tipCache;
         private static CanvasGroup _fadedPlayCluster;
 
         // ── mode cluster: Editor Mode / difficulty / no-fail chips above the strip ──
@@ -777,10 +780,12 @@ namespace Sapphire
                 }
             }
 
-            if (_viewDirty && (!playing || (Time.frameCount & 3) == 0))
+            // A full marker-texture repaint (~1 MB clear + SetPixels32 + GPU upload) is the strip's
+            // biggest per-frame cost. Playback pages the view (15 Hz is indistinguishable); edit-mode
+            // wheel-pan / edge-scrub changes the view continuously, so cap those at 30 Hz too — a ≤1
+            // frame (~16 ms) delay before markers catch up is imperceptible and halves the pan cost.
+            if (_viewDirty && (Time.frameCount & (playing ? 3 : 1)) == 0)
             {
-                // play mode scrolls the view every frame — a full marker-texture repaint per
-                // frame is the single biggest cost, and 15Hz is indistinguishable there
                 RenderMarkers();
                 _viewDirty = false;
             }
@@ -864,7 +869,11 @@ namespace Sapphire
             }
             if (hit != null)
             {
-                tip = BuildTooltip(hit, true);
+                // Cache by hovered event: BuildTooltip allocs a StringBuilder + reflects the data
+                // dict — rebuilding it every hover frame was needless GC. Marker repaints (edits)
+                // clear _tipEvent so the text refreshes.
+                if (!ReferenceEquals(hit, _tipEvent)) { _tipEvent = hit; _tipCache = BuildTooltip(hit, true); }
+                tip = _tipCache;
                 tipAt = new Vector2(mouse.x, mouse.y + 14f); // strip is at the bottom → open upward
             }
             // Click a marker to select its tile; click empty strip to move the playhead
@@ -1801,6 +1810,7 @@ namespace Sapphire
         private static void RenderMarkers()
         {
             if (_markerTex == null || _laneEvents == null) return;
+            _tipEvent = null; // markers repaint on edits/pans → force the hover tooltip to refresh
             int laneCount = _laneEvents.Length;
             int tlh = TexLaneHEff;
             int subH = CamMode && _expandedLane >= 0 ? (int)SubRowH : 0;
@@ -2943,7 +2953,11 @@ namespace Sapphire
             }
 
             if (_clockText == null) return;
-            string txt, bpm = "";
+            // The readout only changes ~1×/sec (clock = whole seconds, beat = int / 0.1), but the
+            // strings were rebuilt EVERY frame — steady GC that reads as playback lag. Gate the
+            // (allocating) build on a quantized signature; the conductor read below stays cheap.
+            string txt = null, bpm = null;
+            long sig;
             if (playing)
             {
                 double elapsed = 0.0;
@@ -2962,19 +2976,29 @@ namespace Sapphire
                 // at the level's end instead of counting into the outro.
                 if (_totalTime > 0.0 && elapsed > _totalTime) elapsed = _totalTime;
                 double beat = BeatAtTime(elapsed) - _beatOffset;
-                txt = FormatClock(elapsed / pitch) + " / " + FormatClock(_totalTime / pitch)
-                    + "  ·  beat " + (beat < 0 ? 0 : (int)beat);
-                bpm = BpmLine(selSeq);
+                int bi = beat < 0 ? 0 : (int)beat;
+                sig = 1L + (long)(int)(elapsed / pitch) * 1000003L + (long)bi * 131L + (long)(selSeq + 2) * 7L;
+                if (sig != _transportSig)
+                {
+                    txt = FormatClock(elapsed / pitch) + " / " + FormatClock(_totalTime / pitch)
+                        + "  ·  beat " + bi;
+                    bpm = BpmLine(selSeq);
+                }
             }
             else if (selSeq >= 0 && _beatPrefix != null && selSeq < _beatPrefix.Length)
             {
                 double beat = _beatPrefix[selSeq] - _beatOffset;
-                txt = "tile " + selSeq + "  ·  beat " + beat.ToString("0.#");
-                bpm = BpmLine(selSeq);
+                sig = 2000000000L + (long)System.Math.Round(beat * 10.0) * 131L + (long)(selSeq + 2) * 1000003L;
+                if (sig != _transportSig)
+                {
+                    txt = "tile " + selSeq + "  ·  beat " + beat.ToString("0.#");
+                    bpm = BpmLine(selSeq);
+                }
             }
-            else txt = "";
-            if (_clockText.text != txt) _clockText.text = txt;
-            if (_bpmText != null && _bpmText.text != bpm) _bpmText.text = bpm;
+            else { sig = -1L; if (sig != _transportSig) { txt = ""; bpm = ""; } }
+            _transportSig = sig;
+            if (txt != null && _clockText.text != txt) _clockText.text = txt;
+            if (bpm != null && _bpmText != null && _bpmText.text != bpm) _bpmText.text = bpm;
         }
 
         // While our transport is up, fade the game's bottom-left play cluster (parent of
@@ -2992,6 +3016,12 @@ namespace Sapphire
                         _fadedPlayCluster.interactable = true;
                         _fadedPlayCluster = null;
                     }
+                    return;
+                }
+                // Fast path: once cached, just keep it faded — no per-frame transform walk + GetComponent.
+                if (_fadedPlayCluster != null)
+                {
+                    if (_fadedPlayCluster.alpha != 0f) { _fadedPlayCluster.alpha = 0f; _fadedPlayCluster.blocksRaycasts = false; }
                     return;
                 }
                 var host = ed != null && ed.playPause != null ? ed.playPause.transform.parent : null;

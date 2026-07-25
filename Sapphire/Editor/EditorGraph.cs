@@ -51,8 +51,11 @@ namespace Sapphire
         private static float _panLastNx, _panLastNy;
 
         // keyframe cache: one entry per (event, component)
-        private struct Key { public ADOFAI.LevelEvent E; public int Comp; public float Frac; public float Val; }
+        // End (tween end frac) and Ease are resolved ONCE here (both reflection-backed) so the
+        // per-pixel raster below never touches reflection — that per-column rescan was the lag.
+        private struct Key { public ADOFAI.LevelEvent E; public int Comp; public float Frac; public float Val; public float End; public DG.Tweening.Ease Ease; }
         private static readonly List<Key> _keys = new List<Key>();
+        private static readonly List<Key> _seg = new List<Key>(); // reused per-comp scratch for plotting
         private static ADOFAI.LevelEvent _sel;
         private static int _selComp;
         private static ADOFAI.LevelEvent _drag;
@@ -254,7 +257,11 @@ namespace Sapphire
             foreach (var comp in comps)
                 foreach (var e in evs)
                     if (TouchesC(e, comp))
-                        _keys.Add(new Key { E = e, Comp = comp, Frac = EditorEvents.GraphFracOfFloor(e.floor), Val = TargetC(e, comp) });
+                    {
+                        float f = EditorEvents.GraphFracOfFloor(e.floor);
+                        _keys.Add(new Key { E = e, Comp = comp, Frac = f, Val = TargetC(e, comp),
+                                            End = EditorEvents.GraphFracEnd(e, f), Ease = EaseOf(e) });
+                    }
 
             // y-range: auto from data unless the axis was zoomed manually
             if (_yAuto)
@@ -296,11 +303,26 @@ namespace Sapphire
             {
                 var col = CompColor(comp);
                 float init = InitialValue(comp);
-                int prevY = -1;
+                // this comp's keys, already in frac order (evs sorted by floor/angleOffset)
+                _seg.Clear();
+                for (int i = 0; i < _keys.Count; i++) if (_keys[i].Comp == comp) _seg.Add(_keys[i]);
+                // single monotonic pass: frac increases with gx, so the active segment only advances
+                int si = 0; float cur = init; int prevY = -1;
                 for (int gx = 0; gx < TexW; gx++)
                 {
                     float frac = _vs + (gx / (float)(TexW - 1)) * (_ve - _vs);
-                    float v = ValueAt(frac, init, comp);
+                    while (si < _seg.Count && frac >= _seg[si].End) { cur = _seg[si].Val; si++; }
+                    float v;
+                    if (si < _seg.Count && frac >= _seg[si].Frac)
+                    {
+                        float dur = Mathf.Max(1e-5f, _seg[si].End - _seg[si].Frac);
+                        float t = (frac - _seg[si].Frac) / dur;
+                        float y;
+                        try { y = DG.Tweening.Core.Easing.EaseManager.Evaluate(_seg[si].Ease, null, t, 1f, 1.70158f, 0f); }
+                        catch { y = t; }
+                        v = cur + (_seg[si].Val - cur) * y;
+                    }
+                    else v = cur;
                     int gy = ValY(v);
                     if (prevY >= 0)
                     {
@@ -341,26 +363,6 @@ namespace Sapphire
             var d = EditorEvents.EventData(e);
             if (d == null || !d.TryGetValue(key, out var v) || v == null) return 0f;
             try { float f = Convert.ToSingle(v); return float.IsNaN(f) ? 0f : f; } catch { return 0f; }
-        }
-
-        private static float ValueAt(float frac, float init, int comp)
-        {
-            float cur = init;
-            for (int i = 0; i < _keys.Count; i++)
-            {
-                var k = _keys[i];
-                if (k.Comp != comp) continue;
-                float end = EditorEvents.GraphFracEnd(k.E, k.Frac);
-                if (frac < k.Frac) break;
-                if (frac >= end) { cur = k.Val; continue; }
-                float dur = Mathf.Max(1e-5f, end - k.Frac);
-                float t = (frac - k.Frac) / dur;
-                float y;
-                try { y = DG.Tweening.Core.Easing.EaseManager.Evaluate(EaseOf(k.E), null, t, 1f, 1.70158f, 0f); }
-                catch { y = t; }
-                return cur + (k.Val - cur) * y;
-            }
-            return cur;
         }
 
         private static int ValY(float v) =>
