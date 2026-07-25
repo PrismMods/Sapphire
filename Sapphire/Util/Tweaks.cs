@@ -130,6 +130,60 @@ namespace Sapphire
             catch { }
         }
 
+        /* The editor's autoplay control tip (scnEditor.controlsTip — the "Space [⎵] Pause ❚❚"
+           help text on the Otto canvas) advertises Space as the pause key. But Sapphire's
+           transpiler REMAPS the editor's autoplay-pause key off Space (AutoplayPauseKey), so the
+           hint is misleading while the suite is on. scnEditor.Update rewrites its text every frame,
+           so disable the Text component per-frame (surgical — leaves the Otto mascot). Reflection
+           so it degrades gracefully if the field is absent. Restore to the game's natural state
+           (enabled during play) when the suite goes off. */
+        private static System.Reflection.FieldInfo _controlsTipFi;
+        private static bool _controlsTipMissing, _hidControlsTip;
+
+        private static UnityEngine.UI.Graphic ControlsTip(scnEditor ed)
+        {
+            if (_controlsTipMissing || ed == null) return null;
+            if (_controlsTipFi == null)
+            {
+                _controlsTipFi = typeof(scnEditor).GetField("controlsTip",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
+                    | System.Reflection.BindingFlags.Instance);
+                if (_controlsTipFi == null) { _controlsTipMissing = true; return null; }
+            }
+            return _controlsTipFi.GetValue(ed) as UnityEngine.UI.Graphic;
+        }
+
+        internal static void TickControlsTip()
+        {
+            if (_controlsTipMissing) return;
+            try
+            {
+                scnEditor ed = null;
+                try { ed = scnEditor.instance; } catch { }
+                bool active = ed != null && MainClass.Settings != null && MainClass.EditorSuiteOn;
+                if (!active && !_hidControlsTip) return; // nothing to do
+                var tip = ControlsTip(ed);
+                if (tip == null) return;
+                if (active) { if (tip.enabled) tip.enabled = false; _hidControlsTip = true; }
+                else { tip.enabled = ed != null && ed.playMode; _hidControlsTip = false; } // restore
+            }
+            catch { }
+        }
+
+        // StopMod: re-show the control tip we hid (the ticker won't run to restore it).
+        internal static void RestoreControlsTip()
+        {
+            if (!_hidControlsTip) return;
+            try
+            {
+                var ed = scnEditor.instance;
+                var tip = ControlsTip(ed);
+                if (tip != null) tip.enabled = ed != null && ed.playMode;
+            }
+            catch { }
+            _hidControlsTip = false;
+        }
+
         // StopMod: un-fade the game's corner HUD (difficulty/speed/no-fail/autoplay/error meter) —
         // Editor Mode fades them per-frame, so a disable mid-fade would otherwise leave them at
         // alpha 0 and break the vanilla UI (and other mods) until a scene reload.

@@ -177,7 +177,7 @@ namespace Sapphire
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
-                Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Acc(0);
+                Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
                 EditorSkin.Tick(); Acc(2);
                 EditorUiLayout.Tick(); Acc(3);
@@ -307,6 +307,7 @@ namespace Sapphire
             _deferredApplyPending = false;
             Tweaks.ReleaseBismuthSuppress();
             Tweaks.DisposeEditorMode();
+            Tweaks.RestoreControlsTip();
             Tweaks.DisposeTileAngle();
             EditorEvents.Dispose();
             EditorSkin.Dispose();
