@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
+using DG.Tweening;
 using HarmonyLib;
 using UnityEngine;
 
@@ -8,6 +9,56 @@ namespace Sapphire
 {
     internal static class Patches
     {
+        /* The editor's info splash (scnEditor.notificationText — "Level saved", tool feedback,
+           etc.) SLIDES in from off-screen (DOAnchorPosX) near the top, where Sapphire's file
+           menu bar now covers it. While the suite is active, re-home it to screen centre and
+           replace the slide with a simple alpha fade in/out (no position tween). notificationText
+           is public; notificationSeq (the game's tween) is private → reflected + killed so the
+           two don't fight. Falls through to the vanilla animation on any failure or when off. */
+        [HarmonyPatch(typeof(scnEditor), "ShowNotification")]
+        private static class NotificationCenterFadePatch
+        {
+            private static System.Reflection.FieldInfo _seqFi;
+
+            public static bool Prefix(scnEditor __instance, string text,
+                System.Nullable<Color> textColor, float delayDuration)
+            {
+                try
+                {
+                    if (MainClass.Settings == null || !MainClass.EditorSuiteOn) return true;
+                    var go = __instance.notificationText;
+                    if (go == null) return true;
+                    var rt = go.GetComponent<RectTransform>();
+                    var tmp = go.GetComponent<TMPro.TMP_Text>();
+                    if (rt == null || tmp == null) return true;
+
+                    tmp.text = text;
+                    tmp.color = textColor ?? Color.white;
+                    rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                    rt.pivot = new Vector2(0.5f, 0.5f);
+                    rt.anchoredPosition = Vector2.zero; // centre of screen
+
+                    var cg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+                    cg.alpha = 0f;
+
+                    if (_seqFi == null)
+                        _seqFi = typeof(scnEditor).GetField("notificationSeq",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var old = _seqFi != null ? _seqFi.GetValue(__instance) as Tween : null;
+                    if (old != null && old.active) old.Kill();
+
+                    var seq = DOTween.Sequence();
+                    seq.SetUpdate(true); // unscaled — survives editor pause
+                    seq.Append(DOTween.To(() => cg.alpha, a => cg.alpha = a, 1f, 0.18f));
+                    seq.AppendInterval(Mathf.Max(0.4f, delayDuration));
+                    seq.Append(DOTween.To(() => cg.alpha, a => cg.alpha = a, 0f, 0.35f));
+                    if (_seqFi != null) _seqFi.SetValue(__instance, seq);
+                    return false; // skip the vanilla slide
+                }
+                catch { return true; }
+            }
+        }
+
         /* The editor hardcodes Space as the autoplay-pause key inside scnEditor.Update's
            `RDC.auto && GetKeyDown(Space) && playMode` block. Swap the pushed constant 32
            for a call into Tweaks.AutoPauseKeyCode so the key is rebindable / disableable.

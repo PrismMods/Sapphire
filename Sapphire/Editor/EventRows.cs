@@ -200,10 +200,19 @@ namespace Sapphire
             bool isColor = false;
             try { isColor = pi.controlType.ToString().IndexOf("Color", StringComparison.OrdinalIgnoreCase) >= 0; }
             catch { }
+            bool isFile = false;
+            try { isFile = pi.controlType.ToString() == "File"; } catch { }
             Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
-            float inputW = w - (isColor ? RowH + Gap : 0f);
+            float rightW = isFile ? 30f : (isColor ? RowH : 0f);
+            float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
             InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
-            if (isColor)
+            if (isFile)
+            {
+                // "…" opens the game's native file picker for this field's type (audio/image/video);
+                // it copies the pick into the level folder and returns the basename we store.
+                Cell(content, "…", x + inputW + Gap, y, rightW, RowH, () => BrowseFileField(c, ed, e2, p2, k), true);
+            }
+            else if (isColor)
             {
                 var swGo = new GameObject("Sw", typeof(RectTransform));
                 swGo.transform.SetParent(content, false);
@@ -235,6 +244,25 @@ namespace Sapphire
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: edit failed: " + ex.Message); }
             c.MarkDirty?.Invoke();
+        }
+
+        /* Browse button for File-type properties: open the game's own native picker for the field's
+           FileType (audio/image/video). ShowFileSelectorFor* handles the level-saved check + last
+           folder, copies the pick into the level folder, and returns the relative basename we store —
+           the same value the game's inspector would write. (mp3 songs the game would convert to ogg;
+           we set the picked name as-is, which modern ADOFAI loads directly.) */
+        private static void BrowseFileField(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi, string key)
+        {
+            try
+            {
+                string result;
+                int ft = (int)pi.fileType;
+                if (ft == 1) result = RDEditorUtils.ShowFileSelectorForImage(RDString.Get("editor.dialog.selectImage", null), -1L);
+                else if (ft == 2) result = RDEditorUtils.ShowFileSelectorForVideo(RDString.Get("editor.dialog.selectVideo", null), -1L);
+                else result = RDEditorUtils.ShowFileSelectorForAudio(RDString.Get("editor.dialog.selectSound", null), -1L);
+                if (!string.IsNullOrEmpty(result)) Commit(c, ed, evt, pi, key, result);
+            }
+            catch (Exception ex) { SapphireLog.Log("EventRows: browse failed: " + ex.Message); }
         }
 
         private static void CommitText(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi,
