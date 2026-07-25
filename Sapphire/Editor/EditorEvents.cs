@@ -60,7 +60,15 @@ namespace Sapphire
         internal static int _expandedLane = -1;
         private const float StripPad = 7f;
         private const float ZoomW = 60f;     // zoom-button column on the right
-        private const int TexW = 1792;
+        // Marker texture is PADDED: it covers TEXPAD× the visible span so pure view movement
+        // (pan / scrub / playback paging) just scrolls the RawImage's uvRect — no texture repaint.
+        // Width scales with the pad so pixel DENSITY (px per frac) matches the old 1792-over-view,
+        // keeping marker/grid sizes identical. Re-renders only when the view leaves the padded
+        // window, on zoom change, or on a content edit. _texStart/_texSpan = the frac range the
+        // texture currently holds; _texZoom = the zoom it was rendered at.
+        private const int TexW = 3584;
+        private const float TEXPAD = 2f;
+        private static float _texStart, _texSpan, _texZoom;
         private const int TexLaneH = 20;     // texture rows per lane (16px marker + 4 gap)
         private static readonly List<LevelEventCategory> _lanes = new List<LevelEventCategory>();
         private static List<KeyValuePair<float, LevelEvent>>[] _laneEvents; // abs-frac-sorted per lane
@@ -780,14 +788,32 @@ namespace Sapphire
                 }
             }
 
-            // A full marker-texture repaint (~1 MB clear + SetPixels32 + GPU upload) is the strip's
-            // biggest per-frame cost. Playback pages the view (15 Hz is indistinguishable); edit-mode
-            // wheel-pan / edge-scrub changes the view continuously, so cap those at 30 Hz too — a ≤1
-            // frame (~16 ms) delay before markers catch up is imperceptible and halves the pan cost.
-            if (_viewDirty && (Time.frameCount & (playing ? 3 : 1)) == 0)
+            /* UV-scroll: the marker texture holds TEXPAD× the visible span, so pure view movement
+               (pan / scrub / playback paging) just scrolls the RawImage's uvRect — no ~1-2 MB
+               clear + SetPixels32 + GPU upload. The texture is only RE-rendered when the view
+               leaves the padded window (must be THIS frame or the exposed edge shows blank), when
+               the zoom changes (the padded span is zoom-relative), or on a content edit
+               (_viewDirty — throttled, a ≤1-frame delay is imperceptible). */
+            float viewSpanF = 1f / _zoom;
+            bool outOfRange = _markerTex == null || _zoom != _texZoom
+                || _viewStart < _texStart - 1e-6f
+                || _viewStart + viewSpanF > _texStart + _texSpan + 1e-6f;
+            if (outOfRange || (_viewDirty && (Time.frameCount & (playing ? 3 : 1)) == 0))
             {
+                // re-center the padded window on the current view
+                _texSpan = Mathf.Min(1f, viewSpanF * TEXPAD);
+                _texStart = Mathf.Clamp(_viewStart - (_texSpan - viewSpanF) * 0.5f, 0f, Mathf.Max(0f, 1f - _texSpan));
+                _texZoom = _zoom;
                 RenderMarkers();
                 _viewDirty = false;
+            }
+            if (_markerImage != null && _texSpan > 1e-6f)
+            {
+                float uvX = (_viewStart - _texStart) / _texSpan;
+                float uvW = viewSpanF / _texSpan;
+                var uv = _markerImage.uvRect;
+                if (Mathf.Abs(uv.x - uvX) > 1e-5f || Mathf.Abs(uv.width - uvW) > 1e-5f)
+                    _markerImage.uvRect = new Rect(uvX, 0f, uvW, 1f);
             }
 
             // Playhead placement (hidden when the selection sits outside the view).
@@ -851,8 +877,11 @@ namespace Sapphire
             LevelEvent hit = null;
             if (inSubRow)
             {
-                // diamonds live at fanned texture positions — hit-test in that space
-                float texX = Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width)) * TexW;
+                // diamonds live at fanned PADDED-texture positions — map mouse → visible frac →
+                // padded texture x to match _subKf's stored cx (texture is wider than the view now)
+                float tv = Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width));
+                float fx = _viewStart + tv / _zoom;
+                float texX = (fx - _texStart) / Mathf.Max(1e-6f, _texSpan) * TexW;
                 float best = 10f;
                 foreach (var kf in _subKf)
                 {
@@ -1826,7 +1855,11 @@ namespace Sapphire
             if (_px == null || _px.Length != need) _px = new Color32[need];
             else System.Array.Clear(_px, 0, need);
             var px = _px;
-            float viewEnd = _viewStart + 1f / _zoom;
+            // Everything below maps through the PADDED render window; the visible view is a
+            // sub-window scrolled via uvRect (see the per-frame block that calls this).
+            float vs = _texStart;
+            float invSpan = 1f / Mathf.Max(1e-6f, _texSpan);
+            float viewEnd = _texStart + _texSpan;
 
             /* Measure grid: 4/4 measures in BEAT domain, mapped to time through the game's
                own (entryBeat → entryTime) pairs — BPM shifts change the spacing by
@@ -1838,9 +1871,9 @@ namespace Sapphire
             var faint = new Color32(255, 255, 255, 22);
             var strong = new Color32(255, 255, 255, 44);
             var boundary = new Color32(255, 190, 80, 70);
-            double viewStartT = _viewStart * _totalTime;
+            double viewStartT = vs * _totalTime;
             double viewEndT = viewEnd * _totalTime;
-            double viewSpan = _totalTime / _zoom;
+            double viewSpan = _totalTime * _texSpan;
             double viewStartBeat = BeatAtTime(viewStartT);
             // One line per measure, phased to the detected downbeat so the drop lands on a
             // strong line even if the intro doesn't fill whole measures.
@@ -1862,8 +1895,8 @@ namespace Sapphire
                     double t = TimeAtBeat(b);
                     if (t > viewEndT) break;
                     double frac = t / _totalTime;
-                    if (frac < _viewStart) continue;
-                    int gx = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 1)), 0, TexW - 1);
+                    if (frac < vs) continue;
+                    int gx = Mathf.Clamp((int)((frac - vs) * invSpan * (TexW - 1)), 0, TexW - 1);
                     var gcol = (n & 3) == 0 ? strong : faint; // every 4th measure = phrase
                     for (int y = 0; y < texH; y++) px[y * TexW + gx] = gcol;
                 }
@@ -1873,7 +1906,7 @@ namespace Sapphire
                 if (bt >= viewStartT && bt <= viewEndT)
                 {
                     double bfrac = bt / _totalTime;
-                    int bx = Mathf.Clamp((int)((bfrac - _viewStart) * _zoom * (TexW - 1)), 0, TexW - 1);
+                    int bx = Mathf.Clamp((int)((bfrac - vs) * invSpan * (TexW - 1)), 0, TexW - 1);
                     for (int y = 0; y < texH; y++) px[y * TexW + bx] = boundary;
                 }
             }
@@ -1890,11 +1923,11 @@ namespace Sapphire
                     float frac = list[i].Key;
                     var e = list[i].Value;
                     float fracEnd = KeyframeMode ? CamDurationFracEnd(e, frac) : frac;
-                    if (fracEnd < _viewStart || frac > viewEnd) continue;
+                    if (fracEnd < vs || frac > viewEnd) continue;
                     var col = e.active
                         ? new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 255)
                         : new Color32((byte)(c.r * 255), (byte)(c.g * 255), (byte)(c.b * 255), 90);
-                    int x0 = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 4)), 0, TexW - 4);
+                    int x0 = Mathf.Clamp((int)((frac - vs) * invSpan * (TexW - 4)), 0, TexW - 4);
                     if (!KeyframeMode)
                     {
                         for (int y = y0; y < y0 + tlh - 3; y++)
@@ -1912,7 +1945,7 @@ namespace Sapphire
                     // is the classic pair — they join visually into tick-then-bar.
                     bool selKf = ReferenceEquals(e, _camSel);
                     if (selKf) col = new Color32(255, 255, 255, 255);
-                    int x1 = Mathf.Clamp((int)((fracEnd - _viewStart) * _zoom * (TexW - 4)), x0, TexW - 4);
+                    int x1 = Mathf.Clamp((int)((fracEnd - vs) * invSpan * (TexW - 4)), x0, TexW - 4);
                     var body = new Color32(col.r, col.g, col.b, (byte)(e.active ? 120 : 45));
                     if (x1 <= x0 + 1)
                     {
@@ -1954,8 +1987,8 @@ namespace Sapphire
                 for (int i = 0; i < list.Count; i++)
                 {
                     float frac = list[i].Key;
-                    if (frac < _viewStart || frac > viewEnd) continue;
-                    int cx = Mathf.Clamp((int)((frac - _viewStart) * _zoom * (TexW - 4)), 0, TexW - 4) + 2;
+                    if (frac < vs || frac > viewEnd) continue;
+                    int cx = Mathf.Clamp((int)((frac - vs) * invSpan * (TexW - 4)), 0, TexW - 4) + 2;
                     if (cx - lastX < 12) cx = lastX + 12; // fan out stacked pairs
                     if (cx > TexW - 6) continue;
                     lastX = cx;
