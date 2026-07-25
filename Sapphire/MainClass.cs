@@ -336,6 +336,7 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorMasterSwitch.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
+            UI.EditorDropdown.Dispose();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
             if (_tickerGo != null)

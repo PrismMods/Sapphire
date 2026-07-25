@@ -123,10 +123,20 @@ namespace Sapphire
             if (val is Enum en)
             {
                 Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
-                var cell = Cell(content, LocEnum(en.GetType().Name, en.ToString()), x, y, w, RowH,
-                    () => Commit(c, ed, e2, p2, k, StepEnum(en, +1)), false);
-                var ch = cell.gameObject.GetComponent<UI.ClickHandler>();
-                if (ch != null) ch.OnRightClick = () => Commit(c, ed, e2, p2, k, StepEnum(en, -1));
+                var et = en.GetType();
+                var arr = Enum.GetValues(et);
+                var labels = new System.Collections.Generic.List<string>(arr.Length);
+                int curIdx = 0;
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    var ev = (Enum)arr.GetValue(i);
+                    labels.Add(LocEnum(et.Name, ev.ToString()));
+                    if (Equals(ev, en)) curIdx = i;
+                }
+                RoundedRectGraphic bg = null;
+                bg = Cell(content, LocEnum(et.Name, en.ToString()) + "  ▾", x, y, w, RowH,
+                    () => UI.EditorDropdown.Open((RectTransform)bg.transform, labels, curIdx,
+                        i => Commit(c, ed, e2, p2, k, arr.GetValue(i))), false, TextAnchor.MiddleLeft);
                 return y - (RowH + Gap);
             }
             if (strOpts != null && strOpts.Length > 0)
@@ -137,10 +147,12 @@ namespace Sapphire
                 int cur = Mathf.Max(0, Array.IndexOf(strOpts, sv));
                 var opts = strOpts;
                 Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
-                var cell = Cell(content, LocEnum(tn, sv), x, y, w, RowH,
-                    () => Commit(c, ed, e2, p2, k, opts[(cur + 1) % opts.Length]), false);
-                var ch = cell.gameObject.GetComponent<UI.ClickHandler>();
-                if (ch != null) ch.OnRightClick = () => Commit(c, ed, e2, p2, k, opts[(cur - 1 + opts.Length) % opts.Length]);
+                var labels = new System.Collections.Generic.List<string>(opts.Length);
+                foreach (var o in opts) labels.Add(LocEnum(tn, o));
+                RoundedRectGraphic bg = null;
+                bg = Cell(content, LocEnum(tn, sv) + "  ▾", x, y, w, RowH,
+                    () => UI.EditorDropdown.Open((RectTransform)bg.transform, labels, cur,
+                        i => Commit(c, ed, e2, p2, k, opts[i])), false, TextAnchor.MiddleLeft);
                 return y - (RowH + Gap);
             }
             if (val is Vector2 v2)
@@ -166,12 +178,22 @@ namespace Sapphire
                         Commit(c, ed, e2, p2, k, Tuple.Create(n, cur2 != null ? cur2.Item2 : tile.Item2));
                     }
                 });
-                Cell(content, LocEnum("TileRelativeTo", tile.Item2.ToString()), x + fw + Gap, y, w - fw - Gap, RowH, () =>
+                var trArr = Enum.GetValues(typeof(TileRelativeTo));
+                var trLabels = new System.Collections.Generic.List<string>(trArr.Length);
+                int trCur = 0;
+                for (int i = 0; i < trArr.Length; i++)
                 {
-                    var cur2 = ValOf(e2, k, tile) as Tuple<int, TileRelativeTo> ?? tile;
-                    var next = (TileRelativeTo)(((int)cur2.Item2 + 1) % 3);
-                    Commit(c, ed, e2, p2, k, Tuple.Create(cur2.Item1, next));
-                }, false);
+                    var tv = (TileRelativeTo)trArr.GetValue(i);
+                    trLabels.Add(LocEnum("TileRelativeTo", tv.ToString()));
+                    if (tv == tile.Item2) trCur = i;
+                }
+                RoundedRectGraphic trBg = null;
+                trBg = Cell(content, LocEnum("TileRelativeTo", tile.Item2.ToString()) + "  ▾", x + fw + Gap, y, w - fw - Gap, RowH,
+                    () => UI.EditorDropdown.Open((RectTransform)trBg.transform, trLabels, trCur, i =>
+                    {
+                        var cur2 = ValOf(e2, k, tile) as Tuple<int, TileRelativeTo> ?? tile;
+                        Commit(c, ed, e2, p2, k, Tuple.Create(cur2.Item1, (TileRelativeTo)trArr.GetValue(i)));
+                    }), false, TextAnchor.MiddleLeft);
                 return y - (RowH + Gap);
             }
 

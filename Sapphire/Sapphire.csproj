@@ -91,6 +91,7 @@
         <Compile Include="Editor\EditorUiEditor.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
+        <Compile Include="UI\EditorDropdown.cs" />
         <Compile Include="UI\Pages\PageEditor.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
         <Compile Include="Util\SapphireLog.cs" />
