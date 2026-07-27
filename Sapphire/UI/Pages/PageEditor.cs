@@ -20,14 +20,14 @@ namespace Sapphire.UI.Pages
 
             UIBuilder.SectionHeaderWithHelp(content, "Language",
                 "Language for Sapphire's editor UI and help.\nAuto follows the game's language setting.");
-            TextMeshProUGUI langLabel = null;
-            var langBtn = UIBuilder.Button(content, "Language: " + LangLabels[Mathf.Clamp(s.UiLanguage, 0, 2)], () =>
+            UIBuilder.Button(content, "Language: " + LangLabels[Mathf.Clamp(s.UiLanguage, 0, 2)], () =>
             {
                 s.UiLanguage = (s.UiLanguage + 1) % 3;
                 notify?.Invoke();
-                if (langLabel != null) langLabel.text = "Language: " + LangLabels[s.UiLanguage];
+                // Rebuild the panel body so this page (and its language button label) re-localize
+                // to the new language; RebuildBody keeps the panel open on this same tab.
+                UICore.RebuildBody();
             });
-            langLabel = langBtn.GetComponentInChildren<TextMeshProUGUI>();
 
             UIBuilder.Collapsible(content, "Invert scroll direction", s.InvertScroll,
                 v => { s.InvertScroll = v; notify?.Invoke(); }, null);

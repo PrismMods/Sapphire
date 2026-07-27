@@ -105,6 +105,9 @@ namespace Sapphire.UI
         private static Settings _settings;
         private static UnityModManager.ModEntry _modEntry;
         private static List<FontLoader.FontEntry> _availableFonts;
+        // Re-runnable tab registration, so RebuildBody() can repopulate the fresh rail.
+        private static Action _buildTabs;
+        private static bool _rebuildPending;
 
         public static TabRail Tabs { get { return _tabs; } }
         public static Settings Settings { get { return _settings; } }
@@ -182,6 +185,51 @@ namespace Sapphire.UI
         // Tracks the scale at which the panel's sizeDelta + anchoredPosition currently make sense.
         // Starts at 1.0 because BuildPanel sets canonical (840×540) at canvas-scale=1.0 units.
         private static float _appliedScale = 1f;
+
+        // MainClass registers its tab set here so the body can be rebuilt in place (e.g. on a
+        // language change) — the same callback repopulates the freshly created rail.
+        public static void SetTabBuilder(Action build) => _buildTabs = build;
+
+        // Language changed while the panel is open: rebuild the tab rail + pages so every baked
+        // Loc.T string re-localizes, keeping the panel open on the same tab. Deferred to
+        // HandleUpdate — the trigger is a Button click, and tearing down the button's own
+        // subtree mid-dispatch is unsafe. Cheap no-op flag; the actual work runs once.
+        public static void RebuildBody() { if (_panel != null) _rebuildPending = true; }
+
+        private static void DoRebuildBody()
+        {
+            if (_panel == null) return;
+            try
+            {
+                int active = _tabs != null ? _tabs.Active : 0;
+
+                // DestroyImmediate (not Destroy): the replacements below reuse the same object
+                // names / anchors, so the old ones must be gone before we rebuild, or two rails /
+                // footers / stale-language pages coexist for a frame.
+                DestroyPanelChild("Rail");
+                DestroyPanelChild("RailDivider");
+                DestroyPanelChild("PageHost");
+                DestroyPanelChild("Footer");
+                _tabs = null;
+                _railRect = null;
+                _pageHostRect = null;
+
+                BuildBody();          // recreates rail/divider/pageHost/footer + a fresh _tabs
+                _buildTabs?.Invoke();  // re-registers the tabs (rebuilds pages with new language)
+                if (_tabs != null && active >= 0) _tabs.Select(active);
+
+                // Scale/theme are already baked into Theme statics + the panel rect, so the new
+                // subtree inherits them; just force a layout so glyphs rasterize this frame.
+                LayoutRebuilder.ForceRebuildLayoutImmediate(_panel);
+            }
+            catch (Exception ex) { SapphireLog.Log("[UI] RebuildBody failed: " + ex); }
+        }
+
+        private static void DestroyPanelChild(string name)
+        {
+            var t = _panel.Find(name);
+            if (t != null) UnityEngine.Object.DestroyImmediate(t.gameObject);
+        }
 
         public static void ApplyScale(float scale)
         {
@@ -571,6 +619,7 @@ namespace Sapphire.UI
         public static void HandleUpdate()
         {
             if (_canvasGo == null) return;
+            if (_rebuildPending) { _rebuildPending = false; DoRebuildBody(); }
             bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
             if (ctrl && Input.GetKeyDown(KeyCode.E)) Toggle();
         }

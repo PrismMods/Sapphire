@@ -18,6 +18,7 @@ namespace Sapphire.UI
         private float _y = 0f;
 
         public RectTransform PageHost { get { return _pageHost; } }
+        public int Active { get { return _active; } }
 
         private class Tab
         {

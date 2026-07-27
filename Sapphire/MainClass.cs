@@ -119,8 +119,11 @@ namespace Sapphire
         private static void BuildUI()
         {
             UICore.Initialize(_modEntry, Settings, () => { }, availableFonts);
-            UICore.Tabs.AddTab("Editor", PageEditor.Build);
+            UICore.SetTabBuilder(BuildTabs); // re-runnable, so RebuildBody() can re-localize the body
+            BuildTabs();
         }
+
+        private static void BuildTabs() => UICore.Tabs.AddTab("Editor", PageEditor.Build);
 
         // The editor features tick per frame; Sapphire has no overlay component to ride,
         // so it brings its own DDOL ticker.
@@ -135,6 +138,31 @@ namespace Sapphire
         private class SapphireTicker : MonoBehaviour
         {
             private int _esFrame;
+
+            // Effective UI language last seen (Loc.Korean already folds in UiLanguage AND, under
+            // Auto, the game's RDString.language). Primed on the first frame so we never fire on
+            // startup — only on an actual flip.
+            private bool _langPrimed;
+            private bool _lastKorean;
+
+            /* One cheap read per frame; acts only on the FLIP. Already-built editor overlays
+               bake their Loc.T strings at build time, so a language change leaves them stale.
+               Dropping them (in-editor only) makes each rebuild with the new language on its
+               very next Tick below — same frame, since this runs before the module ticks. */
+            private void CheckLanguageFlip()
+            {
+                bool kor;
+                try { kor = Loc.Korean; } catch { return; }
+                if (!_langPrimed) { _lastKorean = kor; _langPrimed = true; return; }
+                if (kor == _lastKorean) return;
+                _lastKorean = kor;
+
+                bool inEditor;
+                try { inEditor = scnEditor.instance != null; } catch { inEditor = false; }
+                if (!inEditor) return; // overlays rebuild fresh on entering the editor anyway
+                try { DisposeEditorModules(); }
+                catch (Exception ex) { SapphireLog.Log("[lang] overlay re-localize failed: " + ex); }
+            }
 
             /* Per-module tick timing: accumulated and debug-logged every ~15s so lag
                reports point at a module instead of "the mod". Overhead is one Stopwatch
@@ -175,6 +203,8 @@ namespace Sapphire
                 // Keep exactly one EventSystem alive (a stray DDOL one breaks carets/typing).
                 // Same cadence drains the log buffer so a burst costs one write, not hundreds.
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
+
+                CheckLanguageFlip(); // drop stale-language overlays before this frame's ticks rebuild them
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
@@ -302,16 +332,14 @@ namespace Sapphire
             }
         }
 
-        private static void StopMod(UnityModManager.ModEntry modEntry)
+        // Tears down every Sapphire editor OVERLAY module. Each rebuilds itself from settings /
+        // selection on its next Tick, so this is reused two ways: StopMod (final teardown) and
+        // the language-flip handler (drop the overlays so they rebuild with the new language).
+        // Deliberately excludes non-overlay state that can't be recreated cheaply (Tweaks'
+        // editor-mode / control-tip / tile-angle patches, EditorUiLayout's game-UI wrappers).
+        private static void DisposeEditorModules()
         {
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-            _deferredApplyPending = false;
-            Tweaks.ReleaseBismuthSuppress();
-            Tweaks.DisposeEditorMode();
-            Tweaks.RestoreControlsTip();
-            Tweaks.DisposeTileAngle();
             EditorEvents.Dispose();
-            EditorUiLayout.RestoreAll();
             EditorChrome.Dispose();
             EditorInspector.Dispose();
             EditorPopups.Dispose();
@@ -338,6 +366,18 @@ namespace Sapphire
             EditorMasterSwitch.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             UI.EditorDropdown.Dispose();
+        }
+
+        private static void StopMod(UnityModManager.ModEntry modEntry)
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            _deferredApplyPending = false;
+            Tweaks.ReleaseBismuthSuppress();
+            Tweaks.DisposeEditorMode();
+            Tweaks.RestoreControlsTip();
+            Tweaks.DisposeTileAngle();
+            EditorUiLayout.RestoreAll();
+            DisposeEditorModules();
             EditorUiEditor.Close();
             harmony.UnpatchSelf();
             if (_tickerGo != null)

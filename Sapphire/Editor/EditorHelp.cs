@@ -23,6 +23,12 @@ namespace Sapphire
         private static TMPro.TextMeshProUGUI _body;
         private static RectTransform _bodyRect;
         private static RectTransform _panelRect;
+        private static RectTransform _indexPanelRect;
+        // topic key → its row background (recoloured to mark the current topic)
+        private static readonly Dictionary<string, RoundedRectGraphic> _indexRows =
+            new Dictionary<string, RoundedRectGraphic>();
+        private static RectTransform _indexContent;   // the scrollable list (rebuilt on search)
+        private static string _lastTopicKey;           // re-highlighted after a filter rebuild
         private static bool _open;
         private static readonly List<RaycastResult> _hits = new List<RaycastResult>();
         private static PointerEventData _hoverPed;   // reused by HoverTarget (per-frame while open)
@@ -110,8 +116,9 @@ namespace Sapphire
 
         private static bool OverPanel()
         {
-            return _panelRect != null && RectTransformUtility.RectangleContainsScreenPoint(
-                _panelRect, Input.mousePosition, null);
+            var mp = Input.mousePosition;
+            return (_panelRect != null && RectTransformUtility.RectangleContainsScreenPoint(_panelRect, mp, null))
+                || (_indexPanelRect != null && RectTransformUtility.RectangleContainsScreenPoint(_indexPanelRect, mp, null));
         }
 
         private static readonly Vector3[] _corners = new Vector3[4];
@@ -140,7 +147,20 @@ namespace Sapphire
                 _bodyRect.sizeDelta = new Vector2(0f, _body.preferredHeight + 20f);
                 _bodyRect.anchoredPosition = Vector2.zero;
             }
+            HighlightIndexRow(key);
         }
+
+        // mark the current topic in the browsable index (does nothing for __intro / unlisted keys)
+        private static void HighlightIndexRow(string key)
+        {
+            _lastTopicKey = key; // remembered so a search rebuild can re-highlight the open topic
+            foreach (var kv in _indexRows)
+                kv.Value.color = kv.Key == key ? _rowSelColor : _rowBaseColor;
+        }
+
+        private static readonly Color _rowBaseColor = new Color(1f, 1f, 1f, 0.025f);
+        private static readonly Color _rowSelColor =
+            new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.20f);
 
         // ── UI ──────────────────────────────────────────────────────────────
         private static void EnsureUi()
@@ -261,7 +281,220 @@ namespace Sapphire
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 25f;
+
+            BuildIndex();
         }
+
+        // ── browsable index ──────────────────────────────────────────────────
+        // Left-hand directory: categorised, scrollable, clickable list of every topic.
+        // Grouping is data (Index) so it stays maintainable; only keys present in Topics
+        // are shown. Clicking a row is the non-hover way into a topic's docs.
+        private static void BuildIndex()
+        {
+            _indexRows.Clear();
+            var panelGo = new GameObject("IndexPanel", typeof(RectTransform));
+            panelGo.transform.SetParent(_canvasGo.transform, false);
+            _indexPanelRect = (RectTransform)panelGo.transform;
+            _indexPanelRect.anchorMin = new Vector2(0f, 0.5f);
+            _indexPanelRect.anchorMax = new Vector2(0f, 0.5f);
+            _indexPanelRect.pivot = new Vector2(0f, 0.5f);
+            _indexPanelRect.anchoredPosition = new Vector2(16f, 0f);
+            _indexPanelRect.sizeDelta = new Vector2(300f, 560f);
+            var pbg = panelGo.AddComponent<RoundedRectGraphic>();
+            pbg.Radius = 12f;
+            pbg.color = new Color(0.07f, 0.07f, 0.09f, 0.97f);
+            pbg.BorderWidth = 1f;
+            pbg.BorderColor = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f);
+            pbg.raycastTarget = true;
+
+            // title (left-anchored so it never overflows off the panel's left edge)
+            var titleGo = new GameObject("Title", typeof(RectTransform));
+            titleGo.transform.SetParent(panelGo.transform, false);
+            var tr = (RectTransform)titleGo.transform;
+            tr.anchorMin = new Vector2(0f, 1f); tr.anchorMax = new Vector2(1f, 1f);
+            tr.pivot = new Vector2(0f, 1f);
+            tr.offsetMin = new Vector2(14f, 0f); tr.offsetMax = new Vector2(-14f, 0f);
+            tr.anchoredPosition = new Vector2(14f, -12f);
+            tr.sizeDelta = new Vector2(0f, 24f);
+            UIBuilder.Tmp(titleGo, Loc.Korean ? "목차" : "Contents", 16f, TextAnchor.MiddleLeft, Theme.Text)
+                .fontStyle = TMPro.FontStyles.Bold;
+
+            // search box — filters the list live
+            var fieldGo = new GameObject("Search", typeof(RectTransform));
+            fieldGo.transform.SetParent(panelGo.transform, false);
+            var fr = (RectTransform)fieldGo.transform;
+            fr.anchorMin = new Vector2(0f, 1f); fr.anchorMax = new Vector2(1f, 1f);
+            fr.pivot = new Vector2(0.5f, 1f);
+            fr.offsetMin = new Vector2(12f, 0f); fr.offsetMax = new Vector2(-12f, 0f);
+            fr.anchoredPosition = new Vector2(0f, -42f);
+            fr.sizeDelta = new Vector2(0f, 26f);
+            var fbg = fieldGo.AddComponent<RoundedRectGraphic>();
+            fbg.Radius = 5f;
+            fbg.color = new Color(1f, 1f, 1f, 0.07f);
+            fbg.BorderWidth = 1f;
+            fbg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            fbg.raycastTarget = true;
+            var stGo = new GameObject("T", typeof(RectTransform));
+            stGo.transform.SetParent(fieldGo.transform, false);
+            var str = (RectTransform)stGo.transform;
+            str.anchorMin = Vector2.zero; str.anchorMax = Vector2.one;
+            str.offsetMin = new Vector2(8f, 0f); str.offsetMax = new Vector2(-8f, 0f);
+            var stxt = UIBuilder.Tmp(stGo, "", 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+            stxt.richText = false;
+            var phGo = new GameObject("PH", typeof(RectTransform));
+            phGo.transform.SetParent(fieldGo.transform, false);
+            var phr = (RectTransform)phGo.transform;
+            phr.anchorMin = Vector2.zero; phr.anchorMax = Vector2.one;
+            phr.offsetMin = new Vector2(8f, 0f); phr.offsetMax = new Vector2(-8f, 0f);
+            var phTmp = UIBuilder.Tmp(phGo, Loc.Korean ? "검색…" : "Search…", 12.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            phTmp.raycastTarget = false;
+            var input = UIBuilder.BuildInputField(fieldGo, stxt);
+            input.lineType = TMPro.TMP_InputField.LineType.SingleLine;
+            input.placeholder = phTmp; // TMP shows/hides it as the field empties/fills
+            input.onValueChanged.AddListener(RebuildIndexList);
+
+            // scroll viewport (below the title + search)
+            var viewGo = new GameObject("Viewport", typeof(RectTransform));
+            viewGo.transform.SetParent(panelGo.transform, false);
+            var vr = (RectTransform)viewGo.transform;
+            vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
+            vr.offsetMin = new Vector2(10f, 12f); vr.offsetMax = new Vector2(-8f, -80f);
+            viewGo.AddComponent<RectMask2D>();
+            var vi = viewGo.AddComponent<Image>();
+            vi.color = new Color(0f, 0f, 0f, 0.01f);
+            vi.raycastTarget = true;
+
+            var contentGo = new GameObject("Content", typeof(RectTransform));
+            contentGo.transform.SetParent(viewGo.transform, false);
+            _indexContent = (RectTransform)contentGo.transform;
+            _indexContent.anchorMin = new Vector2(0f, 1f); _indexContent.anchorMax = new Vector2(1f, 1f);
+            _indexContent.pivot = new Vector2(0.5f, 1f);
+            _indexContent.anchoredPosition = Vector2.zero;
+            _indexContent.sizeDelta = Vector2.zero;
+
+            var scroll = viewGo.AddComponent<ScrollRect>();
+            scroll.content = _indexContent;
+            scroll.viewport = vr;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 25f;
+
+            RebuildIndexList("");
+        }
+
+        // (Re)build the directory rows, filtered by a case-insensitive title match. MANUAL y-layout
+        // with explicit top-stretch rows — the earlier VerticalLayoutGroup left-clipped the labels.
+        private static void RebuildIndexList(string filter)
+        {
+            if (_indexContent == null) return;
+            for (int i = _indexContent.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.DestroyImmediate(_indexContent.GetChild(i).gameObject);
+            _indexRows.Clear();
+
+            string f = filter != null ? filter.Trim() : "";
+            float y = 0f;
+            const float rowH = 24f, headH = 22f, gap = 2f;
+            foreach (var cat in Index)
+            {
+                var matches = new List<string>();
+                foreach (var k in cat.Keys)
+                {
+                    if (!Topics.ContainsKey(k)) continue;
+                    if (f.Length == 0 || Topics[k].Key.IndexOf(f, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        matches.Add(k);
+                }
+                if (matches.Count == 0) continue;
+                MakeIndexHeader(Loc.Korean ? cat.Ko : cat.En, y, headH); y -= headH + gap;
+                foreach (var k in matches) { MakeIndexRow(k, Topics[k].Key, y, rowH); y -= rowH + gap; }
+                y -= 4f; // gap between categories
+            }
+            _indexContent.sizeDelta = new Vector2(0f, -y + 4f);
+            _indexContent.anchoredPosition = Vector2.zero;
+            HighlightIndexRow(_lastTopicKey);
+        }
+
+        private static void MakeIndexHeader(string label, float y, float h)
+        {
+            var go = new GameObject("Header", typeof(RectTransform));
+            go.transform.SetParent(_indexContent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(0f, h);
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = new Vector2(6f, 0f); lr.offsetMax = new Vector2(-4f, 0f);
+            var t = UIBuilder.Tmp(lGo, label, 12f, TextAnchor.LowerLeft, Theme.Accent);
+            t.fontStyle = TMPro.FontStyles.Bold | TMPro.FontStyles.UpperCase;
+            t.raycastTarget = false;
+        }
+
+        private static void MakeIndexRow(string key, string title, float y, float h)
+        {
+            var go = new GameObject("Row", typeof(RectTransform));
+            go.transform.SetParent(_indexContent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
+            r.pivot = new Vector2(0.5f, 1f);
+            r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(0f, h);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = _rowBaseColor;
+            bg.raycastTarget = true;
+            _indexRows[key] = bg;
+
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
+            var lbl = UIBuilder.Tmp(lGo, title, 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+            lbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            lbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            lbl.raycastTarget = false;
+
+            UI.ClickHandler.Attach(go, () => ShowTopic(key));
+        }
+
+        // category → topic keys, ordered. Localised header + only-existing-keys enforced at build.
+        private sealed class Cat
+        {
+            public readonly string En, Ko;
+            public readonly string[] Keys;
+            public Cat(string en, string ko, string[] keys) { En = en; Ko = ko; Keys = keys; }
+        }
+
+        private static readonly Cat[] Index =
+        {
+            new Cat("Tools", "도구", new[]
+            {
+                "ToolCircle", "ToolFreeAngle", "ToolPseudo", "ToolZip", "ToolMagic",
+                "ToolTrack", "ToolDeco", "ToolInspector", "ToolCamera", "ToolVfx", "ToolBar",
+                "PseudoMenu", "ZipMenu",
+            }),
+            new Cat("Panels", "패널", new[]
+            {
+                "EventDock", "SapphireLevelMenu", "SapphireCopyPanel", "SapphirePresets",
+                "SapphireCameraCard", "SapphireEasePicker", "SapphireTileMenu", "SapphireFilterPicker",
+                "SapphirePopup",
+            }),
+            new Cat("Timeline & camera", "타임라인 · 카메라", new[]
+            {
+                "SapphireEditorEvents", "SapphireTimelineFold", "SapphireEventTabs", "CamMode",
+                "Lane", "CamInspector", "CameraMenu", "GraphBtn", "SapphireGraph", "SapphireBezier",
+                "SapphirePitch",
+            }),
+            new Cat("Chrome", "크롬", new[]
+            {
+                "FileChip", "SettingsChip", "LevelSettingsChip", "GameSettingsChip", "LeaveChip",
+                "HelpChip", "SapphireMasterSwitch", "SapphireEditorChrome", "SapphireToolbar",
+            }),
+        };
 
         // ── documentation ───────────────────────────────────────────────────
         // key → (title, body). Keys are GameObject names (specific) or root canvas names
@@ -280,9 +513,9 @@ namespace Sapphire
         {
             var d = new Dictionary<string, KeyValuePair<string, string>>();
             Add(d, "__intro", "Help mode",
-"<b>What this is</b>\nHover any Sapphire control — it highlights. Click it to read its documentation here.\n\n<b>Keys</b>\nESC — exit help mode.",
+"<b>What this is</b>\nBrowse every tool and panel from the <b>Contents</b> list on the left — click an entry to read its docs here.\n\nOr point at any Sapphire control: it highlights, and clicking it jumps straight to its documentation.\n\n<b>Keys</b>\nESC — exit help mode.",
 "도움말 모드",
-"<b>사용법</b>\nSapphire UI에 마우스를 올리면 강조 표시됩니다. 클릭하면 해당 기능의 설명이 여기에 표시됩니다.\n\n<b>단축키</b>\nESC — 도움말 모드 종료.");
+"<b>사용법</b>\n왼쪽 <b>목차</b>에서 모든 도구와 패널을 살펴볼 수 있습니다 — 항목을 클릭하면 설명이 여기에 표시됩니다.\n\n또는 Sapphire UI에 마우스를 올리면 강조 표시되고, 클릭하면 해당 기능의 설명으로 바로 이동합니다.\n\n<b>단축키</b>\nESC — 도움말 모드 종료.");
 
             Add(d, "ToolCircle", "Circular path",
 "<b>What it does</b>\nGenerates stars, circles and midspin-circles after the selected tile (Star Calculator parameters).\n\n<b>How to use</b>\nSelect a tile, open the tool, set Pseudo per round / interval / angle, optional Reverse, Keep BPM, mid-spin. Apply builds in one undo.\n\n<b>Keys</b>\n1 — open (no tile selected).",
