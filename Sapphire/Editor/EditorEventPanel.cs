@@ -71,7 +71,11 @@ namespace Sapphire
             if (!baseWant || _userHidden)
             {
                 K.Show(false);
-                if (UI.EditorDropdown.IsOpen) UI.EditorDropdown.Close();
+                // Don't close the SHARED dropdown here: it may belong to the level-settings panel,
+                // not us. On a File>New level no floor is selected (NewLevel DeselectFloors), so this
+                // path runs every frame and was killing the level-menu dropdown the instant it opened.
+                // Our own dropdowns still close via EditorDropdown.Tick's backstop (hidden content →
+                // trigger !activeInHierarchy), which runs later in the same frame.
                 if (!baseWant) { _floor = -1; _sig = 0; _empty = false; } // real close resets; collapse keeps state
                 return;
             }
@@ -115,35 +119,6 @@ namespace Sapphire
             ClampIntoView();
             TickScroll();
             TickResize();
-            DiagClick(); // TEMP: identify what raycast-blocks tile clicks while the panel is open
-        }
-
-        // TEMP DIAGNOSTIC (remove once the full-screen click blocker is found): on a left click
-        // while the event panel is shown, log the topmost UI raycast hits under the cursor. Click
-        // a tile in CLEAR space and the top hit names the element that's eating the click.
-        private static void DiagClick()
-        {
-            if (!Input.GetMouseButtonDown(0)) return;
-            try
-            {
-                var es = UnityEngine.EventSystems.EventSystem.current;
-                if (es == null) return;
-                var pd = new UnityEngine.EventSystems.PointerEventData(es) { position = Input.mousePosition };
-                var hits = new List<UnityEngine.EventSystems.RaycastResult>();
-                es.RaycastAll(pd, hits);
-                var sb = new System.Text.StringBuilder("QCDIAG hits@" + Input.mousePosition + ": ");
-                if (hits.Count == 0) sb.Append("(none)");
-                for (int i = 0; i < hits.Count && i < 5; i++)
-                {
-                    var g = hits[i].gameObject;
-                    var cv = g != null ? g.GetComponentInParent<Canvas>() : null;
-                    sb.Append(g != null ? g.name : "null").Append('[')
-                      .Append(cv != null ? cv.name : "?").Append(':')
-                      .Append(cv != null ? cv.sortingOrder.ToString() : "?").Append("] ");
-                }
-                SapphireLog.Log(sb.ToString());
-            }
-            catch { }
         }
 
         private static bool _dockInited;

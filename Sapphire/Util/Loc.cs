@@ -127,10 +127,10 @@ namespace Sapphire
             ["(none — capture a tile, then Save)"] = "(없음 — 타일을 캡처한 뒤 저장하세요)",
 
             // ── camera timeline ──
-            ["Ease"] = "이징",
+            ["Ease"] = "가감속",
             ["Custom bezier"] = "커스텀 베지어",
             ["Graph"] = "그래프",
-            ["Graph View"] = "그래프 뷰",
+            ["Graph View"] = "그래프",
             ["Filters…"] = "필터 관리…",
             ["Filter manager"] = "필터 관리자",
             ["Filter manager (legacy)"] = "필터 관리자 (레거시)",

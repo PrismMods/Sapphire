@@ -133,7 +133,10 @@ namespace Sapphire
                 var go = ed.settingsPanel.gameObject;
                 if (_panelCg == null || _panelCg.gameObject != go)
                     _panelCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
-                if (_panelCg.alpha != 0f) { _panelCg.alpha = 0f; _panelCg.blocksRaycasts = false; }
+                // blocksRaycasts every frame, not only when alpha flips: the game can re-assert
+                // raycasts on its (invisible) settings panel, and a stuck-true blocker eats clicks.
+                if (_panelCg.alpha != 0f) _panelCg.alpha = 0f;
+                if (_panelCg.blocksRaycasts) _panelCg.blocksRaycasts = false;
                 if (ed.settingsPanel.showInspector) ed.settingsPanel.ShowInspector(false, true);
             }
             catch { }

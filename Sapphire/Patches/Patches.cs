@@ -35,9 +35,9 @@ namespace Sapphire
                     tmp.text = text;
                     tmp.color = textColor ?? Color.white;
                     tmp.alignment = TMPro.TextAlignmentOptions.Center; // else left-aligned in its rect → looks off-centre
-                    rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                    rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.8f);
                     rt.pivot = new Vector2(0.5f, 0.5f);
-                    rt.anchoredPosition = new Vector2(0f, 150f); // a bit above centre
+                    rt.anchoredPosition = new Vector2(0f, 0f); // a bit above centre
 
                     var cg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
                     cg.alpha = 0f;
