@@ -169,11 +169,11 @@ namespace Sapphire
                 if (_barCg == null || _barCg.gameObject != go)
                     _barCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
                 float a = hide ? 0f : 1f;
-                if (_barCg.alpha != a)
-                {
-                    _barCg.alpha = a;
-                    _barCg.blocksRaycasts = !hide;
-                }
+                bool blk = !hide;
+                // blocksRaycasts must track `hide` every frame, not only on an alpha change — the
+                // game can re-enable raycasts on its (invisible) bar and a stuck-true blocker eats clicks.
+                if (_barCg.alpha != a) _barCg.alpha = a;
+                if (_barCg.blocksRaycasts != blk) _barCg.blocksRaycasts = blk;
             }
             catch { }
         }

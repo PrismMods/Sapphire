@@ -17,13 +17,27 @@ namespace Sapphire.UI
         private const float RowH = 24f, Pad = 4f, MaxRows = 12f;
         private static GameObject _canvasGo, _rootGo;
         private static RectTransform _dropRoot;
+        private static RectTransform _trigger;   // the cell it dropped from; drives auto-close
 
         internal static bool IsOpen => _rootGo != null;
+
+        // The blocker is full-screen and raycast-catching (order 957), so a stranded dropdown eats
+        // the next world/tile click. It self-closes only on pick or blocker-click — so also close it
+        // here the moment its trigger goes away: panel hidden (SetActive false → not activeInHierarchy),
+        // selection changed / content rebuilt (cell destroyed → == null), or Esc. One backstop covers
+        // every opener (event inspector, level settings) without each needing to remember to close it.
+        internal static void Tick()
+        {
+            if (_rootGo == null) return;
+            bool gone = _trigger == null || !_trigger.gameObject.activeInHierarchy;
+            if (gone || Input.GetKeyDown(KeyCode.Escape)) Close();
+        }
 
         internal static void Close()
         {
             if (_rootGo != null) UnityEngine.Object.Destroy(_rootGo);
             _rootGo = null;
+            _trigger = null;
         }
 
         internal static void Dispose()
@@ -39,6 +53,7 @@ namespace Sapphire.UI
             Close();
             if (trigger == null || options == null || options.Count == 0) return;
             EnsureCanvas();
+            _trigger = trigger;
 
             _rootGo = new GameObject("Dropdown", typeof(RectTransform));
             _rootGo.transform.SetParent(_dropRoot, false);
@@ -163,6 +178,11 @@ namespace Sapphire.UI
             _dropRoot.anchorMin = Vector2.zero; _dropRoot.anchorMax = Vector2.one;
             _dropRoot.offsetMin = Vector2.zero; _dropRoot.offsetMax = Vector2.zero;
             _dropRoot.pivot = new Vector2(0f, 1f); // top-left space, matching anchoredPosition math
+            // A just-created ScreenSpaceOverlay canvas hasn't been sized yet, so _dropRoot.rect is
+            // (0,0) until the next canvas update — the FIRST Open would then read a zero rect and
+            // place the list off-screen (looked like "the dropdown doesn't open"). Force the layout
+            // now so the very first positioning math sees the real screen-sized root.
+            Canvas.ForceUpdateCanvases();
         }
 
         // Row hover highlight: brightens on pointer-enter unless it's the selected row.

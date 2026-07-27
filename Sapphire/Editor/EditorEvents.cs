@@ -362,12 +362,12 @@ namespace Sapphire
         {
             var s = MainClass.Settings;
             scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
             bool wantChips = false, wantTl = false, wantFold = false;
             try
             {
                 if (s != null && MainClass.EditorSuiteOn && (s.EditorShowEvents || s.EditorTimeline))
                 {
-                    ed = scnEditor.instance;
                     bool editing = ed != null && !ed.playMode && !EditorPanelOpen(ed);
                     bool inEditor = ed != null && !ed.playMode;
                     bool playing = ed != null && ed.playMode;
@@ -376,11 +376,20 @@ namespace Sapphire
                     // Always up while editing (open game panels included) and play-testing
                     // (the playhead follows the run); only the fold arrow hides it (ESC kept
                     // colliding with the game's own ESC behaviors — dropped July 11).
-                    wantTl = (inEditor || playing) && s.EditorTimeline && !_tlUserHidden;
-                    wantFold = (inEditor || playing) && s.EditorTimeline;
+                    // Quick-chart mode hides the whole strip for a clean charting screen.
+                    bool qc = s.FeatQuickChart;
+                    wantTl = (inEditor || playing) && s.EditorTimeline && !_tlUserHidden && !qc;
+                    wantFold = (inEditor || playing) && s.EditorTimeline && !qc;
                 }
             }
             catch { }
+            // The GAME's own play/rewind cluster is redundant while Sapphire owns the transport
+            // (FeatTimeline), and must ALSO stay hidden in quick-chart mode (clean charting screen)
+            // even though the Sapphire strip is gone. Decoupled from the strip's visibility so it
+            // never reappears when the strip hides; un-fades when the suite is off / editor left.
+            bool fadeGamePlay = ed != null && s != null && MainClass.EditorSuiteOn
+                && (s.EditorTransport || s.FeatQuickChart);
+            FadePlayCluster(fadeGamePlay ? ed : null, fadeGamePlay);
             // Outside the master gate: the arrow has its OWN canvas, so it must be told to
             // hide when the suite is switched off — it used to linger.
             TickFoldButton(wantFold);
@@ -397,9 +406,7 @@ namespace Sapphire
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 _chipFloor = -2; // force chip rebuild on return
-                // Master-off lands here without ever reaching TickTimeline's restore — un-fade
-                // the game's play cluster or it stays invisible.
-                FadePlayCluster(null, false);
+                // (game play-cluster fade handled centrally above, so it stays hidden in quick-chart)
                 // Manual zoom survives transient hides (file menu, prefs panel) but resets
                 // once the user actually leaves the editor.
                 if (ed == null) _userZoomed = false;
@@ -611,7 +618,6 @@ namespace Sapphire
                 if (_stripRect != null && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
                 if (_modeCluster != null && _modeCluster.gameObject.activeSelf) _modeCluster.gameObject.SetActive(false);
                 _cursorForced = false; // the game manages the cursor once we're out
-                FadePlayCluster(null, false);
                 return;
             }
             var events = LevelEventList();
@@ -634,7 +640,6 @@ namespace Sapphire
             }
             catch { }
             if (wantTransport != _transportOn) ApplyTransportLayout(wantTransport);
-            FadePlayCluster(ed, wantTransport);
             // With the Sapphire event dock replacing the game's bottom palette, the strip
             // can sit flush against the screen edge.
             float gap = dockOn ? 0f : BottomGap;

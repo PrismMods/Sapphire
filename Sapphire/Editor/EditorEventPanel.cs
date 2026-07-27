@@ -35,6 +35,9 @@ namespace Sapphire
         private static bool _dirty;            // a scan/rebuild is pending
         private static int _scanCd;            // frames until the next external-change rescan
         private static CanvasGroup _gameCg;    // the hidden game panel
+        private static bool _userHidden;       // × collapsed the panel to the chip (tile stays selected)
+        private static GameObject _chipGo;     // reopen chip while collapsed
+        private static TextMeshProUGUI _chipLabel;
 
         internal static void Tick()
         {
@@ -61,11 +64,15 @@ namespace Sapphire
             bool hideGame = active && !decorationSelected;
             SyncGamePanelHidden(ed, hideGame);
 
-            bool want = active && floor >= 0 && !decorationSelected;
-            if (!want)
+            // Collapsible like the event selector: × collapses to a reopen chip (keeping the tile
+            // SELECTED — better chart visibility, esp. in quick-chart), the chip reopens it.
+            bool baseWant = active && floor >= 0 && !decorationSelected;
+            ShowChip(baseWant && _userHidden, floor);
+            if (!baseWant || _userHidden)
             {
                 K.Show(false);
-                _floor = -1; _sig = 0; _empty = false;
+                if (UI.EditorDropdown.IsOpen) UI.EditorDropdown.Close();
+                if (!baseWant) { _floor = -1; _sig = 0; _empty = false; } // real close resets; collapse keeps state
                 return;
             }
 
@@ -108,6 +115,35 @@ namespace Sapphire
             ClampIntoView();
             TickScroll();
             TickResize();
+            DiagClick(); // TEMP: identify what raycast-blocks tile clicks while the panel is open
+        }
+
+        // TEMP DIAGNOSTIC (remove once the full-screen click blocker is found): on a left click
+        // while the event panel is shown, log the topmost UI raycast hits under the cursor. Click
+        // a tile in CLEAR space and the top hit names the element that's eating the click.
+        private static void DiagClick()
+        {
+            if (!Input.GetMouseButtonDown(0)) return;
+            try
+            {
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                if (es == null) return;
+                var pd = new UnityEngine.EventSystems.PointerEventData(es) { position = Input.mousePosition };
+                var hits = new List<UnityEngine.EventSystems.RaycastResult>();
+                es.RaycastAll(pd, hits);
+                var sb = new System.Text.StringBuilder("QCDIAG hits@" + Input.mousePosition + ": ");
+                if (hits.Count == 0) sb.Append("(none)");
+                for (int i = 0; i < hits.Count && i < 5; i++)
+                {
+                    var g = hits[i].gameObject;
+                    var cv = g != null ? g.GetComponentInParent<Canvas>() : null;
+                    sb.Append(g != null ? g.name : "null").Append('[')
+                      .Append(cv != null ? cv.name : "?").Append(':')
+                      .Append(cv != null ? cv.sortingOrder.ToString() : "?").Append("] ");
+                }
+                SapphireLog.Log(sb.ToString());
+            }
+            catch { }
         }
 
         private static bool _dockInited;
@@ -127,6 +163,8 @@ namespace Sapphire
         {
             RestoreGamePanel();
             K.Dispose();
+            if (_chipGo != null) UnityEngine.Object.Destroy(_chipGo);
+            _chipGo = null; _chipLabel = null; _userHidden = false;
             _viewport = null; _content = null; _sig = 0; _floor = -1; _empty = false;
         }
 
@@ -144,11 +182,18 @@ namespace Sapphire
                 if (_gameCg == null || _gameCg.gameObject != go)
                     _gameCg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
                 float a = hide ? 0f : 1f;
-                if (_gameCg.alpha != a)
-                {
-                    _gameCg.alpha = a;
-                    _gameCg.blocksRaycasts = !hide;
-                }
+                bool blk = !hide;
+                // blocksRaycasts must track `hide` EVERY frame, not only when alpha changes:
+                // the game can re-enable raycasts on its (invisible) panel, and a stuck-true
+                // blocker on a hidden-but-onscreen panel silently eats tile clicks.
+                if (_gameCg.alpha != a) _gameCg.alpha = a;
+                if (_gameCg.blocksRaycasts != blk) _gameCg.blocksRaycasts = blk;
+                // titleCanvas/messageCanvas are NESTED Canvas objects, so the parent CanvasGroup's
+                // alpha=0 does NOT hide them (a child Canvas breaks alpha inheritance) — they keep
+                // rendering (reskinned) and show through once docked panels stop occluding them.
+                // Disable the Canvas component outright while hidden.
+                SetCanvasEnabled(panel.titleCanvas, !hide);
+                SetCanvasEnabled(panel.messageCanvas, !hide);
                 // the event-type tab strip is its own root object — our sections replace it
                 var tabs = ed.inspectorTabs;
                 if (tabs != null)
@@ -156,13 +201,19 @@ namespace Sapphire
                     var tGo = tabs.gameObject;
                     if (_tabsCg == null || _tabsCg.gameObject != tGo)
                         _tabsCg = tGo.GetComponent<CanvasGroup>() ?? tGo.AddComponent<CanvasGroup>();
-                    if (_tabsCg.alpha != a)
-                    {
-                        _tabsCg.alpha = a;
-                        _tabsCg.blocksRaycasts = !hide;
-                    }
+                    if (_tabsCg.alpha != a) _tabsCg.alpha = a;
+                    if (_tabsCg.blocksRaycasts != blk) _tabsCg.blocksRaycasts = blk;
                 }
             }
+            catch { }
+        }
+
+        // Nested Canvas child (titleCanvas/messageCanvas): toggle its Canvas.enabled without
+        // touching activeSelf, so we don't fight the game's own show/hide of these objects.
+        private static void SetCanvasEnabled(GameObject go, bool enabled)
+        {
+            if (go == null) return;
+            try { var c = go.GetComponent<Canvas>(); if (c != null && c.enabled != enabled) c.enabled = enabled; }
             catch { }
         }
 
@@ -178,6 +229,54 @@ namespace Sapphire
                 try { _tabsCg.alpha = 1f; _tabsCg.blocksRaycasts = true; } catch { }
                 _tabsCg = null;
             }
+            try
+            {
+                var p = scnEditor.instance != null ? scnEditor.instance.levelEventsPanel : null;
+                if (p != null) { SetCanvasEnabled(p.titleCanvas, true); SetCanvasEnabled(p.messageCanvas, true); }
+            }
+            catch { }
+        }
+
+        // ── collapse chip (the way back after ×; the tile stays selected) ────
+        private static void ShowChip(bool show, int floor)
+        {
+            K.ChipAlive = show; // keeps the panel's canvas alive for the chip while the panel is hidden
+            if (!show)
+            {
+                if (_chipGo != null && _chipGo.activeSelf) _chipGo.SetActive(false);
+                return;
+            }
+            if (_chipGo == null)
+            {
+                if (K.CanvasGo == null) return; // canvas exists once the shell was ever built
+                _chipGo = new GameObject("Chip", typeof(RectTransform));
+                _chipGo.transform.SetParent(K.CanvasGo.transform, false);
+                var r = (RectTransform)_chipGo.transform;
+                r.anchorMin = r.anchorMax = new Vector2(1f, 1f); // top-RIGHT (this is the right panel)
+                r.pivot = new Vector2(1f, 1f);
+                r.anchoredPosition = new Vector2(-10f, -64f);    // below the master switch
+                r.sizeDelta = new Vector2(104f, 24f);
+                var bg = _chipGo.AddComponent<RoundedRectGraphic>();
+                bg.Radius = 7f;
+                bg.color = new Color(0.10f, 0.10f, 0.12f, 0.94f);
+                bg.BorderWidth = 1f;
+                bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
+                bg.raycastTarget = true;
+                var lGo = new GameObject("L", typeof(RectTransform));
+                lGo.transform.SetParent(_chipGo.transform, false);
+                var lr = (RectTransform)lGo.transform;
+                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                lr.offsetMin = lr.offsetMax = Vector2.zero;
+                _chipLabel = UIBuilder.Tmp(lGo, "", 11.5f, TextAnchor.MiddleCenter, Theme.Text);
+                _chipLabel.raycastTarget = false;
+                UI.ClickHandler.Attach(_chipGo, () => { _userHidden = false; _sig = 0; });
+            }
+            if (_chipLabel != null)
+            {
+                string t = "› " + Loc.T("Events") + " #" + floor;
+                if (_chipLabel.text != t) _chipLabel.text = t;
+            }
+            if (!_chipGo.activeSelf) _chipGo.SetActive(true);
         }
 
         // ── data ─────────────────────────────────────────────────────────────
@@ -243,8 +342,7 @@ namespace Sapphire
             K.LblW = 118f;
             K.Rebuild(Loc.T("Events") + " · #" + _floor, () =>
             {
-                // × just collapses until the selection changes (deselect = natural close)
-                try { ed.DeselectFloors(); } catch { }
+                _userHidden = true; // collapse to the reopen chip; keep the tile SELECTED
             }, new Vector2(1495f, -70f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
@@ -278,6 +376,7 @@ namespace Sapphire
         private static void BuildContent(scnEditor ed, List<ADOFAI.LevelEvent> events)
         {
             if (_content == null) return;
+            _ctx.PanelW = _size.x; // rows/dropdowns re-fit the current panel width (viewport = full width)
             for (int i = _content.childCount - 1; i >= 0; i--)
                 UnityEngine.Object.Destroy(_content.GetChild(i).gameObject);
 
@@ -306,7 +405,8 @@ namespace Sapphire
                 + (single ? "" : "  ×" + list.Count);
             string preview = single ? Preview(list[0]) : "";
 
-            float headW = PanelW - Pad * 2f - (single ? 26f : 0f);
+            float pw = _size.x; // live panel width — headers/× must track it like the value rows do
+            float headW = pw - Pad * 2f - (single ? 26f : 0f);
             var head = HeaderCell(title, preview, Pad, y, headW, () =>
             {
                 if (!_expandedTypes.Add(type)) _expandedTypes.Remove(type);
@@ -316,7 +416,7 @@ namespace Sapphire
                 ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f)
                 : new Color(1f, 1f, 1f, 0.06f);
             if (single)
-                EventRows.Cell(_content, "×", PanelW - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, list[0]), true);
+                EventRows.Cell(_content, "×", pw - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, list[0]), true);
             y -= RowH + Gap;
             if (!tExp) return y;
 
@@ -331,7 +431,7 @@ namespace Sapphire
                 bool iExp = _expandedInst.Contains(key);
                 string prev = Preview(evt);
                 string label = (iExp ? "− " : "+ ") + (i + 1) + ".";
-                var sub = HeaderCell(label, prev, Pad + 12f, y, PanelW - Pad * 2f - 12f - 26f, () =>
+                var sub = HeaderCell(label, prev, Pad + 12f, y, pw - Pad * 2f - 12f - 26f, () =>
                 {
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
                     _sig = 0;
@@ -339,7 +439,7 @@ namespace Sapphire
                 sub.color = iExp
                     ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
                     : new Color(1f, 1f, 1f, 0.04f);
-                EventRows.Cell(_content, "×", PanelW - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, evt), true);
+                EventRows.Cell(_content, "×", pw - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, evt), true);
                 y -= RowH + Gap;
                 if (iExp) y = InstanceBody(ed, evt, y);
             }
@@ -373,7 +473,7 @@ namespace Sapphire
             var info = InfoOf(evt);
             if (info == null || EditorEvents.EventData(evt) == null)
             {
-                EventRows.Label(_content, Loc.T("Edited in the event panel"), Pad, y, PanelW - Pad * 2f, RowH, Theme.TextMuted);
+                EventRows.Label(_content, Loc.T("Edited in the event panel"), Pad, y, _size.x - Pad * 2f, RowH, Theme.TextMuted);
                 return y - (RowH + Gap);
             }
 
@@ -386,7 +486,7 @@ namespace Sapphire
                 || evt.eventType == ADOFAI.LevelEventType.SetFilter)
             {
                 var e2 = evt;
-                EventRows.Cell(_content, Loc.T("Filter manager"), Pad, y, PanelW - Pad * 2f, RowH,
+                EventRows.Cell(_content, Loc.T("Filter manager"), Pad, y, _size.x - Pad * 2f, RowH,
                     () => EditorFilterPicker.Open(e2), true);
                 y -= RowH + Gap;
             }
@@ -518,6 +618,7 @@ namespace Sapphire
             if ((r.sizeDelta - _size).sqrMagnitude > 1f)
             {
                 _size = r.sizeDelta;
+                _sig = 0;  // width changed → rebuild rows/dropdowns at the new content width
                 ClampScroll();
             }
         }

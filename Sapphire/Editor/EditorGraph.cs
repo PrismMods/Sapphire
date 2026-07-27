@@ -770,6 +770,10 @@ namespace Sapphire
             scaler.matchWidthOrHeight = 0.5f;
             _canvasGo.AddComponent<GraphicRaycaster>();
             _canvasRect = (RectTransform)_canvasGo.transform;
+            // A just-created ScreenSpaceOverlay canvas isn't sized until the next canvas update, so
+            // the panel's centered anchor would resolve against a (0,0) canvas and land bottom-left
+            // on the FIRST open. Force the layout now so the first position is correct.
+            Canvas.ForceUpdateCanvases();
         }
     }
 }

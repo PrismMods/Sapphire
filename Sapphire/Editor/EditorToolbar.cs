@@ -167,6 +167,8 @@ namespace Sapphire
             TickToolHotkeys(ed);
             TickToolSwap(ed);
             TickToolLabel();
+            // reflect quick-chart mode toggled elsewhere (settings page) — cheap, only on change
+            if (s.FeatQuickChart != _qcShown) { _qcShown = s.FeatQuickChart; SyncQuickChartHighlight(); }
         }
 
         // ── quick tool switching: X = previous tool, C = saved tool (Shift+C saves) ──
@@ -359,7 +361,7 @@ namespace Sapphire
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _canvasRect = null; _barGo = null; _dialogGo = null;
             _fPerRound = _fInterval = _fPseudoAngle = null; _freeAngleCellBg = null;
-            _pseudoCellBg = null; _cameraCellBg = null; _cameraMenuGo = null; _cameraGapsBg = null; _pseudoMenuGo = null; _pseudoMidspinBg = null;
+            _pseudoCellBg = null; _cameraCellBg = null; _quickChartCellBg = null; _cameraMenuGo = null; _cameraGapsBg = null; _pseudoMenuGo = null; _pseudoMidspinBg = null;
             _pseudoCounterLbl = null; _fPseudoTap = null; _fPseudoCustom = null;
             _pseudoCustomBg = null; _pseudoCustomFieldGo = null; _pseudoPresetObjs.Clear(); _fPseudoN = null;
             _toolLabelGo = null; _toolLabelText = null; _tipGo = null; _tipText = null;
@@ -436,6 +438,8 @@ namespace Sapphire
                 _inspCellBg = Place(2, "ToolInspector", Loc.T("Inspector (copy tile events)"), DrawDropperIcon, ToggleInspector);
                 _cameraCellBg = Place(3, "ToolCamera", Loc.T("Camera path"), DrawCameraIcon, ToggleCameraPath);
                 Place(3, "ToolVfx", Loc.T("VFX preview (ESC exits)"), DrawEyeOffIcon, EditorVfxPreview.Toggle);
+                _quickChartCellBg = Place(4, "ToolQuickChart",
+                    Loc.T("Quick chart mode (I swirl · Shift+P/L/G · hides timeline)"), DrawQIcon, ToggleQuickChart);
             }
             r.sizeDelta = new Vector2(cx + pad, cell + pad * 2f);
             SyncInspectorHighlight();
@@ -446,6 +450,7 @@ namespace Sapphire
             SyncFreeAngleHighlight();
             SyncPseudoHighlight();
             SyncCameraHighlight();
+            SyncQuickChartHighlight();
             BuildToolLabel();
             BuildToolTip();
             if (sap && _pseudoTool) ShowPseudoMenu();
@@ -531,7 +536,7 @@ namespace Sapphire
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(10f, 0f); tr.offsetMax = new Vector2(-10f, 0f);
             _toolLabelText = UIBuilder.Tmp(txtGo, "", 13f, TextAnchor.MiddleCenter, Theme.Text);
-            BuildHelpButton();
+            // (help "?" button removed — redundant next to the tool name)
             _toolLabelGo.SetActive(false);
         }
 
@@ -803,6 +808,43 @@ namespace Sapphire
             _cameraGapsBg.color = EditorCameraPath.UseGaps
                 ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
                 : new Color(1f, 1f, 1f, 0.06f);
+        }
+
+        // ── quick-chart mode toggle (a mode, not a click-tool: gates EditorQuickChart + hides
+        // the timeline via Settings.FeatQuickChart). Cell icon is a plain 'Q' letter.
+        private static RoundedRectGraphic _quickChartCellBg;
+        private static bool _qcShown;
+
+        private static void DrawQIcon(GameObject cell)
+        {
+            var g = new GameObject("Q", typeof(RectTransform));
+            g.transform.SetParent(cell.transform, false);
+            var r = (RectTransform)g.transform;
+            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one;
+            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+            UIBuilder.Tmp(g, "Q", 17f, TextAnchor.MiddleCenter, IconCol).raycastTarget = false;
+        }
+
+        private static void ToggleQuickChart()
+        {
+            var s = MainClass.Settings;
+            if (s == null) return;
+            s.FeatQuickChart = !s.FeatQuickChart;
+            _qcShown = s.FeatQuickChart;
+            SyncQuickChartHighlight();
+        }
+
+        private static void SyncQuickChartHighlight()
+        {
+            if (_quickChartCellBg == null) return;
+            bool on = false;
+            try { var s = MainClass.Settings; on = s != null && s.FeatQuickChart; } catch { }
+            var rest = on
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _quickChartCellBg.color = rest;
+            var hover = _quickChartCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
         }
 
         private static void SyncCameraHighlight()

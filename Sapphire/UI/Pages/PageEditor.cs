@@ -48,6 +48,21 @@ namespace Sapphire.UI.Pages
                 v => { s.FeatFileBar = v; notify?.Invoke(); }, null);
 
             UIBuilder.Spacer(content);
+            UIBuilder.SectionHeaderWithHelp(content, "Quick chart",
+                "A charting mode (toggle with the Q button in the editor\ntoolbar). While on, the " +
+                "event timeline hides for a clean\nscreen and these hotkeys are live:\n" +
+                "  I        swirl on/off on the selected tile(s)\n" +
+                "  Shift+P  Pause event (prompts for beats)\n" +
+                "  Shift+L  tile-location event (prompts X / Y)\n" +
+                "  Shift+G  angle pad — type space-separated RELATIVE\n" +
+                "           angles (180 = straight; math ok: 180-30,\n" +
+                "           360/8) and Place a whole run; duplicate it\n" +
+                "           for saved presets.\n" +
+                "These keys are chosen to never clash with the game's tile placement.");
+            UIBuilder.Collapsible(content, "Quick chart mode", s.FeatQuickChart,
+                v => { s.FeatQuickChart = v; notify?.Invoke(); }, null);
+
+            UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Editor mode",
                 "Clean screen for charting: while in the editor\n(play-testing included), " +
                 "Sapphire overlays and the key\nviewer stand down, and the game's difficulty,\n" +

@@ -50,6 +50,8 @@ namespace Sapphire.UI
            releasing anywhere else undocks. Width stays user-resizable while docked. */
         internal int DockSide { get; private set; }   // 0 float · 1 left · 2 right — set via SetDock
         private float _dockWeight = 1f;                // vertical share within its side's stack
+        private RoundedRectGraphic _panelBg, _headBg;  // for square-corners-when-docked
+        private GameObject _dockAppliedGo; private int _dockAppliedSide = -1; // dock-visual cache
         private DragHandle _drag;
 
         internal bool HeaderDragging => _drag != null && _drag.Dragging;
@@ -136,7 +138,7 @@ namespace Sapphire.UI
         private static readonly System.Collections.Generic.List<PanelKit> _dockTmp2 = new System.Collections.Generic.List<PanelKit>();
         private static float _sideWL = 360f, _sideWR = 360f;
         internal static bool DockDragActive; // a dock divider is being dragged
-        private const float SideMin = 220f, DockGap = 6f, DockMargin = 8f, DockPanelMinH = 120f, EdgeSnap = 28f;
+        private const float SideMin = 220f, DockGap = 6f, DockMargin = 0f, DockPanelMinH = 120f, EdgeSnap = 28f;
         private static float _lastTop, _lastBottom, _lastCh, _lastCw; // for divider-drag geometry
         private static int _lastScreenW, _lastScreenH;                // ClampFloating runs only on resize
         // Divider components resolved once — GetComponent per divider per frame was pure overhead.
@@ -184,6 +186,31 @@ namespace Sapphire.UI
             if (side == 1) _dockL.Add(this);
             else if (side == 2) _dockR.Add(this);
             ReRankFocus();
+            EnsureDockVisuals();
+        }
+
+        /* Docked panels sit FLUSH to the screen edge, so square their corners and drop the
+           user-resize grips (the dock divider handles their size instead); floating panels get
+           the rounded corners + grips back. Cached on (PanelGo, DockSide) so it only reworks the
+           mesh / toggles on an actual change — a Rebuild (new PanelGo, re-added grips) re-applies. */
+        private void EnsureDockVisuals()
+        {
+            if (_dockAppliedGo == PanelGo && _dockAppliedSide == DockSide) return;
+            _dockAppliedGo = PanelGo; _dockAppliedSide = DockSide;
+            bool docked = DockSide != 0;
+            float rad = docked ? 0f : 10f;
+            if (_panelBg != null && _panelBg.Radius != rad) _panelBg.Radius = rad;
+            if (_headBg != null && _headBg.Radius != rad) _headBg.Radius = rad;
+            if (PanelGo != null)
+            {
+                var t = PanelGo.transform;
+                for (int i = 0; i < t.childCount; i++)
+                {
+                    var ch = t.GetChild(i);
+                    if (ch.name.StartsWith("Resize") && ch.gameObject.activeSelf == docked)
+                        ch.gameObject.SetActive(!docked);
+                }
+            }
         }
 
         // Central per-frame dock layout (topMargin/bottomInset clear the top chrome + timeline).
@@ -253,6 +280,7 @@ namespace Sapphire.UI
             for (int i = 0; i < n; i++)
             {
                 var p = _dockTmp[i];
+                p.EnsureDockVisuals(); // re-square corners / re-hide grips after a Rebuild while docked
                 float h = avail * (p._dockWeight / totW);
                 var r = (RectTransform)p.PanelGo.transform;
                 r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
@@ -498,6 +526,8 @@ namespace Sapphire.UI
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
             bg.raycastTarget = true;
+            _panelBg = bg;
+            _dockAppliedGo = null; // new PanelGo → re-apply dock visuals (square corners / grips)
 
             var headGo = new GameObject("Head", typeof(RectTransform));
             headGo.transform.SetParent(PanelGo.transform, false);
@@ -510,6 +540,7 @@ namespace Sapphire.UI
             headBg.Radius = 10f;
             headBg.color = new Color(1f, 1f, 1f, 0.04f);
             headBg.raycastTarget = true;
+            _headBg = headBg;
             _drag = headGo.AddComponent<DragHandle>();
             // focusable windows are dockable by default: releasing a header drag near an edge docks
             if (Focusable && OnDragEnd == null) OnDragEnd = () => SnapDockOnDragEnd();

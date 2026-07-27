@@ -34,9 +34,10 @@ namespace Sapphire
 
                     tmp.text = text;
                     tmp.color = textColor ?? Color.white;
+                    tmp.alignment = TMPro.TextAlignmentOptions.Center; // else left-aligned in its rect → looks off-centre
                     rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
                     rt.pivot = new Vector2(0.5f, 0.5f);
-                    rt.anchoredPosition = Vector2.zero; // centre of screen
+                    rt.anchoredPosition = new Vector2(0f, 150f); // a bit above centre
 
                     var cg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
                     cg.alpha = 0f;
@@ -149,6 +150,21 @@ namespace Sapphire
             }
         }
 
+        // Quick-chart owns [ and ] to halve/double the selected tile's SetSpeed — but only when
+        // that tile HAS a SetSpeed. Suppress the game's event-page nav (ShowPrevious/NextEventPage,
+        // the bare [ / ] binds) for exactly those frames so the two don't both fire.
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.ShowPreviousEventPageEditorAction), "Execute")]
+        private static class BracketPrevGuardPatch
+        {
+            private static bool Prefix() { try { return !EditorQuickChart.BracketSpeedActive(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.ShowNextEventPageEditorAction), "Execute")]
+        private static class BracketNextGuardPatch
+        {
+            private static bool Prefix() { try { return !EditorQuickChart.BracketSpeedActive(); } catch { return true; } }
+        }
+
         // The editor's A shortcut toggles autoplay — while A is a PAN key (no selection),
         // swallow the toggle entirely (its lambda fires on key-repeat, so post-hoc restores lose).
         [HarmonyPatch(typeof(scnEditor), "ToggleAuto")]
@@ -173,6 +189,26 @@ namespace Sapphire
             public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
                 && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
                 && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered;
+        }
+
+        /* The beta-build label (scrEnableIfBeta) decides its own visibility in Awake and, on a
+           non-stable Steam branch, force-enables itself there — which runs after (or independently
+           of) any one-shot sweep, so a hidden label comes back and stays. The component has no
+           Update, so Awake is the only re-show path: re-hide right after it whenever the suite is
+           on. Makes "hide beta build text" stick; it never re-enables the label on its own. */
+        [HarmonyPatch(typeof(scrEnableIfBeta), "Awake")]
+        private static class BetaBuildTextHidePatch
+        {
+            private static void Postfix(scrEnableIfBeta __instance)
+            {
+                try
+                {
+                    if (MainClass.Settings != null && MainClass.EditorSuiteOn
+                        && __instance != null && __instance.gameObject.activeSelf)
+                        __instance.gameObject.SetActive(false);
+                }
+                catch { }
+            }
         }
 
         /* Editor Mode hides the autoplay status label. Disabling the Text directly is the

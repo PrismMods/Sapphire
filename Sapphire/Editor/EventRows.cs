@@ -76,9 +76,10 @@ namespace Sapphire
             try { isDisabled = evt.disabled != null && evt.disabled.TryGetValue(key, out var dv) && dv; } catch { }
             float x = Pad;
             float w = panelW - Pad * 2f;
+            Action toggleDisabled = null;
             if (canDisable)
             {
-                Radio(content, !isDisabled, x, y, () =>
+                toggleDisabled = () =>
                 {
                     try
                     {
@@ -88,12 +89,24 @@ namespace Sapphire
                     }
                     catch (Exception ex2) { SapphireLog.Log("EventRows: disable toggle failed: " + ex2.Message); }
                     c.MarkDirty?.Invoke();
-                });
+                };
+                Radio(content, !isDisabled, x, y, toggleDisabled);
                 x += 24f;
                 w -= 24f;
             }
 
             var lblCol = isDisabled ? new Color(0.45f, 0.45f, 0.5f, 1f) : Theme.TextMuted;
+            // Collapsed to save space: a disabled (toggle-off) property shows just its radio + label,
+            // no input field. Clicking the radio OR the label re-enables it (field returns on rebuild).
+            if (canDisable && isDisabled)
+            {
+                Label(content, lbl, x, y, w, RowH, lblCol);
+                LabelToggle(content, x, y, w, RowH, toggleDisabled);
+                return y - (RowH + Gap);
+            }
+            // Enabled + can-disable: clicking the label row also toggles (a transparent hit over the
+            // label only — clear of the field below).
+            if (canDisable) LabelToggle(content, x, y, w, 16f, toggleDisabled);
             string k = key;
             var e2 = evt;
             var p2 = pi;
@@ -133,6 +146,8 @@ namespace Sapphire
                     labels.Add(LocEnum(et.Name, ev.ToString()));
                     if (Equals(ev, en)) curIdx = i;
                 }
+                if (arr.Length == 2)
+                    return TwoButtons(content, x, y, w, labels, curIdx, i => Commit(c, ed, e2, p2, k, arr.GetValue(i)));
                 RoundedRectGraphic bg = null;
                 bg = Cell(content, LocEnum(et.Name, en.ToString()) + "  ▾", x, y, w, RowH,
                     () => UI.EditorDropdown.Open((RectTransform)bg.transform, labels, curIdx,
@@ -149,6 +164,8 @@ namespace Sapphire
                 Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
                 var labels = new System.Collections.Generic.List<string>(opts.Length);
                 foreach (var o in opts) labels.Add(LocEnum(tn, o));
+                if (opts.Length == 2)
+                    return TwoButtons(content, x, y, w, labels, cur, i => Commit(c, ed, e2, p2, k, opts[i]));
                 RoundedRectGraphic bg = null;
                 bg = Cell(content, LocEnum(tn, sv) + "  ▾", x, y, w, RowH,
                     () => UI.EditorDropdown.Open((RectTransform)bg.transform, labels, cur,
@@ -360,6 +377,25 @@ namespace Sapphire
             UI.ClickHandler.Attach(hit, onClick);
         }
 
+        // Transparent, raycastable hit target over a property's label so clicking the label toggles
+        // its enable radio. Sits under the non-raycast label text; covers only the label height so
+        // it never steals clicks from the field below.
+        private static void LabelToggle(RectTransform content, float x, float y, float w, float h, Action onClick)
+        {
+            if (onClick == null) return;
+            var go = new GameObject("LblHit", typeof(RectTransform));
+            go.transform.SetParent(content, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
+            r.pivot = new Vector2(0f, 1f);
+            r.anchoredPosition = new Vector2(x, y);
+            r.sizeDelta = new Vector2(w, h);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.color = new Color(0f, 0f, 0f, 0.01f); // invisible but catches the click
+            bg.raycastTarget = true;
+            UI.ClickHandler.Attach(go, onClick);
+        }
+
         internal static void Label(RectTransform content, string text, float x, float y, float w, float h, Color color)
         {
             var go = new GameObject("L", typeof(RectTransform));
@@ -373,6 +409,21 @@ namespace Sapphire
             t.textWrappingMode = TextWrappingModes.NoWrap;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
+        }
+
+        // A 2-option enum as a side-by-side segmented toggle (label row already emitted): the
+        // current option is accent-tinted. Reads far better than a dropdown for on/off-style enums.
+        private static float TwoButtons(RectTransform content, float x, float y, float w,
+            System.Collections.Generic.IList<string> labels, int curIdx, Action<int> onPick)
+        {
+            float half = (w - Gap) * 0.5f;
+            for (int i = 0; i < 2; i++)
+            {
+                int ii = i;
+                var b = Cell(content, labels[i], x + i * (half + Gap), y, half, RowH, () => onPick(ii), true);
+                b.color = PanelKit.Tint(curIdx == i);
+            }
+            return y - (RowH + Gap);
         }
 
         internal static RoundedRectGraphic Cell(RectTransform content, string text, float x, float y, float w, float h,
@@ -416,6 +467,7 @@ namespace Sapphire
             bg.Radius = 5f;
             bg.color = new Color(1f, 1f, 1f, 0.08f);
             bg.raycastTarget = true;
+            go.AddComponent<RectMask2D>(); // clip long values (e.g. a filename) to the field, not onto the browse "…"
             var txtGo = new GameObject("T", typeof(RectTransform));
             txtGo.transform.SetParent(go.transform, false);
             var tr = (RectTransform)txtGo.transform;

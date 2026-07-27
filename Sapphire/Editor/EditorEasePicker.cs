@@ -316,6 +316,9 @@ namespace Sapphire
             scaler.matchWidthOrHeight = 0.5f;
             _canvasGo.AddComponent<GraphicRaycaster>();
             _canvasRect = (RectTransform)_canvasGo.transform;
+            // Size the canvas now so the FIRST open's on-screen clamp (uses _canvasRect.rect.size)
+            // isn't computed against a (0,0) rect — that made the grid spawn off-screen.
+            Canvas.ForceUpdateCanvases();
         }
     }
 }

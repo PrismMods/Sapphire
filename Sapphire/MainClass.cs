@@ -141,13 +141,13 @@ namespace Sapphire
                restart per module per frame. */
             private static readonly string[] PerfNames =
             {
-                "Tweaks", "EditorEvents", "EditorSkin", "EditorUiLayout", "EditorChrome",
+                "Tweaks", "EditorEvents", "EditorUiLayout", "EditorChrome",
                 "EditorInspector", "EditorPopups", "EditorToolbar", "EditorTileMenu",
                 "EditorCopyPanel", "EditorCameraPath", "EditorPitch", "EditorLevelMenu",
                 "EditorGameSettings", "EditorVfxPreview", "EditorHelp", "EditorPresets",
                 "EditorEasePicker", "EditorBezier", "EditorGraph", "EditorFilterPicker",
                 "EditorMagicShape", "EditorTrackTools", "EditorDecoTools", "EditorMasterSwitch",
-                "EditorEventPanel", "EditorEventSelector",
+                "EditorEventPanel", "EditorEventSelector", "EditorQuickChart",
             };
             // Reused by the UI census so it doesn't allocate an array per canvas.
             private static readonly List<UnityEngine.UI.Graphic> _censusBuf = new List<UnityEngine.UI.Graphic>();
@@ -179,31 +179,32 @@ namespace Sapphire
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
-                EditorSkin.Tick(); Acc(2);
-                EditorUiLayout.Tick(); Acc(3);
-                EditorChrome.Tick(); Acc(4);
-                EditorInspector.Tick(); Acc(5);
-                EditorPopups.Tick(); Acc(6);
-                EditorToolbar.Tick(); Acc(7);
-                EditorTileMenu.Tick(); Acc(8);
-                EditorCopyPanel.Tick(); Acc(9);
-                EditorCameraPath.Tick(); Acc(10);
-                EditorPitch.Tick(); Acc(11);
-                EditorLevelMenu.Tick(); Acc(12);
-                EditorGameSettings.Tick(); Acc(13);
-                EditorVfxPreview.Tick(); Acc(14);
-                EditorHelp.Tick(); Acc(15);
-                EditorPresets.Tick(); Acc(16);
-                EditorEasePicker.Tick(); Acc(17);
-                EditorBezier.Tick(); Acc(18);
-                EditorGraph.Tick(); Acc(19);
-                EditorFilterPicker.Tick(); Acc(20);
-                EditorMagicShape.Tick(); Acc(21);
-                EditorTrackTools.Tick(); Acc(22);
-                EditorDecoTools.Tick(); Acc(23);
-                EditorEventPanel.Tick(); Acc(25);
-                EditorEventSelector.Tick(); Acc(26);
-                EditorMasterSwitch.Tick(); Acc(24);
+                EditorUiLayout.Tick(); Acc(2);
+                EditorChrome.Tick(); Acc(3);
+                EditorInspector.Tick(); Acc(4);
+                EditorPopups.Tick(); Acc(5);
+                EditorToolbar.Tick(); Acc(6);
+                EditorTileMenu.Tick(); Acc(7);
+                EditorCopyPanel.Tick(); Acc(8);
+                EditorCameraPath.Tick(); Acc(9);
+                EditorPitch.Tick(); Acc(10);
+                EditorLevelMenu.Tick(); Acc(11);
+                EditorGameSettings.Tick(); Acc(12);
+                EditorVfxPreview.Tick(); Acc(13);
+                EditorHelp.Tick(); Acc(14);
+                EditorPresets.Tick(); Acc(15);
+                EditorEasePicker.Tick(); Acc(16);
+                EditorBezier.Tick(); Acc(17);
+                EditorGraph.Tick(); Acc(18);
+                EditorFilterPicker.Tick(); Acc(19);
+                EditorMagicShape.Tick(); Acc(20);
+                EditorTrackTools.Tick(); Acc(21);
+                EditorDecoTools.Tick(); Acc(22);
+                EditorEventPanel.Tick(); Acc(24);
+                EditorEventSelector.Tick(); Acc(25);
+                UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
+                EditorQuickChart.Tick(); Acc(26);
+                EditorMasterSwitch.Tick(); Acc(23);
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
                 // Run unconditionally: when the master switch turns off, the modules hide their
                 // panels this frame and TickDocks then finds nothing visible and tears its own
@@ -310,7 +311,6 @@ namespace Sapphire
             Tweaks.RestoreControlsTip();
             Tweaks.DisposeTileAngle();
             EditorEvents.Dispose();
-            EditorSkin.Dispose();
             EditorUiLayout.RestoreAll();
             EditorChrome.Dispose();
             EditorInspector.Dispose();
@@ -334,6 +334,7 @@ namespace Sapphire
             EditorDecoTools.Dispose();
             EditorEventPanel.Dispose();
             EditorEventSelector.Dispose();
+            EditorQuickChart.Dispose();
             EditorMasterSwitch.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             UI.EditorDropdown.Dispose();

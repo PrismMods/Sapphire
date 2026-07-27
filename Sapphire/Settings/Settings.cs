@@ -160,11 +160,7 @@ namespace Sapphire
         public bool FeatToolsSapphire = true; // toolbar's native tools + tile actions + presets
         public bool FeatToolsMods = true;     // MSM & MH tools (magic shape, track, deco)
         public bool FeatFileBar = true;       // Sapphire file chip / menu bar
-
-        // Dark reskin of the game's own editor menus. STANDALONE + transitional — as the
-        // native panels replace hidden game UI this is being retired, so it isn't in a
-        // category. Default off going forward (the native panels are already dark).
-        public bool EditorDarkTheme = false;
+        public bool FeatQuickChart = false;   // quick-chart mode (toolbar Q): keybinds + angle pad, hides timeline
 
         // ── granular facades over the categories (do not assign; read only) ──
         // Passive tile-angle readout: NOT a tool — stays up whenever the suite is on (its

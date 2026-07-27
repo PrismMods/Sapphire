@@ -100,8 +100,8 @@
         <Compile Include="Util\TmpShadow.cs" />
         <Compile Include="Util\KeyListener.cs" />
         <Compile Include="Util\Tweaks.cs" />
+        <Compile Include="Util\ExprEval.cs" />
         <Compile Include="Editor\EditorEvents.cs" />
-        <Compile Include="Editor\EditorSkin.cs" />
         <Compile Include="Editor\EditorChrome.cs" />
         <Compile Include="Editor\EditorInspector.cs" />
         <Compile Include="Editor\EditorPopups.cs" />
@@ -125,6 +125,7 @@
         <Compile Include="Editor\DecoToolsEngine.cs" />
         <Compile Include="Editor\EditorDecoTools.cs" />
         <Compile Include="Editor\EventRows.cs" />
+        <Compile Include="Editor\EditorQuickChart.cs" />
         <Compile Include="Editor\EditorEventPanel.cs" />
         <Compile Include="Editor\EditorEventSelector.cs" />
         <Compile Include="Editor\EditorPitch.cs" />

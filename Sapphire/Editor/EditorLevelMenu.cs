@@ -20,6 +20,9 @@ namespace Sapphire
     {
         private static readonly PanelKit K = new PanelKit("SapphireLevelMenu", 902, PanelW, focusable: true);
         private const float PanelW = 560f, RailW = 146f, HeaderH = 28f;
+        // Narrow panels collapse the tab rail to just icons.
+        private const float IconRailW = 34f, CollapseW = 430f;
+        private static float CurRailW() => _size.x < CollapseW ? IconRailW : RailW;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
         private static Vector2 _size = new Vector2(PanelW, 720f);
@@ -225,7 +228,7 @@ namespace Sapphire
             K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -40f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
-            ResizeHandle.AttachAll(panel, true, 440f, 320f);
+            ResizeHandle.AttachAll(panel, true, 300f, 320f); // allow narrow → rail collapses to icons
             K.OnDragEnd = () => K.SnapDockOnDragEnd();
             if (!_dockInited) { _dockInited = true; }
 
@@ -262,13 +265,20 @@ namespace Sapphire
 
         private static void BuildContent(scnEditor ed)
         {
-            BuildRail();
+            // Re-fit the rail + viewport to the current width (collapsed rail on narrow panels),
+            // BEFORE laying out rows. PanelW is derived from _size (viewport.rect lags a resize
+            // frame), so rows always use the correct content width.
+            float railW = CurRailW();
+            bool collapsed = railW < 100f;
+            if (_railHost != null) _railHost.offsetMax = new Vector2(Pad + railW, -HeaderH - 2f);
+            if (_viewport != null) _viewport.offsetMin = new Vector2(Pad + railW + Pad, Pad);
+            BuildRail(collapsed);
             if (_content == null) return;
             for (int i = _content.childCount - 1; i >= 0; i--)
                 UnityEngine.Object.Destroy(_content.GetChild(i).gameObject);
 
             _ctx.Content = _content;
-            _ctx.PanelW = _viewport != null ? _viewport.rect.width : PanelW - RailW;
+            _ctx.PanelW = Mathf.Max(120f, _size.x - railW - Pad * 3f);
 
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);
@@ -283,7 +293,7 @@ namespace Sapphire
             ClampScroll();
         }
 
-        private static void BuildRail()
+        private static void BuildRail(bool collapsed)
         {
             if (_railHost == null) return;
             for (int i = _railHost.childCount - 1; i >= 0; i--)
@@ -314,22 +324,26 @@ namespace Sapphire
                     var iGo = new GameObject("I", typeof(RectTransform));
                     iGo.transform.SetParent(go.transform, false);
                     var ir = (RectTransform)iGo.transform;
-                    ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
-                    ir.pivot = new Vector2(0f, 0.5f);
-                    ir.anchoredPosition = new Vector2(7f, 0f);
+                    // collapsed: icon centred (no label); expanded: icon left, label beside it
+                    ir.anchorMin = ir.anchorMax = new Vector2(collapsed ? 0.5f : 0f, 0.5f);
+                    ir.pivot = new Vector2(0.5f, 0.5f);
+                    ir.anchoredPosition = new Vector2(collapsed ? 0f : 16f, 0f);
                     ir.sizeDelta = new Vector2(18f, 18f);
                     var img = iGo.AddComponent<Image>();
                     img.sprite = icon; img.preserveAspect = true; img.raycastTarget = false;
                 }
-                var lGo = new GameObject("L", typeof(RectTransform));
-                lGo.transform.SetParent(go.transform, false);
-                var lr = (RectTransform)lGo.transform;
-                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = new Vector2(icon != null ? 29f : 8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
-                var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
-                lt.textWrappingMode = TextWrappingModes.NoWrap;
-                lt.overflowMode = TextOverflowModes.Ellipsis;
-                lt.raycastTarget = false;
+                if (!collapsed)
+                {
+                    var lGo = new GameObject("L", typeof(RectTransform));
+                    lGo.transform.SetParent(go.transform, false);
+                    var lr = (RectTransform)lGo.transform;
+                    lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+                    lr.offsetMin = new Vector2(icon != null ? 29f : 8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
+                    var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
+                    lt.textWrappingMode = TextWrappingModes.NoWrap;
+                    lt.overflowMode = TextOverflowModes.Ellipsis;
+                    lt.raycastTarget = false;
+                }
 
                 UI.ClickHandler.Attach(go, () => { _tab = idx; _scroll = 0f; _sig = 0; });
                 y -= rowH + gap;
