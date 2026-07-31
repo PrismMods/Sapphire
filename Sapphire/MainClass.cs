@@ -175,12 +175,12 @@ namespace Sapphire
                 "EditorGameSettings", "EditorVfxPreview", "EditorHelp", "EditorPresets",
                 "EditorEasePicker", "EditorBezier", "EditorGraph", "EditorFilterPicker",
                 "EditorMagicShape", "EditorTrackTools", "EditorDecoTools", "EditorMasterSwitch",
-                "EditorEventPanel", "EditorEventSelector", "EditorQuickChart",
+                "EditorEventPanel", "EditorEventSelector", "EditorQuickChart", "EditorShapeLibrary",
             };
             // Reused by the UI census so it doesn't allocate an array per canvas.
             private static readonly List<UnityEngine.UI.Graphic> _censusBuf = new List<UnityEngine.UI.Graphic>();
-            private static readonly double[] _perfMs = new double[27];
-            private static readonly double[] _perfMax = new double[27];
+            private static readonly double[] _perfMs = new double[28];
+            private static readonly double[] _perfMax = new double[28];
             private static int _perfFrames;
 
             /* Lap timer: banks the elapsed slice into module i (no allocations). Reads the raw
@@ -234,6 +234,7 @@ namespace Sapphire
                 EditorEventSelector.Tick(); Acc(25);
                 UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
                 EditorQuickChart.Tick(); Acc(26);
+                EditorShapeLibrary.Tick(); Acc(27);
                 EditorMasterSwitch.Tick(); Acc(23);
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
                 // Run unconditionally: when the master switch turns off, the modules hide their
@@ -364,6 +365,7 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorMasterSwitch.Dispose();
+            EditorShapeLibrary.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             UI.EditorDropdown.Dispose();
         }
