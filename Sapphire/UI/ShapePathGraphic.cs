@@ -36,6 +36,9 @@ namespace Sapphire.UI
            the caller auto-fits. */
         internal static Vector2[] Walk(IList<PseudoStep> steps, out List<int> swirlIdx, out List<int> midspinIdx)
         {
+            // NOTE: preview uses a fixed spin (+1). The real build's AppendRel takes spin from the
+            // append-from tile's isCCW, so a chiral shape inserted after a CCW tile is the MIRROR of
+            // this preview. Scale/orientation match; chirality is preview-only.
             swirlIdx = new List<int>();
             midspinIdx = new List<int>();
             var pts = new List<Vector2>();

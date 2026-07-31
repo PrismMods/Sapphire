@@ -320,6 +320,7 @@ namespace Sapphire
         private static void InsertSimple(ShapeDef def)
         {
             var ed = scnEditor.instance; if (ed == null || def == null) return;
+            if (ed.lockPathEditing) { SapphireLog.Log("ShapeLib: insert - path editing locked"); return; }
             using (new SaveStateScope(ed))
             {
                 double dir = StartDir(ed);
@@ -331,6 +332,7 @@ namespace Sapphire
         private static void InsertPseudo(PseudoForm pf)
         {
             var ed = scnEditor.instance; if (ed == null || pf == null) return;
+            if (ed.lockPathEditing) { SapphireLog.Log("ShapeLib: insert - path editing locked"); return; }
             using (new SaveStateScope(ed)) InsertPseudoInner(ed, pf);
         }
 
@@ -339,8 +341,19 @@ namespace Sapphire
         private static void InsertPseudoInner(scnEditor ed, PseudoForm pf)
         {
             double dir = StartDir(ed);
-            int firstNewSeq = -1;
-            try { firstNewSeq = ADOBase.lm.floorAngles.Length; } catch { }
+            // Swirl Twirls attach by seqID. New tiles land right AFTER the append-from tile
+            // (the last selected floor, or the level end when nothing is selected) — NOT at
+            // floorAngles.Length, which is only the end-append case. Convert reselects the
+            // pre-run tile before calling this, so its anchor = startSeq-1 → firstNewSeq = startSeq.
+            int firstNewSeq = 0;
+            try
+            {
+                int anchorSeq = ed.selectedFloors != null && ed.selectedFloors.Count > 0
+                    ? ed.selectedFloors[ed.selectedFloors.Count - 1].seqID
+                    : ADOBase.lm.floorAngles.Length - 1;
+                firstNewSeq = anchorSeq + 1;
+            }
+            catch { }
             var swirlSeqs = new System.Collections.Generic.List<int>();
             int placed = 0;
             foreach (var st in pf.Steps)
