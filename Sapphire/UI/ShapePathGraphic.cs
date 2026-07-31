@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace Sapphire.UI
 {
     /* Draws a chart tile-path from a charter sequence as beige bars + a planet dot at the
-       start, spiral marks on swirl tiles, dots on midspin tiles. Auto-fits/centers the path
+       start, colored marks on swirl tiles, dots on midspin tiles. Auto-fits/centers the path
        into the RectTransform. Same walk math the build uses, so the preview matches the
        inserted tiles. Stylized (not the game's own sprites) — deliberate, keeps it data-only. */
     internal class ShapePathGraphic : MaskableGraphic
@@ -106,8 +106,8 @@ namespace Sapphire.UI
             for (int i = 1; i <= seg; i++) vh.AddTriangle(i0, i0 + i, i0 + i + 1);
         }
 
-        // Known-case sanity: [180,180] = straight (2 unit steps east), [90,90] = an L
-        // (east then north). Logs PASS/FAIL; call once from the panel's first build.
+        // Known-case sanity: [180,180] = straight (2 unit steps east); [90,90] = turn-before-move,
+        // dir 90 then 180, points (0,0)->(0,1)->(-1,1) (north then west). Logs PASS/FAIL; call once from the panel's first build.
         internal static bool SelfCheck()
         {
             var straight = Walk(new[] { new PseudoStep(180), new PseudoStep(180) }, out _, out _);
@@ -115,8 +115,8 @@ namespace Sapphire.UI
             bool ok = straight.Length == 3
                       && Mathf.Abs(straight[2].x - 2f) < 0.01f && Mathf.Abs(straight[2].y) < 0.01f
                       && l.Length == 3
-                      && Mathf.Abs(l[1].x - 1f) < 0.01f && Mathf.Abs(l[1].y) < 0.01f
-                      && Mathf.Abs(l[2].x - 1f) < 0.01f && Mathf.Abs(l[2].y - 1f) < 0.01f;
+                      && Mathf.Abs(l[1].x) < 0.01f && Mathf.Abs(l[1].y - 1f) < 0.01f
+                      && Mathf.Abs(l[2].x + 1f) < 0.01f && Mathf.Abs(l[2].y - 1f) < 0.01f;
             SapphireLog.Log("ShapePathGraphic.SelfCheck: " + (ok ? "PASS" : "FAIL"));
             return ok;
         }
