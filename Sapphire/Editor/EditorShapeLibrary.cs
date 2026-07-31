@@ -23,6 +23,7 @@ namespace Sapphire
         private static RectTransform _viewport, _content, _railHost;
         private static float _scroll;
         private static int _sel;              // selected shape index
+        private static int _matchIdx = -1;    // ShapeLibrary.All index the CURRENT editor selection matches, -1 = none
         private static bool _open;
         private static bool _selfChecked;
 
@@ -43,13 +44,32 @@ namespace Sapphire
             if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
             K.Show(true);
             TickScroll();
+            TickSelectionMatch(ed);
+        }
+
+        // Auto-surface: every ~12 frames, check whether the current editor selection matches
+        // some shape's Simple run; if the matched shape changes (incl. becoming/un-becoming a
+        // match), switch to it and rebuild so Convert buttons re-gate. Skip while typing so a
+        // text field's keystrokes don't fight a rebuild.
+        private static void TickSelectionMatch(scnEditor ed)
+        {
+            if (Time.frameCount % 12 != 0) return;
+            try { if (ed.userIsEditingAnInputField) return; } catch { }
+            var shapes = ShapeLibrary.All;
+            int found = -1;
+            for (int i = 0; i < shapes.Length; i++)
+                if (SelectionMatches(shapes[i], out _, out _)) { found = i; break; }
+            if (found == _matchIdx) return;
+            _matchIdx = found;
+            if (found >= 0) _sel = found;
+            BuildRail(); BuildPreview();
         }
 
         internal static void Dispose()
         {
             K.Dispose();
             _viewport = null; _content = null; _railHost = null;
-            _open = false; _selfChecked = false; _scroll = 0f;
+            _open = false; _selfChecked = false; _scroll = 0f; _matchIdx = -1;
         }
 
         // ── shell (rail + scroll viewport, geometry lifted from EditorLevelMenu) ─────────────
@@ -161,10 +181,12 @@ namespace Sapphire
             float y = -2f;
             y = AddPreviewBlock(y, w, def.Name + " — " + Loc.T("Simple"), def.SimpleMeta,
                 g => g.SetSimple(def.Simple), Loc.T("Insert simple"), () => InsertSimple(def));
+            bool selMatches = SelectionMatches(def, out _, out _);
             if (def.Pseudo != null)
                 foreach (var pf in def.Pseudo)
                     y = AddPreviewBlock(y, w, pf.Name, pf.Meta, g => g.SetPath(pf.Steps),
-                        Loc.T("Insert pseudo"), () => InsertPseudo(pf));
+                        Loc.T("Insert pseudo"), () => InsertPseudo(pf),
+                        Loc.T("Convert"), selMatches ? () => Convert(def, pf) : null);
 
             _content.sizeDelta = new Vector2(0f, -y + 6f);
             ClampScroll();
@@ -174,8 +196,11 @@ namespace Sapphire
         private const float BtnH = 24f, BtnW = 130f;
 
         // title/meta + preview graphic, then an action button (Insert simple/pseudo) below it.
+        // convertLabel/onConvert add a second button (pseudo blocks only); onConvert == null
+        // renders it disabled (dim, unclickable) — the Task 5 selection-match gate.
         private static float AddPreviewBlock(float y, float w, string title, string meta,
-            Action<ShapePathGraphic> fill, string btnLabel, Action onInsert)
+            Action<ShapePathGraphic> fill, string btnLabel, Action onInsert,
+            string convertLabel = null, Action onConvert = null)
         {
             EventRows.Label(_content, title, 0f, y, w, CapH, Theme.Text);
             y -= CapH;
@@ -189,6 +214,8 @@ namespace Sapphire
             fill(g);
             y -= PreviewH + 6f;
             MakeButton(_content, btnLabel, 0f, y, BtnW, BtnH, onInsert);
+            if (convertLabel != null)
+                MakeButton(_content, convertLabel, BtnW + 8f, y, BtnW, BtnH, onConvert);
             y -= BtnH + BlockGap;
             return y;
         }
@@ -196,10 +223,12 @@ namespace Sapphire
         // Absolute-position action button matching this panel's layout (top-left anchored,
         // anchoredPosition/sizeDelta — same convention as MakePreview/EventRows.Label, not the
         // LayoutElement-driven UIBuilder.Button). Deselect after click: clicked Buttons stay
-        // selected and Space re-submits them (repo-wide uGUI gotcha).
+        // selected and Space re-submits them (repo-wide uGUI gotcha). onClick == null renders a
+        // disabled button: dim + raycastTarget off (no handler attached) — the Convert gate.
         private static void MakeButton(RectTransform parent, string label, float x, float y,
             float w, float h, Action onClick)
         {
+            bool enabled = onClick != null;
             var go = new GameObject("Btn", typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var r = (RectTransform)go.transform;
@@ -209,20 +238,20 @@ namespace Sapphire
             r.sizeDelta = new Vector2(w, h);
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 6f;
-            bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f);
+            bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, enabled ? 0.4f : 0.12f);
             bg.BorderWidth = 1f;
-            bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
-            bg.raycastTarget = true;
+            bg.BorderColor = new Color(1f, 1f, 1f, enabled ? 0.14f : 0.05f);
+            bg.raycastTarget = enabled;   // no raycast target = OnPointerClick never fires
 
             var txtGo = new GameObject("T", typeof(RectTransform));
             txtGo.transform.SetParent(go.transform, false);
             var tr = (RectTransform)txtGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = tr.offsetMax = Vector2.zero;
-            var txt = UIBuilder.Tmp(txtGo, label, 12.5f, TextAnchor.MiddleCenter, Theme.Text);
+            var txt = UIBuilder.Tmp(txtGo, label, 12.5f, TextAnchor.MiddleCenter, enabled ? Theme.Text : Theme.TextMuted);
             txt.raycastTarget = false;
 
-            UI.ClickHandler.Attach(go, () => { Deselect(); onClick(); });
+            if (enabled) UI.ClickHandler.Attach(go, () => { Deselect(); onClick(); });
         }
 
         private static void Deselect()
@@ -302,23 +331,97 @@ namespace Sapphire
         private static void InsertPseudo(PseudoForm pf)
         {
             var ed = scnEditor.instance; if (ed == null || pf == null) return;
+            using (new SaveStateScope(ed)) InsertPseudoInner(ed, pf);
+        }
+
+        // Body of InsertPseudo, scope-less so Convert can run delete+insert as ONE undo step
+        // (its own SaveStateScope wraps both the run-delete and this call).
+        private static void InsertPseudoInner(scnEditor ed, PseudoForm pf)
+        {
+            double dir = StartDir(ed);
+            int firstNewSeq = -1;
+            try { firstNewSeq = ADOBase.lm.floorAngles.Length; } catch { }
+            var swirlSeqs = new System.Collections.Generic.List<int>();
+            int placed = 0;
+            foreach (var st in pf.Steps)
+            {
+                if (st.Kind == StepKind.Midspin) { AppendMidspin(ed); }
+                // fix: an Abs step also sets the tracked facing, else a later relative Tap
+                // continues from the pre-Abs direction instead of where the ball actually is.
+                else if (st.Kind == StepKind.Abs) { AppendAbs(ed, st.Angle); dir = st.Angle; }
+                else { dir = AppendRel(ed, st.Angle, dir); }
+                if (st.Swirl) swirlSeqs.Add(firstNewSeq + placed);
+                placed++;
+            }
+            foreach (int seq in swirlSeqs) AddTwirl(ed, seq);   // twirls AFTER build
+            ed.RemakePath(true, true);
+        }
+
+        // ── selection detection + convert (Task 5) ────────────────────────────
+
+        // charter of selected tile seq, derived from absolute facings (180 - turn).
+        // ponytail: assumes the selection is a contiguous run (no gap check) — matches the brief's
+        // lazy v1 scope (whole-selection match only); add a seq-contiguity check if users select
+        // scattered tiles that happen to match charters and Convert deletes the wrong span.
+        private static bool SelectedCharters(scnEditor ed, out System.Collections.Generic.List<double> ch, out int startSeq)
+        {
+            ch = new System.Collections.Generic.List<double>(); startSeq = -1;
+            var sel = ed.selectedFloors;
+            if (sel == null || sel.Count == 0) return false;
+            var seqs = new System.Collections.Generic.List<int>();
+            foreach (var f in sel) if (f != null) seqs.Add(f.seqID);
+            if (seqs.Count == 0) return false;
+            seqs.Sort();
+            startSeq = seqs[0];
+            var af = ADOBase.lm.floorAngles;
+            foreach (int seq in seqs)
+            {
+                if (seq <= 0 || seq >= af.Length) return false;
+                double turn = Norm180(af[seq] - af[seq - 1]);   // signed turn at this tile
+                ch.Add(180.0 - System.Math.Abs(turn));
+            }
+            return true;
+        }
+
+        private static double Norm180(double a) { a %= 360.0; if (a > 180) a -= 360; if (a < -180) a += 360; return a; }
+
+        // whole-selection match only: selected charter count == def.Simple.Length, each within tolerance.
+        private static bool SelectionMatches(ShapeDef def, out int startSeq, out int count)
+        {
+            startSeq = -1; count = 0;
+            var ed = scnEditor.instance; if (ed == null || def == null || def.Simple == null) return false;
+            if (!SelectedCharters(ed, out var ch, out startSeq)) return false;
+            if (ch.Count != def.Simple.Length) return false;
+            for (int i = 0; i < ch.Count; i++)
+                if (System.Math.Abs(ch[i] - def.Simple[i]) > 1.5) return false;   // ~1.5deg tolerance
+            count = ch.Count;
+            return true;
+        }
+
+        // replace the matched selection (its `count` run of tiles from startSeq) with the pseudo
+        // form at the same spot. Delete-then-insert in ONE SaveStateScope = one undo step.
+        private static void Convert(ShapeDef def, PseudoForm pf)
+        {
+            var ed = scnEditor.instance; if (ed == null || def == null || pf == null) return;
+            if (!SelectionMatches(def, out int startSeq, out int count)) return;
+            if (ed.lockPathEditing) { SapphireLog.Log("ShapeLib: convert - path editing locked"); return; }
             using (new SaveStateScope(ed))
             {
-                double dir = StartDir(ed);
-                int firstNewSeq = -1;
-                try { firstNewSeq = ADOBase.lm.floorAngles.Length; } catch { }
-                var swirlSeqs = new System.Collections.Generic.List<int>();
-                int placed = 0;
-                foreach (var st in pf.Steps)
+                // delete the run high→low (mirrors EditorToolbar's multi-tile delete pattern:
+                // BuildAngledSideways @ EditorToolbar.cs ~2255) — seqs above a deleted tile shift
+                // down, so deleting from the top keeps startSeq..startSeq+count-1 stable meanwhile.
+                for (int i = count - 1; i >= 0; i--)
                 {
-                    if (st.Kind == StepKind.Midspin) { AppendMidspin(ed); }
-                    else if (st.Kind == StepKind.Abs) { AppendAbs(ed, st.Angle); }
-                    else { dir = AppendRel(ed, st.Angle, dir); }
-                    if (st.Swirl) swirlSeqs.Add(firstNewSeq + placed);
-                    placed++;
+                    scrFloor t = null;
+                    try { var fl = ed.floors; int seq = startSeq + i; if (seq >= 0 && seq < fl.Count) t = fl[seq]; } catch { }
+                    if (t == null) continue;
+                    try { ed.DeselectFloors(); ed.SelectFloor(t, false); if (ed.SelectionIsSingle()) ed.DeleteSingleSelection(false); } catch { }
                 }
-                foreach (int seq in swirlSeqs) AddTwirl(ed, seq);   // twirls AFTER build
-                ed.RemakePath(true, true);
+                scrFloor prev = null;
+                try { prev = ed.floors[startSeq - 1]; } catch { }
+                if (prev == null) { SapphireLog.Log("ShapeLib: convert lost predecessor"); return; }
+                try { ed.DeselectFloors(); ed.SelectFloor(prev, false); } catch { }
+                InsertPseudoInner(ed, pf);   // appends from the reselected prev tile; does its own RemakePath
             }
         }
 
