@@ -359,20 +359,17 @@ namespace Sapphire
 
         // ── selection detection + convert (Task 5) ────────────────────────────
 
-        // charter of selected tile seq, derived from absolute facings (180 - turn).
-        // ponytail: assumes the selection is a contiguous run (no gap check) — matches the brief's
-        // lazy v1 scope (whole-selection match only); add a seq-contiguity check if users select
-        // scattered tiles that happen to match charters and Convert deletes the wrong span.
-        private static bool SelectedCharters(scnEditor ed, out System.Collections.Generic.List<double> ch, out int startSeq)
+        // charter of each selected tile, derived from absolute facings (180 - turn). Emits the
+        // sorted seqIDs themselves (not just the first) so callers delete exactly what's selected.
+        private static bool SelectedCharters(scnEditor ed, out System.Collections.Generic.List<double> ch, out System.Collections.Generic.List<int> seqs)
         {
-            ch = new System.Collections.Generic.List<double>(); startSeq = -1;
+            ch = new System.Collections.Generic.List<double>();
+            seqs = new System.Collections.Generic.List<int>();
             var sel = ed.selectedFloors;
             if (sel == null || sel.Count == 0) return false;
-            var seqs = new System.Collections.Generic.List<int>();
             foreach (var f in sel) if (f != null) seqs.Add(f.seqID);
             if (seqs.Count == 0) return false;
             seqs.Sort();
-            startSeq = seqs[0];
             var af = ADOBase.lm.floorAngles;
             foreach (int seq in seqs)
             {
@@ -385,40 +382,52 @@ namespace Sapphire
 
         private static double Norm180(double a) { a %= 360.0; if (a > 180) a -= 360; if (a < -180) a += 360; return a; }
 
-        // whole-selection match only: selected charter count == def.Simple.Length, each within tolerance.
-        private static bool SelectionMatches(ShapeDef def, out int startSeq, out int count)
+        // whole-selection match only: selected charter count == def.Simple.Length, each within
+        // tolerance, AND the selected seqs form a contiguous run (else Convert would delete tiles
+        // the user never selected — a scattered selection whose per-tile charters happen to line
+        // up must NOT match). Emits the actual seqs so Convert deletes exactly those, never a
+        // startSeq+i-derived span.
+        private static bool SelectionMatches(ShapeDef def, out int startSeq, out int count, out System.Collections.Generic.List<int> seqs)
         {
-            startSeq = -1; count = 0;
+            startSeq = -1; count = 0; seqs = null;
             var ed = scnEditor.instance; if (ed == null || def == null || def.Simple == null) return false;
-            if (!SelectedCharters(ed, out var ch, out startSeq)) return false;
+            if (!SelectedCharters(ed, out var ch, out seqs)) return false;
             if (ch.Count != def.Simple.Length) return false;
+            for (int i = 1; i < seqs.Count; i++)
+                if (seqs[i] != seqs[i - 1] + 1) return false;   // contiguity guard
             for (int i = 0; i < ch.Count; i++)
                 if (System.Math.Abs(ch[i] - def.Simple[i]) > 1.5) return false;   // ~1.5deg tolerance
+            startSeq = seqs[0];
             count = ch.Count;
             return true;
         }
 
-        // replace the matched selection (its `count` run of tiles from startSeq) with the pseudo
-        // form at the same spot. Delete-then-insert in ONE SaveStateScope = one undo step.
+        private static bool SelectionMatches(ShapeDef def, out int startSeq, out int count)
+            => SelectionMatches(def, out startSeq, out count, out _);
+
+        // replace the matched selection (its actual selected tiles, `seqs`) with the pseudo form
+        // at the same spot. Delete-then-insert in ONE SaveStateScope = one undo step.
         private static void Convert(ShapeDef def, PseudoForm pf)
         {
             var ed = scnEditor.instance; if (ed == null || def == null || pf == null) return;
-            if (!SelectionMatches(def, out int startSeq, out int count)) return;
+            if (!SelectionMatches(def, out int startSeq, out _, out var seqs)) return;
             if (ed.lockPathEditing) { SapphireLog.Log("ShapeLib: convert - path editing locked"); return; }
             using (new SaveStateScope(ed))
             {
-                // delete the run high→low (mirrors EditorToolbar's multi-tile delete pattern:
-                // BuildAngledSideways @ EditorToolbar.cs ~2255) — seqs above a deleted tile shift
-                // down, so deleting from the top keeps startSeq..startSeq+count-1 stable meanwhile.
-                for (int i = count - 1; i >= 0; i--)
+                // delete by the ACTUAL selected seqIDs, high→low (mirrors EditorToolbar's proven
+                // multi-tile delete: BuildAngledSideways @ EditorToolbar.cs ~2255). Never derive the
+                // span from startSeq+i — that deletes whatever sits at that index, not what the user
+                // selected, if a future change ever loosens the contiguity guard above.
+                for (int i = seqs.Count - 1; i >= 0; i--)
                 {
+                    int seq = seqs[i];
                     scrFloor t = null;
-                    try { var fl = ed.floors; int seq = startSeq + i; if (seq >= 0 && seq < fl.Count) t = fl[seq]; } catch { }
+                    try { var fl = ed.floors; if (seq >= 0 && seq < fl.Count) t = fl[seq]; } catch { }
                     if (t == null) continue;
                     try { ed.DeselectFloors(); ed.SelectFloor(t, false); if (ed.SelectionIsSingle()) ed.DeleteSingleSelection(false); } catch { }
                 }
                 scrFloor prev = null;
-                try { prev = ed.floors[startSeq - 1]; } catch { }
+                try { if (startSeq > 0) prev = ed.floors[startSeq - 1]; } catch { }
                 if (prev == null) { SapphireLog.Log("ShapeLib: convert lost predecessor"); return; }
                 try { ed.DeselectFloors(); ed.SelectFloor(prev, false); } catch { }
                 InsertPseudoInner(ed, pf);   // appends from the reselected prev tile; does its own RemakePath
