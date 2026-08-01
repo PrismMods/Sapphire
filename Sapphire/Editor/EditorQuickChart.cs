@@ -31,8 +31,6 @@ namespace Sapphire
         private const KeyCode KLocate = KeyCode.L;   // Shift+L
         private const KeyCode KAnglePad = KeyCode.G; // Shift+G
 
-        private const char ArbitraryChar = (char)163; // float-floor sentinel (see EditorToolbar)
-
         private static GameObject _canvasGo;
         private static RectTransform _root;
         private static readonly List<Pad> _pads = new List<Pad>();
@@ -413,61 +411,15 @@ namespace Sapphire
         // Append a run of tiles at RELATIVE (charter) angles, chained off the last selected tile
         // (or the track's end): each value is the tile's angle relative to the current heading —
         // 180 = straight, 90 = quarter turn, 0 = U-turn (the same convention the tile-angle readout
-        // shows). Sign follows the current tile's spin, matching EditorToolbar.AppendRel. Each
-        // CreateFloor advances the selection, so the next value chains onto it. One undo for the run.
+        // shows). Routed through PseudoBuild's anchor mode (Fixed=false): spin tracked from the
+        // anchor, flip before a twirled tap — reproduces this pad's original build exactly. The
+        // whole expanded run (ParseAngles already flattens (...)*n) is one unit, so RepeatN=1.
         private static int PlaceAngles(scnEditor ed, List<AngleStep> steps)
         {
             if (ed == null || steps == null || steps.Count == 0) return 0;
-            scrFloor anchor = null;
-            try
-            {
-                var sel = ed.selectedFloors;
-                if (sel != null && sel.Count > 0) anchor = sel[sel.Count - 1];
-                if (anchor == null) { var fl = ed.floors; if (fl != null && fl.Count > 0) anchor = fl[fl.Count - 1]; }
-            }
-            catch { }
-            if (anchor == null) return 0;
-            int placed = 0;
-            using (new SaveStateScope(ed))
-            {
-                try { ed.DeselectFloors(); } catch { }
-                try { ed.SelectFloor(anchor, false); } catch { }
-                if (!SelectionIsSingle(ed)) return 0;
-                // New tiles land right after the anchor; tile #i gets seqID firstNewSeq+i.
-                int firstNewSeq = anchor.seqID + 1;
-                double dir = anchor.floatDirection;          // running absolute heading
-                int spinSign;                                 // (ccw ? -1 : +1) multiplier on (180-rel)
-                try { spinSign = anchor.isCCW ? -1 : 1; } catch { spinSign = 1; }
-                for (int i = 0; i < steps.Count; i++)
-                {
-                    try
-                    {
-                        // A twirl on THIS tile: the event sits one tile earlier (the ball twirls
-                        // leaving the prior tile), added NOW — not after the whole run — and the
-                        // spin flips BEFORE this tile is placed so it and everything after chain off
-                        // the reversed heading. Placing twirls after the build would fight the
-                        // relative chaining and misplace tiles.
-                        if (steps[i].Twirl)
-                        {
-                            int tseq = firstNewSeq + placed - 1;
-                            if (tseq >= 0) try { ed.events.Add(new ADOFAI.LevelEvent(tseq, ADOFAI.LevelEventType.Twirl)); } catch { }
-                            spinSign = -spinSign;
-                        }
-                        double a = dir + spinSign * (180.0 - steps[i].Angle);
-                        ed.CreateFloorWithCharOrAngle((float)a, ArbitraryChar, false, false);
-                        dir = a; placed++;
-                    }
-                    catch { break; }
-                }
-                try { ed.RemakePath(true, true); } catch { }
-            }
-            return placed;
-        }
-
-        private static bool SelectionIsSingle(scnEditor ed)
-        {
-            try { return ed.SelectionIsSingle(); }
-            catch { return false; }
+            var unit = new PseudoStep[steps.Count];
+            for (int i = 0; i < steps.Count; i++) unit[i] = new PseudoStep(steps[i].Angle, StepKind.Tap, steps[i].Twirl);
+            return PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, RepeatN = 1 });
         }
 
         private struct AngleStep
