@@ -1,8 +1,7 @@
-# Sapphire — Feature Reference
+# Features
 
 Sapphire is an editor-suite mod for **A Dance of Fire and Ice** (UnityModManager).
-It layers a modern, tool-rich charting environment on top of the game's built-in editor —
-without reimplementing the game's own logic (it proxies the game's buttons and primitives).
+It layers a modern, tool-rich charting/VFX environment on top of the game's built-in editor.
 
 This page is a running summary of what Sapphire does. Keep it updated as features land.
 
@@ -12,30 +11,30 @@ This page is a running summary of what Sapphire does. Keep it updated as feature
 
 - **Master switch** — the power button (top-right) gates the entire suite. Off = vanilla editor.
 - **Settings** — `Ctrl+E` opens the settings panel (skin accent, toggles, module options).
-- **Reload after a build** — `Ctrl+F10` reloads the mod in-game.
 - **Manual** — the `?` button beside the active tool opens the in-editor instruction manual.
 
 ---
 
 ## Toolbar tools
 
-An Adobe-style toolbar (compact cells) replaces guesswork with dedicated tools. Digit keys
-`1`–`6` pick the first tools when nothing is selected; each cell has a hover tooltip.
+An Adobe-style toolbar replaces the event palette. Digit keys
+`1`–`0` pick the tools under the current selected category when nothing is selected; each cell has a hover tooltip.
 
 | Tool | What it does |
 |---|---|
 | **Circular path** | Build arcs / circles / stars as midspin sequences (per-point tab + smooth tiles). |
 | **Free angle** | Free-rotate a tile by dragging (hold **Left-Alt** or arm the tool); right-click stays free for the tile menu. |
-| **Pseudo (동타)** | Turn a tile into a beat-neutral pseudo (single-click or multi-select batch), with midspin/swirl constructions and retune. |
+| **Pseudo (동타)** | Turn a tile into a beat-neutral pseudo (single-click or multi-select batch), with midspin/twirl constructions and retune. |
 | **Camera path** | On-screen FreeCamera path overlay: click-inspect keyframes, ▶ preview, play-all with beat gaps. |
 | **Zip** | Replace a tile with a zip: 360° total split evenly across N keys (min 4), no extra params. |
-| **VFX preview** | "Crossed-eye" mode — hides all UI (including the game's) to preview visuals; persists into play mode, ESC to exit. |
-| **Inspector** | Eyedropper: left-click captures a tile's events, right-click pastes onto tiles. The copy panel doubles as a paste filter. |
+| **VFX preview** | VFX only mode — hides all UI (including the game's) to preview visuals; persists into play mode, ESC to exit. |
+| **Inspector** | Eyedropper: left-click captures a tile's events, right-click pastes onto tiles. The copy panel also works as a paste filter. |
 | **Quick chart (Q)** | Toggle fast in-place charting mode (see below). |
 | **Shape library** | Dockable palette of reusable shapes (see below). |
 
-Other tool comfort:
-- **Selective copy + mirror** panel (multi-select, top-right) — copy runs, mirror geometry.
+Other QoL tools:
+
+- **Selective copy + mirror** panel (multi-select, top-right) — copy multiple tiles, mirror geometry.
 - **Filter browser** — the game's ~300-entry `SetFilterAdvanced` dropdown as a searchable,
   category-organized browser (chip rides the game's event panel).
 - **Event presets** — save named bundles of events (via the Inspector) and stamp them back.
@@ -66,7 +65,7 @@ A fast, tool-less charting mode. While on, the timeline hides and these keys are
 
 | Key | Action |
 |---|---|
-| `I` | Toggle a **swirl** (Twirl) on the selected tile(s). |
+| `I` | Toggle a **twirl** on the selected tile(s). |
 | `O` | **Set speed** — prompt (BPM or Multiplier) → SetSpeed event. |
 | `[` / `]` | **Halve / double** the selected tile's SetSpeed value. |
 | `Shift+P` | **Pause** — prompt beats → Pause event. |
@@ -78,11 +77,10 @@ A fast, tool-less charting mode. While on, the timeline hides and these keys are
 Space-separated **relative** angles (charter convention: `180` = straight, `90` = quarter turn):
 
 - **Math** per token — `180-30`, `360/8`, `2*45`.
-- **Twirl** — a trailing `t` twirls that tile: `30t 30t 180`. The twirl event lands one tile
-  earlier and flips the running spin, so following tiles chain off the reversed heading.
-- **Group repeat** — parenthesise and multiply: `(30t 30t 180)*3`. Groups nest.
+- **Twirl** — a trailing `t` twirls that tile: `30t 30t 180`.
+- **Group repeat** — parenthesise and multiply: `(30t 150 180 180 180)*4`. Groups can nest.
 
-Angle pads are duplicable (each keeps its own value as a scratch preset) and draggable.
+Angle pads **are duplicable** (each keeps its own value as a scratch preset) and draggable.
 
 ---
 
@@ -134,10 +132,9 @@ key-count variants, inserted as a repeating pseudo.
 | Key | Context | Action |
 |---|---|---|
 | `Ctrl+E` | anywhere | Open settings |
-| `Ctrl+F10` | anywhere | Reload mod (after a build) |
-| `1`–`6` | no tool/selection | Pick toolbar tool |
-| `,` / `.` | editor | Previous tool / saved slot (`Shift+.` saves slot) |
+| `digits` | no tool/selection | Pick toolbar tool |
 | `digits` | tile selected | Pick nth event of the dock category; `Enter` stamps |
+| `,` / `.` | editor | Previous tool / saved slot (`Shift+.` saves slot) |
 | `Q` | editor | Toggle Quick chart mode |
 | `I` `O` `[` `]` | Quick chart | Swirl / set speed / halve / double |
 | `Shift+P` `Shift+L` `Shift+G` | Quick chart | Pause / location / angle pad |

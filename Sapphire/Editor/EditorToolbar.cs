@@ -442,7 +442,7 @@ namespace Sapphire
                 _cameraCellBg = Place(3, "ToolCamera", Loc.T("Camera path"), DrawCameraIcon, ToggleCameraPath);
                 Place(3, "ToolVfx", Loc.T("VFX preview (ESC exits)"), DrawEyeOffIcon, EditorVfxPreview.Toggle);
                 _quickChartCellBg = Place(4, "ToolQuickChart",
-                    Loc.T("Quick chart mode (I swirl · Shift+P/L/G · hides timeline)"), DrawQIcon, ToggleQuickChart);
+                    Loc.T("Quickchart Mode"), DrawQIcon, ToggleQuickChart);
             }
             r.sizeDelta = new Vector2(cx + pad, cell + pad * 2f);
             SyncInspectorHighlight();

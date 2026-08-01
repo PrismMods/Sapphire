@@ -323,6 +323,39 @@ namespace Sapphire
             ["× Exit"] = "× 닫기",
             ["Help"] = "도움말",
             ["Help mode"] = "도움말 모드",
+
+            // ── shape library ──
+            ["Shape library"] = "도형 라이브러리",
+            ["Insert"] = "삽입",
+            ["New shape"] = "새 도형",
+            ["From selection"] = "선택에서 가져오기",
+            ["Name"] = "이름",
+            ["Category"] = "분류",
+            ["Angles"] = "각도",
+            ["+ Category"] = "+ 분류",
+            ["+ Shape"] = "+ 도형",
+            ["Delete category"] = "분류 삭제",
+            ["Delete shape"] = "도형 삭제",
+            ["(its shapes are removed too)"] = "(포함된 도형도 삭제됩니다)",
+            ["select a run of tiles first"] = "먼저 타일을 선택하세요",
+            [" tiles captured"] = " 타일 캡처됨",
+            ["check the angles"] = "각도를 확인하세요",
+            ["e.g. 30t 30t 180  (t = twirl · sum = base)"] = "예: 30t 30t 180  (t = 회전 · 합 = 기준각)",
+
+            // ── quick chart / angle pad ──
+            ["Quickchart Mode"] = "퀵차트 모드",
+            ["Angle pad"] = "각도 패드",
+            ["Set speed"] = "속도 설정",
+            ["Place"] = "배치",
+            ["Duplicate"] = "복제",
+            ["Close"] = "닫기",
+            ["180=straight · 30t=twirl · (…)*n"] = "180=직진 · 30t=회전 · (…)*n",
+            ["check the expression"] = "식을 확인하세요",
+            ["check the value"] = "값을 확인하세요",
+            ["check "] = "확인: ",
+            ["select a tile / open a level"] = "타일 선택 / 레벨 열기",
+            [" tile"] = " 타일",
+            [" placed"] = " 배치됨",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short
