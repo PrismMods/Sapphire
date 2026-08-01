@@ -1925,7 +1925,7 @@ namespace Sapphire
                     else if (midspin)
                     {
                         var ch = new double[taps];
-                        for (int k = 0; k < taps; k++) ch[k] = _pseudoTapAngle * (k + 1);
+                        for (int k = 0; k < taps; k++) ch[k] = _pseudoTapAngle;
                         BuildMidspinPseudo(ed, tile, ch);
                     }
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, false);
@@ -1942,13 +1942,16 @@ namespace Sapphire
         private static void BuildMidspinPseudo(scnEditor ed, scrFloor tile, double[] tapCharters)
         {
             if (ed == null || tile == null || tapCharters == null || tapCharters.Length == 0) return;
-            var unit = new System.Collections.Generic.List<PseudoStep>(tapCharters.Length * 2);
+            // (pseudoAngle, 999) per tap, then a closing STRAIGHT (180) — 999s are transparent to
+            // the heading, so the straight brings the run back to the line. Replaces the clicked tile.
+            var unit = new System.Collections.Generic.List<PseudoStep>(tapCharters.Length * 2 + 1);
             foreach (var c in tapCharters)
             {
                 unit.Add(new PseudoStep(c, StepKind.Tap));
                 unit.Add(new PseudoStep(0, StepKind.Midspin));
             }
-            PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, ReplaceSeqs = new[] { tile.seqID }, Compensate = true });
+            unit.Add(new PseudoStep(180, StepKind.Tap));
+            PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, ReplaceSeqs = new[] { tile.seqID }, Compensate = false });
         }
 
         // Replace one tile with a swirl-only turn pseudo that REDIRECTS the ball (absolute facings +
