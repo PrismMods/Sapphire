@@ -134,6 +134,7 @@
         <Compile Include="Editor\EditorEventSelector.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
         <Compile Include="Editor\EditorShapeLibrary.cs" />
+        <Compile Include="Editor\PseudoBuild.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />
         <Compile Include="Patches\Patches.cs" />

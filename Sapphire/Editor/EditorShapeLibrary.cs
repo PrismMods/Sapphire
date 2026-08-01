@@ -55,7 +55,7 @@ namespace Sapphire
             bool inEditor = ed != null && !ed.playMode && s != null && MainClass.EditorSuiteOn;
             if (!_open || !inEditor) { K.Show(false); return; }
             if (!K.Built) { BuildShell(); BuildBody(); }
-            if (!_selfChecked) { _selfChecked = true; ShapePathGraphic.SelfCheck(); }
+            if (!_selfChecked) { _selfChecked = true; ShapePathGraphic.SelfCheck(); PseudoBuild.SelfCheck(); }
             if (Input.GetKeyDown(KeyCode.Escape) && !IsTyping(ed)) { Close(); return; }
             K.Show(true);
             TickResize();
