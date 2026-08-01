@@ -376,84 +376,18 @@ namespace Sapphire
 
         // ── build / preview geometry (fixed turn sign; mask flips after twirled tiles) ────
 
-        private const char ArbitraryChar = (char)163;
         private const int TurnSign = 1;
-
-        private static void AppendAbs(scnEditor ed, double abs) => ed.CreateFloorWithCharOrAngle((float)abs, ArbitraryChar, false, false);
-
-        private static int AnchorSpin(scnEditor ed)
-        {
-            try
-            {
-                var sel = ed.selectedFloors;
-                scrFloor a = sel != null && sel.Count > 0 ? sel[sel.Count - 1] : null;
-                if (a == null) { var fl = ed.floors; if (fl != null && fl.Count > 0) a = fl[fl.Count - 1]; }
-                if (a != null) return a.isCCW ? 1 : -1;
-            }
-            catch { }
-            return 1;
-        }
-
-        private static int AnchorSeq(scnEditor ed)
-        {
-            try
-            {
-                return ed.selectedFloors != null && ed.selectedFloors.Count > 0
-                    ? ed.selectedFloors[ed.selectedFloors.Count - 1].seqID : ADOBase.lm.floorAngles.Length - 1;
-            }
-            catch { return -1; }
-        }
-
-        private static double StartDir(scnEditor ed)
-        {
-            try { var af = ADOBase.lm.floorAngles; return af[Mathf.Clamp(AnchorSeq(ed), 0, af.Length - 1)]; }
-            catch { return 0.0; }
-        }
-
-        private static void AddTwirl(scnEditor ed, int seq)
-        {
-            try { ed.events.Add(new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Twirl)); }
-            catch (Exception ex) { SapphireLog.Log("ShapeLib: twirl failed: " + ex.Message); }
-        }
 
         private static void InsertShape(ShapeEntry sh, ShapeVariant v, int n)
         {
             var ed = scnEditor.instance; if (ed == null || sh == null || v == null) return;
-            if (ed.lockPathEditing) { SapphireLog.Log("ShapeLib: insert - path editing locked"); return; }
             double[] rel = CurRel(sh, v);
             bool[] mask = v.Twirls;
             bool rotate = _rotate.TryGetValue(Key(sh, v), out var rv) && rv;
-            if (n < 1) n = 1;
-            using (new SaveStateScope(ed))
-            {
-                // FIXED geometry (localSign starts at the turn sign, not the anchor) so the shape
-                // looks the same wherever it lands; flips after each twirled tile. Twirls sit ONE
-                // TILE BEFORE their tile; the first twirled tile is conditional on the incoming spin
-                // for correct colour, the rest always fire. Rotate negates the turn sign (mirror).
-                double dir = StartDir(ed);
-                int firstNewSeq = AnchorSeq(ed) + 1;
-                int ts = rotate ? -TurnSign : TurnSign;
-                int spin = AnchorSpin(ed);
-                int localSign = ts;
-                int total = rel.Length * n, placed = 0;
-                bool firstMasked = true;
-                var swirlSeqs = new List<int>();
-                for (int idx = 0; idx < total; idx++)
-                {
-                    int i = idx % rel.Length;
-                    dir = Norm360(dir + localSign * (180.0 - rel[i]));
-                    AppendAbs(ed, dir);
-                    if (i < mask.Length && mask[i])
-                    {
-                        if (!firstMasked || spin == ts) swirlSeqs.Add(firstNewSeq + placed - 1);
-                        firstMasked = false;
-                        localSign = -localSign;
-                    }
-                    placed++;
-                }
-                foreach (int seq in swirlSeqs) if (seq >= firstNewSeq - 1) AddTwirl(ed, seq);
-                ed.RemakePath(true, true);
-            }
+            var unit = new PseudoStep[rel.Length];
+            for (int i = 0; i < rel.Length; i++)
+                unit[i] = new PseudoStep(rel[i], StepKind.Tap, i < mask.Length && mask[i]);
+            PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = true, TurnSign = rotate ? -1 : 1, RepeatN = Mathf.Max(1, n) });
         }
 
         private static double Norm360(double a) { a %= 360.0; if (a < 0) a += 360.0; return a; }
