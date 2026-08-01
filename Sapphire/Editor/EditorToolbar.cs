@@ -1919,39 +1919,14 @@ namespace Sapphire
                         // the midspins fold it back. No midspin → beat-neutral fold: charters padded
                         // to sum 180° (turns sum 360°) so the ball exits on the baseline again
                         // instead of climbing off as a disruptive staircase.
-                        if (midspin) BuildMidspinPseudo(ed, tile, ParsePseudoCustom());
+                        if (midspin) ApplyPseudoAbs(ed, tile, ParsePseudoCustom(), true);
                         else ApplyPseudo(ed, tile, PseudoCharters(_pseudoN, _pseudoTapAngle, custom), false, false);
                     }
-                    else if (midspin)
-                    {
-                        var ch = new double[taps];
-                        for (int k = 0; k < taps; k++) ch[k] = _pseudoTapAngle;
-                        BuildMidspinPseudo(ed, tile, ch);
-                    }
+                    else if (midspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle);
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, false);
                 }
             }
             catch (Exception ex) { SapphireLog.Log("Toolbar: pseudo convert failed: " + ex.Message); }
-        }
-
-        // Route a MIDSPIN pseudo through the shared PseudoBuild core: the clicked tile is REPLACED
-        // by [tap, 999, tap, 999, …] + a baseline-closing compensator so the run returns to the
-        // line (net-zero drift) instead of the old climbing staircase. Anchor orientation; the exact
-        // beat rounding is still being tuned in-game. (Non-midspin convert paths stay on their own
-        // builders for now.)
-        private static void BuildMidspinPseudo(scnEditor ed, scrFloor tile, double[] tapCharters)
-        {
-            if (ed == null || tile == null || tapCharters == null || tapCharters.Length == 0) return;
-            // (pseudoAngle, 999) per tap, then a closing STRAIGHT (180) — 999s are transparent to
-            // the heading, so the straight brings the run back to the line. Replaces the clicked tile.
-            var unit = new System.Collections.Generic.List<PseudoStep>(tapCharters.Length * 2 + 1);
-            foreach (var c in tapCharters)
-            {
-                unit.Add(new PseudoStep(c, StepKind.Tap));
-                unit.Add(new PseudoStep(0, StepKind.Midspin));
-            }
-            unit.Add(new PseudoStep(180, StepKind.Tap));
-            PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, ReplaceSeqs = new[] { tile.seqID }, Compensate = false });
         }
 
         // Replace one tile with a swirl-only turn pseudo that REDIRECTS the ball (absolute facings +
