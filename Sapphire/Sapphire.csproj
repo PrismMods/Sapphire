@@ -92,6 +92,7 @@
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
+        <Compile Include="UI\ShapePathGraphic.cs" />
         <Compile Include="UI\Pages\PageEditor.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
         <Compile Include="Util\SapphireLog.cs" />
@@ -113,6 +114,9 @@
         <Compile Include="Editor\EditorGameSettings.cs" />
         <Compile Include="Editor\EditorVfxPreview.cs" />
         <Compile Include="Editor\EditorHelp.cs" />
+        <Compile Include="Editor\EditorHelpKo.cs" />
+        <Compile Include="Editor\ShapeLibrary.cs" />
+        <Compile Include="Editor\ShapeStore.cs" />
         <Compile Include="Editor\EditorPresets.cs" />
         <Compile Include="Editor\EditorEasePicker.cs" />
         <Compile Include="Editor\EditorBezier.cs" />
@@ -129,6 +133,7 @@
         <Compile Include="Editor\EditorEventPanel.cs" />
         <Compile Include="Editor\EditorEventSelector.cs" />
         <Compile Include="Editor\EditorPitch.cs" />
+        <Compile Include="Editor\EditorShapeLibrary.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />
         <Compile Include="Patches\Patches.cs" />

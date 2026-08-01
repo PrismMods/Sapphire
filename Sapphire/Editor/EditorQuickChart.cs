@@ -14,8 +14,9 @@ namespace Sapphire
          • Shift+P  prompt for beats → place a Pause event on the selected tile
          • Shift+L  prompt for X/Y  → place a PositionTrack event on the selected tile
          • Shift+G  open an "angle pad": a floating field that appends a whole run of tiles from
-                    space-separated angle values (math allowed: 180-30, 360/8). Duplicable so
-                    several float on screen, each holding its own saved value as a temp preset.
+                    space-separated angle values (math allowed: 180-30, 360/8). A trailing 't'
+                    twirls that tile (30t 30t 180); a parenthesised group repeats with '*'
+                    ((30 30 180)*3). Duplicable, each holding its own value as a temp preset.
 
        Keybinds are SHIFT combos on purpose: the editor's 34 keyboard tile-placement binds are
        all registered with KeyModifier.None and matched by EXACT modifier equality, so a Shift+
@@ -414,9 +415,9 @@ namespace Sapphire
         // 180 = straight, 90 = quarter turn, 0 = U-turn (the same convention the tile-angle readout
         // shows). Sign follows the current tile's spin, matching EditorToolbar.AppendRel. Each
         // CreateFloor advances the selection, so the next value chains onto it. One undo for the run.
-        private static int PlaceAngles(scnEditor ed, List<double> rels)
+        private static int PlaceAngles(scnEditor ed, List<AngleStep> steps)
         {
-            if (ed == null || rels == null || rels.Count == 0) return 0;
+            if (ed == null || steps == null || steps.Count == 0) return 0;
             scrFloor anchor = null;
             try
             {
@@ -432,14 +433,27 @@ namespace Sapphire
                 try { ed.DeselectFloors(); } catch { }
                 try { ed.SelectFloor(anchor, false); } catch { }
                 if (!SelectionIsSingle(ed)) return 0;
-                double dir = anchor.floatDirection; // running absolute heading
-                for (int i = 0; i < rels.Count; i++)
+                // New tiles land right after the anchor; tile #i gets seqID firstNewSeq+i.
+                int firstNewSeq = anchor.seqID + 1;
+                double dir = anchor.floatDirection;          // running absolute heading
+                int spinSign;                                 // (ccw ? -1 : +1) multiplier on (180-rel)
+                try { spinSign = anchor.isCCW ? -1 : 1; } catch { spinSign = 1; }
+                for (int i = 0; i < steps.Count; i++)
                 {
                     try
                     {
-                        var sel = ed.selectedFloors;
-                        bool ccw = sel != null && sel.Count > 0 && sel[0].isCCW;
-                        double a = dir + (ccw ? -(180.0 - rels[i]) : (180.0 - rels[i]));
+                        // A twirl on THIS tile: the event sits one tile earlier (the ball twirls
+                        // leaving the prior tile), added NOW — not after the whole run — and the
+                        // spin flips BEFORE this tile is placed so it and everything after chain off
+                        // the reversed heading. Placing twirls after the build would fight the
+                        // relative chaining and misplace tiles.
+                        if (steps[i].Twirl)
+                        {
+                            int tseq = firstNewSeq + placed - 1;
+                            if (tseq >= 0) try { ed.events.Add(new ADOFAI.LevelEvent(tseq, ADOFAI.LevelEventType.Twirl)); } catch { }
+                            spinSign = -spinSign;
+                        }
+                        double a = dir + spinSign * (180.0 - steps[i].Angle);
                         ed.CreateFloorWithCharOrAngle((float)a, ArbitraryChar, false, false);
                         dir = a; placed++;
                     }
@@ -456,20 +470,84 @@ namespace Sapphire
             catch { return false; }
         }
 
-        // Parse the pad field: whitespace-separated tokens, each an ExprEval expression.
-        // Returns null if any token is malformed (so a typo never places a partial run).
-        private static List<double> ParseAngles(string text)
+        private struct AngleStep
+        {
+            public double Angle; public bool Twirl;
+            public AngleStep(double a, bool t) { Angle = a; Twirl = t; }
+        }
+
+        private const int MaxRunTiles = 1000; // guard against (…)*N blowups
+
+        // Parse the pad field into a run of tiles. Grammar:
+        //   • whitespace-separated tokens, each an ExprEval angle expression (180-30, 360/8, 2*45)
+        //   • a trailing 't' marks a Twirl on that tile:            30t 30t 180
+        //   • a parenthesised group repeats with '*':               (30 30 180)*3   /   (30 30) * 2
+        //   groups nest. Returns null on any malformed input so a typo never places a partial run.
+        private static List<AngleStep> ParseAngles(string text)
         {
             if (string.IsNullOrEmpty(text)) return null;
-            var toks = text.Split(new[] { ' ', '\t', ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            if (toks.Length == 0) return null;
-            var outv = new List<double>(toks.Length);
-            foreach (var tk in toks)
-            {
-                if (!ExprEval.TryEval(tk, out double v)) return null;
-                outv.Add(v);
-            }
+            int i = 0;
+            var outv = ParseSeq(text, ref i, false);
+            if (outv == null || outv.Count == 0 || outv.Count > MaxRunTiles) return null;
+            SkipSep(text, ref i);
+            if (i < text.Length) return null; // trailing junk
             return outv;
+        }
+
+        private static void SkipSep(string s, ref int i)
+        { while (i < s.Length && (char.IsWhiteSpace(s[i]) || s[i] == ',')) i++; }
+
+        // Parse tokens until end (inGroup=false) or a matching ')' (inGroup=true, which it consumes).
+        private static List<AngleStep> ParseSeq(string s, ref int i, bool inGroup)
+        {
+            var res = new List<AngleStep>();
+            for (;;)
+            {
+                SkipSep(s, ref i);
+                if (i >= s.Length) return inGroup ? null : res;   // unclosed group = malformed
+                char c = s[i];
+                if (c == ')') { if (!inGroup) return null; i++; return res; }
+                if (c == '(')
+                {
+                    i++;
+                    var grp = ParseSeq(s, ref i, true); // consumes the ')'
+                    if (grp == null) return null;
+                    int rep = 1;
+                    SkipSep(s, ref i);
+                    if (i < s.Length && s[i] == '*')
+                    {
+                        i++; SkipSep(s, ref i);
+                        if (!ReadCount(s, ref i, out rep)) return null;
+                    }
+                    for (int r = 0; r < rep; r++) res.AddRange(grp);
+                    if (res.Count > MaxRunTiles) return null;
+                }
+                else
+                {
+                    // bare token: up to whitespace / paren / comma. Keeps math operators, so
+                    // 180-30 and 2*45 stay single ExprEval expressions.
+                    int st = i;
+                    while (i < s.Length && !char.IsWhiteSpace(s[i]) && s[i] != '(' && s[i] != ')' && s[i] != ',') i++;
+                    string tok = s.Substring(st, i - st);
+                    bool twirl = tok.Length > 0 && (tok[tok.Length - 1] == 't' || tok[tok.Length - 1] == 'T');
+                    if (twirl) tok = tok.Substring(0, tok.Length - 1);
+                    if (!ExprEval.TryEval(tok, out double v)) return null;
+                    res.Add(new AngleStep(v, twirl));
+                }
+            }
+        }
+
+        // Read a repeat count after a group's '*': the next bare token, a positive integer 1..999.
+        private static bool ReadCount(string s, ref int i, out int rep)
+        {
+            rep = 0;
+            int st = i;
+            while (i < s.Length && !char.IsWhiteSpace(s[i]) && s[i] != '(' && s[i] != ')' && s[i] != ',') i++;
+            if (!ExprEval.TryEval(s.Substring(st, i - st), out double v)) return false;
+            int n = (int)Math.Round(v);
+            if (n < 1 || n > 999) return false;
+            rep = n;
+            return true;
         }
 
         // ── shared helpers ─────────────────────────────────────────────────────
@@ -636,7 +714,7 @@ namespace Sapphire
             hir.anchorMin = new Vector2(0f, 1f); hir.anchorMax = new Vector2(1f, 1f);
             hir.pivot = new Vector2(0.5f, 1f);
             hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad - 60f, -68f);
-            pw.Hint = UIBuilder.Tmp(hintGo, Loc.T("relative · 180=straight · math"), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            pw.Hint = UIBuilder.Tmp(hintGo, Loc.T("180=straight · 30t=twirl · (…)*n"), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
             pw.Hint.raycastTarget = false;
 
             // place button

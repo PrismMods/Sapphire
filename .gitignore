@@ -429,6 +429,8 @@ crashlytics-build.properties
 /UnityProject/[Aa]ssets/[Ss]treamingAssets/aa/*
 *.DS_Store
 .claude
+.superpowers
+docs/superpowers
 Bismuth.zip
 RELEASE_NOTES.md
 

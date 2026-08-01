@@ -82,6 +82,7 @@ namespace Sapphire
         private static int _pseudoN = 2;
         private static RoundedRectGraphic _pseudoCellBg;
         private static RoundedRectGraphic _cameraCellBg;   // camera-path overlay toggle (passive)
+        private static RoundedRectGraphic _shapeLibCellBg; // shape library panel toggle (passive)
         private static GameObject _cameraMenuGo;           // camera submenu (Play all)
         private static GameObject _pseudoMenuGo;
         private static readonly int[] PseudoNumbers = { 2, 3, 4, 5, 6, 8, 10, 12, 16 };
@@ -366,6 +367,7 @@ namespace Sapphire
             _pseudoCustomBg = null; _pseudoCustomFieldGo = null; _pseudoPresetObjs.Clear(); _fPseudoN = null;
             _toolLabelGo = null; _toolLabelText = null; _tipGo = null; _tipText = null;
             _zipMenuGo = null; _zipCellBg = null; _fZipBeats = null; _magicCellBg = null; _trackCellBg = null; _decoCellBg = null;
+            _shapeLibCellBg = null;
             for (int i = 0; i < _zipBtnBgs.Length; i++) _zipBtnBgs[i] = null;
             for (int i = 0; i < _pseudoAngleBtnBgs.Length; i++) _pseudoAngleBtnBgs[i] = null;
             for (int i = 0; i < _pseudoBtnBgs.Length; i++) _pseudoBtnBgs[i] = null;
@@ -425,7 +427,8 @@ namespace Sapphire
                 Place(0, "ToolCircle", Loc.T("Circular path"), DrawCircleIcon, OpenDialog);
                 _freeAngleCellBg = Place(0, "ToolFreeAngle", Loc.T("Free angle"), DrawAngleIcon, ToggleFreeAngle);
                 _pseudoCellBg = Place(0, "ToolPseudo", Loc.T("Pseudo"), DrawPseudoIcon, TogglePseudo);
-                _zipCellBg = Place(0, "ToolZip", Loc.T("Zip (redirect through tiny angles)"), DrawZipIcon, ToggleZip);
+                _zipCellBg = Place(0, "ToolZip", Loc.T("Zip"), DrawZipIcon, ToggleZip);
+                _shapeLibCellBg = Place(0, "ToolShapeLib", Loc.T("Shape library"), DrawShapeIcon, EditorShapeLibrary.Toggle);
             }
             if (mods)
             {
@@ -451,6 +454,7 @@ namespace Sapphire
             SyncPseudoHighlight();
             SyncCameraHighlight();
             SyncQuickChartHighlight();
+            SyncShapeLibHighlight();
             BuildToolLabel();
             BuildToolTip();
             if (sap && _pseudoTool) ShowPseudoMenu();
@@ -856,6 +860,33 @@ namespace Sapphire
             _cameraCellBg.color = rest;
             var hover = _cameraCellBg.GetComponent<CellHover>();
             if (hover != null) hover.Base = rest;
+        }
+
+        internal static void SyncShapeLibHighlight()
+        {
+            if (_shapeLibCellBg == null) return;
+            var rest = EditorShapeLibrary.IsOpen
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _shapeLibCellBg.color = rest;
+            var hover = _shapeLibCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        // Shape library: hexagon outline, 6 thin bars around the cell centre (matches
+        // DrawTrackIcon/DrawAngleIcon's bar-primitive style — there's no separate line helper).
+        private static void DrawShapeIcon(GameObject cell)
+        {
+            const float R = 8f, thick = 2f;
+            for (int i = 0; i < 6; i++)
+            {
+                float a0 = i * 60f * Mathf.Deg2Rad, a1 = (i + 1) * 60f * Mathf.Deg2Rad;
+                var p0 = new Vector2(Mathf.Sin(a0), Mathf.Cos(a0)) * R;
+                var p1 = new Vector2(Mathf.Sin(a1), Mathf.Cos(a1)) * R;
+                var d = p1 - p0;
+                float ang = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+                MakeBar(cell, (p0 + p1) * 0.5f, new Vector2(d.magnitude, thick), ang);
+            }
         }
 
         private static void MakeBar(GameObject parent, Vector2 pos, Vector2 size, float rot)

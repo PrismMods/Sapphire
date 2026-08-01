@@ -2,14 +2,9 @@
 
 ADOFAI editor suite by PrismMods
 
-- Premiere-style event timeline
-- redesigned editor UI
-- Editor Mode for clean-screen charting
-- Magic Shape tools (multiply / create / rotate)
-- Track Tools (fade in/out, explosion, multi-track copies, size ramps, generate-from-angles)
-- Deco Tools (image flipbooks, video frame extraction, 3D decoration stacks, lyric generation)
+## Features
 
-Settings panel: **Ctrl+E** in game.
+See the [features page](docs/FEATURES.md).
 
 ## Credits
 

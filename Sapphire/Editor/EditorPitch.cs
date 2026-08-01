@@ -135,6 +135,12 @@ namespace Sapphire
             Apply((ed != null ? Effective(ed) : _practicePitch) + delta);
         }
 
+        // Arrow step: 10 normally, 1 while Shift held (fine adjust).
+        private static int Step()
+        {
+            return (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) ? 1 : 10;
+        }
+
         // ── construction ────────────────────────────────────────────────────
 
         private static void Build()
@@ -170,9 +176,9 @@ namespace Sapphire
 
             float x = pad;
             MakeLabel(Loc.T("Pitch"), x, lblW, h);          x += lblW + gap;
-            MakeButton("<", x, btn, h, () => Nudge(-10)); x += btn + gap;
+            MakeButton("<", x, btn, h, () => Nudge(-Step())); x += btn + gap;
             _field = MakeField(x, fieldW, h);        x += fieldW + gap;
-            MakeButton(">", x, btn, h, () => Nudge(10));  x += btn + gap;
+            MakeButton(">", x, btn, h, () => Nudge(Step()));  x += btn + gap;
             MakeButton(Loc.T("Reset"), x, resetW, h, ResetPractice);
         }
 

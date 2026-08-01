@@ -71,6 +71,12 @@ namespace Sapphire
 
         private static void OnSaveGUI(UnityModManager.ModEntry modEntry) => Settings.Save(modEntry);
 
+        // Persist Settings on demand (custom shapes / categories change outside the UMM menu).
+        internal static void SaveSettings()
+        {
+            try { if (Settings != null && _modEntry != null) Settings.Save(_modEntry); } catch { }
+        }
+
         private static bool OnUnload(UnityModManager.ModEntry modEntry)
         {
             if (EditorUiEditor.IsActive) EditorUiEditor.Close();

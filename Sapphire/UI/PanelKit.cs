@@ -138,7 +138,10 @@ namespace Sapphire.UI
         private static readonly System.Collections.Generic.List<PanelKit> _dockTmp2 = new System.Collections.Generic.List<PanelKit>();
         private static float _sideWL = 360f, _sideWR = 360f;
         internal static bool DockDragActive; // a dock divider is being dragged
-        private const float SideMin = 220f, DockGap = 6f, DockMargin = 0f, DockPanelMinH = 120f, EdgeSnap = 28f;
+        // DockGap 0: stacked docked panels butt FLUSH (no transparent seam bleeding the game
+        // through). Their borders + the grip pill read as the divider, Photoshop-style.
+        private const float SideMin = 220f, DockGap = 0f, DockMargin = 0f, DockPanelMinH = 120f, EdgeSnap = 28f;
+        private const float DividerHit = 10f; // grab strip height on the flush seam (independent of DockGap)
         private static float _lastTop, _lastBottom, _lastCh, _lastCw; // for divider-drag geometry
         private static int _lastScreenW, _lastScreenH;                // ClampFloating runs only on resize
         // Divider components resolved once — GetComponent per divider per frame was pure overhead.
@@ -294,7 +297,7 @@ namespace Sapphire.UI
                     var div = GetHDiv();
                     div.Set(side, i, false);
                     var dr = (RectTransform)div.transform;
-                    dr.sizeDelta = new Vector2(sideW, DockGap + 6f);
+                    dr.sizeDelta = new Vector2(sideW, DividerHit);
                     dr.anchoredPosition = new Vector2(x + sideW * 0.5f, y - h - DockGap * 0.5f);
                 }
                 y -= h + DockGap;

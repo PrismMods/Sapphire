@@ -12,7 +12,9 @@ namespace Sapphire.UI
     {
         private PseudoStep[] _steps = new PseudoStep[0];
         private static readonly Color TileCol = new Color(0.86f, 0.78f, 0.55f, 1f); // ADOFAI beige
-        private const float BarW = 0.34f;      // bar thickness as a fraction of the unit step
+        private static readonly Color SwirlRed = new Color(0.80f, 0.20f, 0.24f, 1f);
+        private static readonly Color SwirlBlue = new Color(0.26f, 0.44f, 0.85f, 1f);
+        private const float BarW = 0.55f;      // bar thickness as a fraction of the unit step
         private const float Pad = 10f;
 
         internal void SetPath(IList<PseudoStep> steps)
@@ -34,12 +36,12 @@ namespace Sapphire.UI
            sets the facing absolutely. Returns center points (count = tiles+1, incl. the start).
            spin (+1 = CW) is the preview convention; absolute orientation is irrelevant because
            the caller auto-fits. */
-        internal static Vector2[] Walk(IList<PseudoStep> steps, out List<int> swirlIdx, out List<int> midspinIdx)
+        internal static Vector2[] Walk(IList<PseudoStep> steps, out List<int> swirlIdx, out List<bool> swirlBlue, out List<int> midspinIdx)
         {
-            // NOTE: preview uses a fixed spin (+1). The real build's AppendRel takes spin from the
-            // append-from tile's isCCW, so a chiral shape inserted after a CCW tile is the MIRROR of
-            // this preview. Scale/orientation match; chirality is preview-only.
+            // NOTE: preview uses a fixed spin (+1). Chirality/colour of the real insert come from
+            // the step data the caller bakes in (SwirlBlue), so this is just the geometry walk.
             swirlIdx = new List<int>();
+            swirlBlue = new List<bool>();
             midspinIdx = new List<int>();
             var pts = new List<Vector2>();
             Vector2 p = Vector2.zero;
@@ -48,13 +50,19 @@ namespace Sapphire.UI
             for (int i = 0; i < steps.Count; i++)
             {
                 var st = steps[i];
-                if (st.Kind == StepKind.Midspin) { spin = -spin; midspinIdx.Add(pts.Count - 1); continue; }
+                if (st.Kind == StepKind.Midspin)
+                {
+                    spin = -spin;
+                    midspinIdx.Add(pts.Count - 1);
+                    if (st.Swirl) { swirlIdx.Add(pts.Count - 1); swirlBlue.Add(st.SwirlBlue); }
+                    continue;
+                }
                 if (st.Kind == StepKind.Abs) dir = st.Angle;
                 else dir += spin * (180.0 - st.Angle);
                 double r = dir * Mathf.Deg2Rad;
                 p += new Vector2((float)System.Math.Cos(r), (float)System.Math.Sin(r));
                 pts.Add(p);
-                if (st.Swirl) swirlIdx.Add(pts.Count - 1);
+                if (st.Swirl) { swirlIdx.Add(pts.Count - 1); swirlBlue.Add(st.SwirlBlue); }
             }
             return pts.ToArray();
         }
@@ -63,7 +71,7 @@ namespace Sapphire.UI
         {
             vh.Clear();
             if (_steps.Length == 0) return;
-            var pts = Walk(_steps, out var swirls, out var mids);
+            var pts = Walk(_steps, out var swirls, out var swirlBlue, out var mids);
             if (pts.Length < 2) return;
 
             // fit: bounds of pts → scale/offset into rect with padding
@@ -81,10 +89,14 @@ namespace Sapphire.UI
             float half = BarW * scale * 0.5f;
             for (int i = 1; i < pts.Length; i++)
                 AddBar(vh, map(pts[i - 1]), map(pts[i]), half, TileCol);
+            // corner smoothing: a tile-colour disc at every vertex caps the mitre gaps (rounded joints)
+            for (int i = 0; i < pts.Length; i++)
+                AddDot(vh, map(pts[i]), half, TileCol);
             // planet dot at the start
-            AddDot(vh, map(pts[0]), half * 1.6f, new Color(0.95f, 0.95f, 1f, 1f));
-            foreach (int s in swirls) AddDot(vh, map(pts[s]), half * 1.1f, new Color(0.7f, 0.2f, 0.35f, 1f));
-            foreach (int m in mids)   AddDot(vh, map(pts[m]), half * 0.8f, new Color(0.4f, 0.6f, 1f, 1f));
+            AddDot(vh, map(pts[0]), half * 0.85f, new Color(0.95f, 0.95f, 1f, 1f));
+            for (int j = 0; j < swirls.Count; j++)
+                AddDot(vh, map(pts[swirls[j]]), half * 0.62f, swirlBlue[j] ? SwirlBlue : SwirlRed);
+            foreach (int m in mids)   AddDot(vh, map(pts[m]), half * 0.5f, new Color(0.4f, 0.6f, 1f, 1f));
         }
 
         private static void AddBar(VertexHelper vh, Vector2 a, Vector2 b, float half, Color col)
@@ -113,8 +125,8 @@ namespace Sapphire.UI
         // dir 90 then 180, points (0,0)->(0,1)->(-1,1) (north then west). Logs PASS/FAIL; call once from the panel's first build.
         internal static bool SelfCheck()
         {
-            var straight = Walk(new[] { new PseudoStep(180), new PseudoStep(180) }, out _, out _);
-            var l = Walk(new[] { new PseudoStep(90), new PseudoStep(90) }, out _, out _);
+            var straight = Walk(new[] { new PseudoStep(180), new PseudoStep(180) }, out _, out _, out _);
+            var l = Walk(new[] { new PseudoStep(90), new PseudoStep(90) }, out _, out _, out _);
             bool ok = straight.Length == 3
                       && Mathf.Abs(straight[2].x - 2f) < 0.01f && Mathf.Abs(straight[2].y) < 0.01f
                       && l.Length == 3

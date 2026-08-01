@@ -124,10 +124,32 @@ namespace Sapphire
         public List<PresetEvent> Events = new List<PresetEvent>();
     }
 
+    // Shape-library custom shapes (persisted). A shape is a base angle with key-count variants;
+    // each variant is relative charters + a per-tile twirl flag + a default repeat count.
+    public class ShapeVariantDto
+    {
+        public int K;
+        public List<double> Angles = new List<double>();
+        public List<bool> Twirls = new List<bool>();
+        public int N = 3;
+    }
+
+    public class CustomShapeDto
+    {
+        public string Name = "Shape";
+        public string Category = "My shapes";
+        public double Base;
+        public List<ShapeVariantDto> Variants = new List<ShapeVariantDto>();
+    }
+
     public class Settings : UnityModManager.ModSettings
     {
         // Inspector-tool event presets (user-named bundles of events applied per tile).
         public List<EventPreset> EventPresets = new List<EventPreset>();
+
+        // Shape library: user-created shapes + their category names (built-in category is implicit).
+        public List<string> ShapeCategories = new List<string>();
+        public List<CustomShapeDto> CustomShapes = new List<CustomShapeDto>();
 
         public bool ShowProgress = true;
         public bool ShowAcc = false;
