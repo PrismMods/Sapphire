@@ -24,7 +24,7 @@ An Adobe-style toolbar replaces the event palette. Digit keys
 
 | Tool | What it does |
 |---|---|
-| **Circular path** | Build arcs / circles / stars as midspin sequences (per-point tab + smooth tiles). |
+| **Circular path** | Build arcs / circles / stars as midspin sequences. |
 | **Free angle** | Free-rotate a tile by dragging (hold **Left-Alt** or arm the tool); right-click stays free for the tile menu. |
 | **Pseudo (동타)** | Turn a tile into a beat-neutral pseudo (single-click or multi-select batch), with midspin/twirl constructions and retune. |
 | **Camera path** | On-screen FreeCamera path overlay: click-inspect keyframes, ▶ preview, play-all with beat gaps. |
