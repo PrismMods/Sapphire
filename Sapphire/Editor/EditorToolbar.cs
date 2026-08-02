@@ -2100,10 +2100,10 @@ namespace Sapphire
             seqs.Sort();
 
             int taps = Mathf.Max(1, keys - 1);
-            bool midspin = (keys % 2 == 0);   // even keys need a trailing midspin to keep direction
+            bool evenMidspin = (keys % 2 == 0);   // even keys need a trailing midspin to keep direction
             using (new SaveStateScope(ed))
             {
-                for (int i = seqs.Count - 1; i >= 0; i--)
+                for (int i = seqs.Count - 1; i >= 0; i--)   // high→low: replacements don't shift lower seqs
                 {
                     if ((i % interval) != 0) continue;   // spacing between pseudos
                     scrFloor tile = null;
@@ -2113,7 +2113,12 @@ namespace Sapphire
                         if (fl != null && seqs[i] >= 0 && seqs[i] < fl.Count) tile = fl[seqs[i]];
                     }
                     catch { }
-                    if (tile != null) ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, midspin);
+                    if (tile == null) continue;
+                    // Midspin ON → the verified net-zero unit [θ,999,360−θ,180] per tile (same core as
+                    // the single-click convert), so the run stays on course instead of the taps-after
+                    // climb ApplyInlinePseudo produced. OFF → the plain battlement tab.
+                    if (_pseudoMidspin) BuildMidspinPseudo(ed, tile, _pseudoTapAngle);
+                    else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, evenMidspin);
                 }
             }
         }
