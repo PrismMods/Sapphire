@@ -110,6 +110,7 @@ namespace Sapphire
             ["All"] = "전체",
             ["None"] = "없음",
             ["Paste filter"] = "붙여넣기 필터",
+            ["Event save inspired by EditorCustomModules"] = "이벤트 저장 기능은 EditorCustomModules에서 영감을 받았습니다",
             ["(no events)"] = "(이벤트 없음)",
             ["Gameplay"] = "게임플레이",
             ["Track"] = "트랙",

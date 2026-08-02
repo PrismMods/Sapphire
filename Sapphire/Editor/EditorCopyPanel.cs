@@ -333,7 +333,21 @@ namespace Sapphire
                 Cell(Loc.T("Copy"), (PanelW - copyW) * 0.5f, y, copyW, RowH + 2f, DoCopy, true);
                 y -= RowH + 2f + Pad;
             }
-            else y -= Pad - 4f;
+            else
+            {
+                y -= Pad - 4f;
+                // Credit: the event save/copy/paste concept came from EditorCustomModules.
+                var credGo = new GameObject("Credit", typeof(RectTransform));
+                credGo.transform.SetParent(_panelGo.transform, false);
+                var crt = (RectTransform)credGo.transform;
+                crt.anchorMin = crt.anchorMax = new Vector2(0f, 1f);
+                crt.pivot = new Vector2(0f, 1f);
+                crt.anchoredPosition = new Vector2(Pad, y);
+                crt.sizeDelta = new Vector2(PanelW - Pad * 2f, 24f);
+                UIBuilder.Tmp(credGo, Loc.T("Event save inspired by EditorCustomModules"), 9f,
+                    TextAnchor.UpperLeft, Theme.TextMuted);
+                y -= 26f;
+            }
 
             r.sizeDelta = new Vector2(PanelW, -y);
             SyncTints();

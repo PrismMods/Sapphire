@@ -17,3 +17,7 @@ Integrated with permission, UI rebuilt on Sapphire's framework:
   magic-shape rotate, track tools (fades/explosion/multi-track/size/generate), deco tools
   (flipbook/video extraction/3D stacks/lyrics; lyric PNG rendering rebuilt on TMP instead
   of GDI+)
+
+Also thanks to:
+
+- **EditorCustomModules** — inspiration for the Inspector's event save/copy/paste feature.
