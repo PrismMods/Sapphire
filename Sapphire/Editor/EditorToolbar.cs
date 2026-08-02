@@ -1922,28 +1922,11 @@ namespace Sapphire
                         if (midspin) ApplyPseudoAbs(ed, tile, ParsePseudoCustom(), true);
                         else ApplyPseudo(ed, tile, PseudoCharters(_pseudoN, _pseudoTapAngle, custom), false, false);
                     }
-                    else if (midspin) BuildMidspinPseudo(ed, tile, _pseudoTapAngle);
+                    else if (midspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle);
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, false);
                 }
             }
             catch (Exception ex) { SapphireLog.Log("Toolbar: pseudo convert failed: " + ex.Message); }
-        }
-
-        // Midspin pseudo through the shared PseudoBuild core, reproducing the reference construction
-        // (level.txt): the clicked tile is REPLACED by [tap(θ), 999, tap(360−θ), straight(180)]. The
-        // tap and its 360−θ return cancel (net-zero drift) for either spin, the 999 is transparent to
-        // the heading, and the straight continues the line. Anchor orientation.
-        private static void BuildMidspinPseudo(scnEditor ed, scrFloor tile, double tapAngle)
-        {
-            if (ed == null || tile == null) return;
-            var unit = new System.Collections.Generic.List<PseudoStep>
-            {
-                new PseudoStep(tapAngle, StepKind.Tap),
-                new PseudoStep(0, StepKind.Midspin),
-                new PseudoStep(360.0 - tapAngle, StepKind.Tap),
-                new PseudoStep(180, StepKind.Tap),
-            };
-            PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, ReplaceSeqs = new[] { tile.seqID }, Compensate = false });
         }
 
         // Replace one tile with a swirl-only turn pseudo that REDIRECTS the ball (absolute facings +
@@ -2114,10 +2097,11 @@ namespace Sapphire
                     }
                     catch { }
                     if (tile == null) continue;
-                    // Midspin ON → the verified net-zero unit [θ,999,360−θ,180] per tile (same core as
-                    // the single-click convert), so the run stays on course instead of the taps-after
-                    // climb ApplyInlinePseudo produced. OFF → the plain battlement tab.
-                    if (_pseudoMidspin) BuildMidspinPseudo(ed, tile, _pseudoTapAngle);
+                    // Midspin ON → the SAME verified single-click construction per tile
+                    // (ApplyMidspinPseudo: keep tile + insert the interleaved tap+999 excursion that
+                    // returns to course), so the run stays flat instead of the taps-after climb
+                    // ApplyInlinePseudo produced. OFF → the plain battlement tab.
+                    if (_pseudoMidspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle);
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, evenMidspin);
                 }
             }
