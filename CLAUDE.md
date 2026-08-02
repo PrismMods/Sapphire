@@ -9,9 +9,11 @@ Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens
   `UMMMods/Sapphire`. The user reloads in-game (Ctrl+F10) and tests; iterate from their
   screenshots/reports.
 - `./release.sh` — tester zip named with the git hash; `./release.sh <version>` bumps
-  Info.json + VERSION.txt. The USER decides versions; don't bump unprompted.
+  Info.json + VERSION.txt + `repository.json` (the UMM update feed). The USER decides
+  versions; don't bump unprompted.
 - The csproj uses an explicit `<Compile>` whitelist — every new .cs file must be added.
-- Private repo (QuartzTeam/Sapphire), no updater pipeline; builds are shared as zips.
+- **Public repo** (PrismMods/Sapphire). UMM auto-update is wired via `repository.json` +
+  GitHub release assets — see the `update-feed` memory for the publish flow + landmines.
 
 ## Architecture
 
