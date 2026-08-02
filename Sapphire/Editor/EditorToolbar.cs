@@ -1919,10 +1919,10 @@ namespace Sapphire
                         // the midspins fold it back. No midspin → beat-neutral fold: charters padded
                         // to sum 180° (turns sum 360°) so the ball exits on the baseline again
                         // instead of climbing off as a disruptive staircase.
-                        if (midspin) ApplyPseudoAbs(ed, tile, ParsePseudoCustom(), true);
+                        if (midspin) ApplyPseudoAbs(ed, tile, ParsePseudoCustom(), true, tile.isCCW ? -1 : 1);
                         else ApplyPseudo(ed, tile, PseudoCharters(_pseudoN, _pseudoTapAngle, custom), false, false);
                     }
-                    else if (midspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle);
+                    else if (midspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle, tile.isCCW ? -1 : 1);
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, false);
                 }
             }
@@ -2101,7 +2101,7 @@ namespace Sapphire
                     // (ApplyMidspinPseudo: keep tile + insert the interleaved tap+999 excursion that
                     // returns to course), so the run stays flat instead of the taps-after climb
                     // ApplyInlinePseudo produced. OFF → the plain battlement tab.
-                    if (_pseudoMidspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle);
+                    if (_pseudoMidspin) ApplyMidspinPseudo(ed, tile, taps, _pseudoTapAngle, tile.isCCW ? -1 : 1);
                     else ApplyInlinePseudo(ed, tile, taps, _pseudoTapAngle, evenMidspin);
                 }
             }
