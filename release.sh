@@ -14,6 +14,16 @@ if [ -n "$1" ]; then
     echo "$VERSION" > VERSION.txt
     jq --arg v "$VERSION" '.Version = $v' Info.json > Info.json.tmp && mv Info.json.tmp Info.json
     ZIP_NAME="Sapphire-$VERSION.zip"
+    # Keep the UMM auto-update feed in sync. DownloadUrl assumes the release is published as
+    # tag v<version> with the zip attached (see the publish steps below). raw.githubusercontent
+    # serves repository.json publicly; UMM polls it and compares Version.
+    URL="https://github.com/PrismMods/Sapphire/releases/download/v$VERSION/$ZIP_NAME"
+    jq --arg v "$VERSION" --arg u "$URL" \
+        '.Releases[0].Version = $v | .Releases[0].DownloadUrl = $u' repository.json > repository.json.tmp \
+        && mv repository.json.tmp repository.json
+    echo "Updated repository.json -> $VERSION ($URL)"
+    echo "Publish: git add -A && git commit && git push; git tag v$VERSION && git push origin v$VERSION;"
+    echo "         gh release create v$VERSION $ZIP_NAME --prerelease --title 'Sapphire $VERSION'"
 else
     VERSION=$(cat VERSION.txt)
     HASH=$(git rev-parse --short HEAD 2>/dev/null || echo nogit)

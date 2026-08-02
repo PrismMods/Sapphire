@@ -6,5 +6,6 @@
   "ManagerVersion": "0.32.4.0",
   "AssemblyName": "Sapphire.dll",
   "EntryMethod": "Sapphire.Startup.Load",
-  "HomePage": ""
+  "HomePage": "https://github.com/PrismMods/Sapphire",
+  "Repository": "https://raw.githubusercontent.com/PrismMods/Sapphire/main/repository.json"
 }
