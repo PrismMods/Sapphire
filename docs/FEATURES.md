@@ -1,9 +1,11 @@
+| English | [한국어](FEATURES.ko.md) |
+
 # Features
 
 Sapphire is an editor-suite mod for **A Dance of Fire and Ice** (UnityModManager).
 It layers a modern, tool-rich charting/VFX environment on top of the game's built-in editor.
 
-This page is a running summary of what Sapphire does. Keep it updated as features land.
+This page is a running summary of what Sapphire does. It will be updated as features land.
 
 ---
 
@@ -26,7 +28,7 @@ An Adobe-style toolbar replaces the event palette. Digit keys
 | **Free angle** | Free-rotate a tile by dragging (hold **Left-Alt** or arm the tool); right-click stays free for the tile menu. |
 | **Pseudo (동타)** | Turn a tile into a beat-neutral pseudo (single-click or multi-select batch), with midspin/twirl constructions and retune. |
 | **Camera path** | On-screen FreeCamera path overlay: click-inspect keyframes, ▶ preview, play-all with beat gaps. |
-| **Zip** | Replace a tile with a zip: 360° total split evenly across N keys (min 4), no extra params. |
+| **Zip** | Replace a tile with a zip: 360° total split evenly across N keys (min 4) |
 | **VFX preview** | VFX only mode — hides all UI (including the game's) to preview visuals; persists into play mode, ESC to exit. |
 | **Inspector** | Eyedropper: left-click captures a tile's events, right-click pastes onto tiles. The copy panel also works as a paste filter. |
 | **Quick chart (Q)** | Toggle fast in-place charting mode (see below). |
@@ -122,7 +124,7 @@ key-count variants, inserted as a repeating pseudo.
 
 - **Practice pitch** — `scnEditor.playbackSpeed` (the game's native lever; hitsounds follow).
 - **Non-destructive pitch overlay**.
-- **WASD** camera pan; `A` toggles autoplay (restores after pan); `N` toggles no-fail (visual chip).
+- **WASD** camera pan.
 - **Autoplay-pause key**, **Editor Mode**, live **tile-angle readout**.
 
 ---
