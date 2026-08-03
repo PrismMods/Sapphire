@@ -1076,7 +1076,7 @@ namespace Sapphire
                Settings drives the public ShowPreferences() (the game wires
                buttonPreferences to it, but the button reference can be flaky — the menu
                row used to vanish); leave proxies the game's exit button. */
-            var settingsGo = MakeSideChip("SettingsChip", 6f);
+            var settingsGo = MakeSideChip("SettingsChip", 42f);
             for (int i = 0; i < 3; i++) // no ⚙ in the user fonts — procedural slider bars
             {
                 var barGo = new GameObject("Bar", typeof(RectTransform));
@@ -1106,7 +1106,7 @@ namespace Sapphire
 
             // Level settings — toggles the game's song/level settings inspector
             // (scnEditor.buttonSettings), reskinned by the dark theme + panel rail.
-            var levelSetGo = MakeSideChip("LevelSettingsChip", 42f);
+            var levelSetGo = MakeSideChip("LevelSettingsChip", 6f);
             var docGo = new GameObject("Doc", typeof(RectTransform));
             docGo.transform.SetParent(levelSetGo.transform, false);
             var docR = (RectTransform)docGo.transform;

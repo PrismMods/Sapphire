@@ -211,6 +211,24 @@ namespace Sapphire
         {
             long h = 17;
             h = h * 31 + _tab;
+            if (Tabs[_tab].Type == ADOFAI.LevelEventType.DecorationSettings)
+            {
+                h = h * 31 + _decoSel;
+                try
+                {
+                    var decos = DecoList(ed);
+                    h = h * 31 + (decos != null ? decos.Count : 0);
+                    foreach (var t in _decoExpanded) h = h * 31 + t.GetHashCode();
+                    if (decos != null) for (int i = 0; i < decos.Count; i++) h = h * 31 + DecoTag(decos[i]).GetHashCode();
+                    if (_decoSel >= 0 && decos != null && _decoSel < decos.Count)
+                    {
+                        var dd = EditorEvents.EventData(decos[_decoSel]);
+                        if (dd != null) foreach (var kv in dd) h = h * 31 + (kv.Key?.GetHashCode() ?? 0) + (kv.Value?.GetHashCode() ?? 0);
+                    }
+                }
+                catch { }
+                return h;
+            }
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             // showIf gating depends on other values → hash the visible data so toggling a
             // parent setting redraws dependent rows
@@ -283,9 +301,19 @@ namespace Sapphire
             _ctx.Content = _content;
             _ctx.PanelW = Mathf.Max(120f, _size.x - railW - Pad * 3f);
 
+            float y = -2f;
+            // Decorations aren't a flat settings object — they're a LIST of AddDecoration events.
+            // Sapphire-native browser (list + tag folders + per-item EventRows inspector).
+            if (Tabs[_tab].Type == ADOFAI.LevelEventType.DecorationSettings)
+            {
+                y = RenderDecoBrowser(ed, y);
+                _content.sizeDelta = new Vector2(0f, -y + 6f);
+                ClampScroll();
+                return;
+            }
+
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);
-            float y = -2f;
             if (evt == null || info == null)
             {
                 EventRows.Label(_content, Loc.T("(settings unavailable)"), Pad, y, _ctx.PanelW - Pad * 2f, RowH, Theme.TextMuted);
@@ -294,6 +322,270 @@ namespace Sapphire
             else y = EventRows.Render(_ctx, ed, info, evt, y);
             _content.sizeDelta = new Vector2(0f, -y + 6f);
             ClampScroll();
+        }
+
+        // ── decoration browser (Sapphire-native; replaces the game's deco panel) ──
+        private static int _decoSel = -1;   // index into ed.decorations, -1 = none
+        private static bool _decoGrid;       // false = grouped list, true = thumbnail grid
+        // Folders are COLLAPSED by default — track the ones the user has expanded.
+        private static readonly System.Collections.Generic.HashSet<string> _decoExpanded =
+            new System.Collections.Generic.HashSet<string>();
+        private static readonly EventRows.Ctx _decoCtx = new EventRows.Ctx
+        {
+            MarkDirty = () => _sig = 0,
+            AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } },
+        };
+
+        private static System.Collections.Generic.List<ADOFAI.LevelEvent> DecoList(scnEditor ed)
+        {
+            try { return ed.decorations; } catch { return null; }   // DecorationsArray<LevelEvent> : List<LevelEvent>
+        }
+
+        private static string DecoDataStr(ADOFAI.LevelEvent evt, string key)
+        {
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                object v;
+                if (d != null && d.TryGetValue(key, out v) && v is string s) return s;
+            }
+            catch { }
+            return "";
+        }
+
+        private static string DecoTag(ADOFAI.LevelEvent evt) => DecoDataStr(evt, "tag");
+
+        private static string DecoType(ADOFAI.LevelEvent evt)
+        {
+            try
+            {
+                switch (evt.eventType)
+                {
+                    case ADOFAI.LevelEventType.AddDecoration: return Loc.T("image");
+                    case ADOFAI.LevelEventType.AddText: return Loc.T("text");
+                    case ADOFAI.LevelEventType.AddObject: return Loc.T("object");
+                    case ADOFAI.LevelEventType.AddParticle: return Loc.T("particle");
+                    case ADOFAI.LevelEventType.AddComponent: return Loc.T("component");
+                }
+                return evt.eventType.ToString();
+            }
+            catch { return "?"; }
+        }
+
+        // Tile the deco is anchored to, if any: data["relativeTo"] is a Tuple<int, TileRelativeTo>
+        // whose Item1 is the tile number. Null when not tile-relative.
+        private static int? DecoTile(ADOFAI.LevelEvent evt)
+        {
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                object v;
+                if (d != null && d.TryGetValue("relativeTo", out v) && v != null)
+                {
+                    var p = v.GetType().GetProperty("Item1");
+                    if (p != null) { object o = p.GetValue(v, null); if (o is int) return (int)o; }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static string DecoLabel(ADOFAI.LevelEvent evt, int i)
+        {
+            string name;
+            string img = DecoDataStr(evt, "decorationImage");
+            string txt = DecoDataStr(evt, "decText");
+            if (!string.IsNullOrEmpty(img)) name = System.IO.Path.GetFileName(img);
+            else if (!string.IsNullOrEmpty(txt)) name = "“" + (txt.Length > 16 ? txt.Substring(0, 16) : txt) + "”";
+            else name = "#" + i;
+            int? tile = DecoTile(evt);
+            return DecoType(evt) + "  " + name + (tile.HasValue ? "   · T" + tile.Value : "");
+        }
+
+        private static void SelectDeco(scnEditor ed, int i)
+        {
+            _decoSel = (_decoSel == i) ? -1 : i;
+            try
+            {
+                if (_decoSel >= 0) ed.SelectDecoration(_decoSel, false, false, false, false); // no camera jump, no game panel
+                else ed.DeselectAllDecorations();
+            }
+            catch { }
+            _sig = 0;
+        }
+
+        private static void AddDeco(scnEditor ed)
+        {
+            try
+            {
+                ed.AddDecoration(ADOFAI.LevelEventType.AddDecoration);   // append at end, returns the new event
+                ed.UpdateDecorationObjects();
+                var decos = DecoList(ed);
+                _decoSel = decos != null ? decos.Count - 1 : -1;
+            }
+            catch (Exception ex) { SapphireLog.Log("Deco add failed: " + ex.Message); }
+            _sig = 0;
+        }
+
+        private static float RenderDecoBrowser(scnEditor ed, float y)
+        {
+            float w = _ctx.PanelW - Pad * 2f;
+            float bw = (w - Gap) * 0.5f;
+            EventRows.Cell(_content, Loc.T("+ Decoration"), Pad, y, bw, RowH, () => AddDeco(ed), true);
+            EventRows.Cell(_content, Loc.T("Duplicate"), Pad + bw + Gap, y, bw, RowH,
+                () => { try { ed.DuplicateDecorations(); } catch { } _sig = 0; }, true);
+            y -= RowH + Gap;
+            EventRows.Cell(_content, _decoGrid ? Loc.T("View: Grid (thumbnails)") : Loc.T("View: List"), Pad, y, w, RowH,
+                () => { _decoGrid = !_decoGrid; _sig = 0; }, true);
+            y -= RowH + Gap * 2f;
+
+            var decos = DecoList(ed);
+            if (decos == null || decos.Count == 0)
+            {
+                EventRows.Label(_content, Loc.T("(no decorations)"), Pad, y, w, RowH, Theme.TextMuted);
+                return y - RowH - Gap;
+            }
+            if (_decoSel >= decos.Count) _decoSel = -1;
+            if (_decoGrid) return RenderDecoGridBody(ed, decos, y);
+
+            // group indices by tag, preserving first-seen order
+            var order = new System.Collections.Generic.List<string>();
+            var groups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<int>>();
+            for (int i = 0; i < decos.Count; i++)
+            {
+                string tag = DecoTag(decos[i]);
+                System.Collections.Generic.List<int> lst;
+                if (!groups.TryGetValue(tag, out lst)) { lst = new System.Collections.Generic.List<int>(); groups[tag] = lst; order.Add(tag); }
+                lst.Add(i);
+            }
+
+            foreach (var tag in order)
+            {
+                var lst = groups[tag];
+                string tagCopy = tag;
+                bool expanded = _decoExpanded.Contains(tag);   // collapsed by default
+                string hdr = (expanded ? "‹  " : "›  ")
+                    + (tag.Length == 0 ? Loc.T("(untagged)") : tag) + "   (" + lst.Count + ")";
+                var hbg = EventRows.Cell(_content, hdr, Pad, y, w, RowH,
+                    () => { if (!_decoExpanded.Remove(tagCopy)) _decoExpanded.Add(tagCopy); _sig = 0; },
+                    false, TextAnchor.MiddleLeft);
+                hbg.color = new Color(1f, 1f, 1f, 0.06f);
+                y -= RowH + Gap;
+                if (!expanded) continue;
+
+                foreach (int idx in lst)
+                {
+                    int i = idx;
+                    bool sel = i == _decoSel;
+                    var rbg = EventRows.Cell(_content, "    " + DecoLabel(decos[i], i), Pad + 10f, y, w - 10f, RowH,
+                        () => SelectDeco(ed, i), false, TextAnchor.MiddleLeft);
+                    if (sel) rbg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f);
+                    y -= RowH + Gap;
+                    if (sel) y = DecoInspector(ed, decos[i], y);
+                }
+            }
+            return y;
+        }
+
+        // Inline property inspector for one decoration (its OWN event type), shared by list + grid.
+        private static float DecoInspector(scnEditor ed, ADOFAI.LevelEvent evt, float y)
+        {
+            var info = InfoOf(evt.eventType);   // image/text/object/particle differ
+            if (info == null) return y;
+            _decoCtx.Content = _content;
+            _decoCtx.PanelW = _ctx.PanelW;
+            y = EventRows.Render(_decoCtx, ed, info, evt, y);
+            return y - Gap;
+        }
+
+        // The game already loaded each decoration's sprite — reuse it (no file IO / path resolution).
+        private static Sprite DecoSprite(ADOFAI.LevelEvent evt)
+        {
+            try
+            {
+                var dec = scrDecorationManager.GetDecoration(evt);
+                if (dec == null) return null;
+                var sr = dec.GetComponentInChildren<SpriteRenderer>();
+                return sr != null ? sr.sprite : null;
+            }
+            catch { return null; }
+        }
+
+        // Thumbnail gallery of every decoration; image decos show their sprite, others a typed
+        // placeholder. Click a cell = same select+inspect as the list. Selected cell's inspector
+        // renders full-width below the whole grid.
+        private static float RenderDecoGridBody(scnEditor ed, System.Collections.Generic.List<ADOFAI.LevelEvent> decos, float y)
+        {
+            float w = _ctx.PanelW - Pad * 2f;
+            const float gap = 6f, lblH = 16f, target = 76f;
+            int cols = Mathf.Max(1, Mathf.FloorToInt((w + gap) / (target + gap)));
+            float cw = (w - gap * (cols - 1)) / cols;
+            float cellH = cw + lblH;   // square thumb + label strip
+            float gridTop = y;
+
+            for (int i = 0; i < decos.Count; i++)
+            {
+                int col = i % cols, row = i / cols;
+                float cx = Pad + col * (cw + gap);
+                float cy = gridTop - row * (cellH + gap);
+                int idx = i;
+                bool sel = i == _decoSel;
+                DecoGridCell(ed, decos[i], idx, cx, cy, cw, cellH, lblH, sel);
+            }
+            int rows = (decos.Count + cols - 1) / cols;
+            y = gridTop - rows * (cellH + gap) - Gap;
+
+            if (_decoSel >= 0 && _decoSel < decos.Count) y = DecoInspector(ed, decos[_decoSel], y);
+            return y;
+        }
+
+        private static void DecoGridCell(scnEditor ed, ADOFAI.LevelEvent evt, int idx,
+            float x, float yTop, float cw, float cellH, float lblH, bool sel)
+        {
+            var cellGo = new GameObject("DecoCell", typeof(RectTransform));
+            cellGo.transform.SetParent(_content, false);
+            var cr = (RectTransform)cellGo.transform;
+            cr.anchorMin = cr.anchorMax = new Vector2(0f, 1f);
+            cr.pivot = new Vector2(0f, 1f);
+            cr.anchoredPosition = new Vector2(x, yTop);
+            cr.sizeDelta = new Vector2(cw, cellH);
+            var bg = cellGo.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = sel ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f)
+                           : new Color(1f, 1f, 1f, 0.05f);
+            UI.ClickHandler.Attach(cellGo, () => SelectDeco(ed, idx));
+
+            // thumbnail (square, top of the cell)
+            float pad = 5f, thumb = cw - pad * 2f;
+            var sp = DecoSprite(evt);
+            var imgGo = new GameObject("Thumb", typeof(RectTransform));
+            imgGo.transform.SetParent(cellGo.transform, false);
+            var ir = (RectTransform)imgGo.transform;
+            ir.anchorMin = ir.anchorMax = new Vector2(0.5f, 1f);
+            ir.pivot = new Vector2(0.5f, 1f);
+            ir.anchoredPosition = new Vector2(0f, -pad);
+            ir.sizeDelta = new Vector2(thumb, thumb);
+            var img = imgGo.AddComponent<UnityEngine.UI.Image>();
+            img.raycastTarget = false;
+            if (sp != null) { img.sprite = sp; img.preserveAspect = true; img.color = Color.white; }
+            else { img.color = new Color(1f, 1f, 1f, 0.08f); }   // no sprite → faint placeholder plate
+
+            // label strip (type + name), one line, ellipsis-ish via truncation in DecoLabel
+            var lblGo = new GameObject("Lbl", typeof(RectTransform));
+            lblGo.transform.SetParent(cellGo.transform, false);
+            var lr = (RectTransform)lblGo.transform;
+            lr.anchorMin = new Vector2(0f, 0f); lr.anchorMax = new Vector2(1f, 0f);
+            lr.pivot = new Vector2(0.5f, 0f);
+            lr.offsetMin = new Vector2(3f, 1f); lr.offsetMax = new Vector2(-3f, lblH);
+            var lbl = lblGo.AddComponent<TextMeshProUGUI>();
+            lbl.font = UI.Theme.TmpFont;
+            lbl.fontSize = 9.5f;
+            lbl.color = sp != null ? new Color(0.85f, 0.85f, 0.88f, 1f) : Theme.TextMuted;
+            lbl.alignment = TextAlignmentOptions.Center;
+            lbl.enableWordWrapping = false;
+            lbl.overflowMode = TextOverflowModes.Ellipsis;
+            lbl.raycastTarget = false;
+            lbl.text = sp != null ? System.IO.Path.GetFileName(DecoDataStr(evt, "decorationImage")) : DecoType(evt);
         }
 
         private static void BuildRail(bool collapsed)
