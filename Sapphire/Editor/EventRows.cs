@@ -189,7 +189,7 @@ namespace Sapphire
                 InputRow(content, x, y, fw, tile.Item1.ToString(), sv =>
                 {
                     int n;
-                    if (int.TryParse(sv, out n))
+                    if (ExprEval.TryParseInt(sv, out n))
                     {
                         var cur2 = ValOf(e2, k, tile) as Tuple<int, TileRelativeTo>;
                         Commit(c, ed, e2, p2, k, Tuple.Create(n, cur2 != null ? cur2.Item2 : tile.Item2));
@@ -298,22 +298,22 @@ namespace Sapphire
         private static object CoerceLike(string raw, object oldVal)
         {
             raw = (raw ?? "").Trim();
-            try
+            // Numeric fields accept arithmetic ("180*2", "100/3") like vanilla's inspector; the
+            // type of the OLD value is what marks a field numeric, so text fields (tag, image
+            // path, decText) are never evaluated — a tag of "e" stays "e", not 2.718.
+            double d;
+            if (oldVal is float || oldVal is double || oldVal is int || oldVal is long)
             {
-                if (oldVal is float) return float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                if (oldVal is double) return double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                if (oldVal is int || oldVal is long)
-                {
-                    // Override the editor's number constraints: the game's UI caps/steps live in its
-                    // own inspector, which Sapphire's native panel bypasses (no min/max here). Keep an
-                    // explicitly-typed FRACTION as a float rather than truncating it — e.g. decimal
-                    // song pitch — while whole numbers keep their original int/long type.
-                    double d = double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                    if (d != System.Math.Floor(d)) return (float)d;
-                    return oldVal is long ? (object)(long)d : (object)(int)d;
-                }
+                if (!ExprEval.TryParseDouble(raw, out d)) return oldVal;
+                if (oldVal is float) return (float)d;
+                if (oldVal is double) return d;
+                // Override the editor's number constraints: the game's UI caps/steps live in its
+                // own inspector, which Sapphire's native panel bypasses (no min/max here). Keep an
+                // explicitly-typed FRACTION as a float rather than truncating it — e.g. decimal
+                // song pitch — while whole numbers keep their original int/long type.
+                if (d != System.Math.Floor(d)) return (float)d;
+                return oldVal is long ? (object)(long)d : (object)(int)d;
             }
-            catch { return oldVal; }
             return raw;
         }
 
@@ -505,10 +505,12 @@ namespace Sapphire
 
         private static string VecComp(float v) => float.IsNaN(v) ? "" : v.ToString("0.###");
 
+        // NaN is the "component disabled" sentinel (VecComp renders it blank), so an unparseable
+        // component — including a blank one — must stay NaN rather than collapse to 0.
         private static float ParseComp(string sv)
         {
             float f;
-            return float.TryParse((sv ?? "").Trim(), out f) ? f : float.NaN;
+            return ExprEval.TryParseFloat(sv, out f) ? f : float.NaN;
         }
 
         private static string FormatVal(object v)

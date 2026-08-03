@@ -240,12 +240,11 @@ namespace Sapphire
             var txt = UIBuilder.Tmp(txtGo, "100", 13f, TextAnchor.MiddleCenter, Theme.Text);
             txt.richText = false;
             var input = UIBuilder.BuildInputField(go, txt);
-            input.contentType = TMP_InputField.ContentType.IntegerNumber;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            UIBuilder.MakeNumericField(input);
             input.text = "100";
             input.onEndEdit.AddListener(t =>
             {
-                if (int.TryParse(t, out var v)) Apply(v);
+                if (ExprEval.TryParseInt(t, out var v)) Apply(v);
             });
             return input;
         }

@@ -13,10 +13,20 @@
         <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
         <FileAlignment>512</FileAlignment>
         <Deterministic>true</Deterministic>
-        <AdofaiManaged>/Users/preluminance/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice/ADanceOfFireAndIce.app/Contents/Resources/Data/Managed</AdofaiManaged>
-        <!-- MelonLoader + UMMCompat install: HarmonyX ships under MelonLoader/, the UMM
-             shim under UserLibs/ (this is a Mono v4.8 game, so the net472 Harmony). -->
-        <GameRoot>/Users/preluminance/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice</GameRoot>
+        <!-- Never hardcode a developer's home here: it builds on exactly one machine and
+             silently breaks every other clone. Defaults to the macOS Steam location under
+             $(HOME); override with xbuild /p:AdofaiRoot=... for a non-standard install. -->
+        <AdofaiRoot Condition=" '$(AdofaiRoot)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice</AdofaiRoot>
+        <GameRoot>$(AdofaiRoot)</GameRoot>
+        <AdofaiManaged>$(AdofaiRoot)/ADanceOfFireAndIce.app/Contents/Resources/Data/Managed</AdofaiManaged>
+        <!-- Two supported loader layouts. MelonLoader + UMMCompat: HarmonyX 2.10 under
+             MelonLoader/net472, the UMM shim under UserLibs/. Native UMM: both live in
+             Managed/UnityModManager, with an OLDER Harmony — which is why the code must stay
+             off 2.10-only APIs (see CLAUDE.md) and why either reference compiles the same source. -->
+        <HarmonyDll Condition=" '$(HarmonyDll)' == '' AND Exists('$(GameRoot)/MelonLoader/net472/0Harmony.dll') ">$(GameRoot)/MelonLoader/net472/0Harmony.dll</HarmonyDll>
+        <HarmonyDll Condition=" '$(HarmonyDll)' == '' ">$(AdofaiManaged)/UnityModManager/0Harmony.dll</HarmonyDll>
+        <UmmDll Condition=" '$(UmmDll)' == '' AND Exists('$(GameRoot)/UserLibs/UnityModManager.dll') ">$(GameRoot)/UserLibs/UnityModManager.dll</UmmDll>
+        <UmmDll Condition=" '$(UmmDll)' == '' ">$(AdofaiManaged)/UnityModManager/UnityModManager.dll</UmmDll>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
         <DebugSymbols>true</DebugSymbols>
@@ -36,12 +46,13 @@
         <WarningLevel>4</WarningLevel>
     </PropertyGroup>
     <ItemGroup>
-        <Reference Include="0Harmony"><HintPath>$(GameRoot)/MelonLoader/net472/0Harmony.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="0Harmony"><HintPath>$(HarmonyDll)</HintPath><Private>False</Private></Reference>
         <Reference Include="Assembly-CSharp"><HintPath>$(AdofaiManaged)/Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(AdofaiManaged)/Assembly-CSharp-firstpass.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="DOTween"><HintPath>$(AdofaiManaged)/DOTween.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="DOTweenPro"><HintPath>$(AdofaiManaged)/DOTweenPro.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="RDTools"><HintPath>$(AdofaiManaged)/RDTools.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="Newtonsoft.Json"><HintPath>$(AdofaiManaged)/Newtonsoft.Json.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="netstandard"><HintPath>$(AdofaiManaged)/netstandard.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="System" />
         <Reference Include="System.Core" />
@@ -73,7 +84,7 @@
         <Reference Include="UnityEngine.VideoModule"><HintPath>$(AdofaiManaged)/UnityEngine.VideoModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(AdofaiManaged)/UnityEngine.ImageConversionModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(AdofaiManaged)/UnityEngine.JSONSerializeModule.dll</HintPath><Private>False</Private></Reference>
-        <Reference Include="UnityModManager"><HintPath>$(GameRoot)/UserLibs/UnityModManager.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="UnityModManager"><HintPath>$(UmmDll)</HintPath><Private>False</Private></Reference>
     </ItemGroup>
     <ItemGroup>
         <Compile Include="Startup.cs" />
@@ -102,6 +113,10 @@
         <Compile Include="Util\KeyListener.cs" />
         <Compile Include="Util\Tweaks.cs" />
         <Compile Include="Util\ExprEval.cs" />
+        <Compile Include="Util\SemVer.cs" />
+        <Compile Include="Util\UpdateService.cs" />
+        <Compile Include="UI\ToastStack.cs" />
+        <Compile Include="UI\UpdateToast.cs" />
         <Compile Include="Editor\EditorEvents.cs" />
         <Compile Include="Editor\EditorChrome.cs" />
         <Compile Include="Editor\EditorInspector.cs" />

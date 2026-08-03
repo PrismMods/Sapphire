@@ -27,6 +27,8 @@ namespace Sapphire
         }
         public static UnityModManager.ModEntry.ModLogger Logger { get; private set; }
         public static string ModPath { get; private set; }
+        // Info.json's Version, read by the updater to decide what counts as newer.
+        public static string ModVersion { get; private set; }
 
         private static Harmony harmony;
         private static List<FontLoader.FontEntry> availableFonts = new List<FontLoader.FontEntry>();
@@ -40,6 +42,7 @@ namespace Sapphire
         {
             Logger = modEntry.Logger;
             ModPath = modEntry.Path;
+            try { ModVersion = modEntry.Info.Version; } catch { ModVersion = ""; }
             Settings = Settings.Load<Settings>(modEntry);
             Settings.EnsureDefaults();
             modEntry.OnToggle = OnToggle;
@@ -211,6 +214,11 @@ namespace Sapphire
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
 
                 CheckLanguageFlip(); // drop stale-language overlays before this frame's ticks rebuild them
+
+                // Outside the perf laps below (the arrays are sized to the editor modules) and
+                // deliberately ungated by EditorSuiteOn — an update notice is session-wide, not
+                // an editor feature.
+                UI.UpdateToast.Tick();
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
@@ -387,7 +395,11 @@ namespace Sapphire
             EditorUiLayout.RestoreAll();
             DisposeEditorModules();
             EditorUiEditor.Close();
-            harmony.UnpatchSelf();
+            UI.UpdateToast.Dispose();
+            // NOT UnpatchSelf(): that's HarmonyX 2.10-only, so on native UMM's older Harmony it
+            // throws MissingMethodException at unload and leaves every patch live. UnpatchAll(id)
+            // is the same operation and exists in both.
+            harmony.UnpatchAll(harmony.Id);
             if (_tickerGo != null)
             {
                 UnityEngine.Object.Destroy(_tickerGo);

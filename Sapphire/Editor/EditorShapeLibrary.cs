@@ -39,6 +39,7 @@ namespace Sapphire
         private static bool _formOpen;
         private static TMP_InputField _fName, _fCat, _fExpr;
         private static TextMeshProUGUI _formHint;
+        private static TextMeshProUGUI _insertHint;   // transient "select a tile first" beside Insert
         private static float _scroll;
         private static bool _open, _selfChecked;
 
@@ -69,7 +70,7 @@ namespace Sapphire
             HideConfirm();
             K.Dispose();
             _viewport = null; _content = null; _railHost = null;
-            _fName = _fCat = _fExpr = null; _formHint = null;
+            _fName = _fCat = _fExpr = null; _formHint = null; _insertHint = null;
             _relOverride.Clear(); _nOverride.Clear(); _rotate.Clear();
             _open = false; _selfChecked = false; _scroll = 0f; _formOpen = false;
         }
@@ -279,6 +280,10 @@ namespace Sapphire
             bool anyTwirl = false; foreach (var m in mask) anyTwirl |= m;
             if (anyTwirl)
                 MakeButton(_content, Loc.T("Rotate"), BtnW + 8f, y, 96f, BtnH, () => { _rotate[Key(sh, v)] = !rotate; BuildPreview(); });
+            // Insert needs a tile to build from and now refuses without one; say so rather than
+            // leaving the button looking broken.
+            _insertHint = ContentLabel("", BtnW + (anyTwirl ? 112f : 8f), y, w - BtnW - 120f,
+                BtnH, Theme.TextMuted);
             y -= BtnH + BlockGap;
             return y;
         }
@@ -300,7 +305,7 @@ namespace Sapphire
 
         private static void EditN(ShapeEntry sh, ShapeVariant v, string raw)
         {
-            if (int.TryParse((raw ?? "").Trim(), out int val)) _nOverride[Key(sh, v)] = Mathf.Clamp(val, 1, 999);
+            if (ExprEval.TryParseInt(raw, out int val)) _nOverride[Key(sh, v)] = Mathf.Clamp(val, 1, 999);
             BuildPreview();
         }
 
@@ -381,6 +386,13 @@ namespace Sapphire
         private static void InsertShape(ShapeEntry sh, ShapeVariant v, int n)
         {
             var ed = scnEditor.instance; if (ed == null || sh == null || v == null) return;
+            if (!PseudoBuild.HasAnchor(ed))
+            {
+                if (_insertHint != null)
+                { _insertHint.text = Loc.T("select a tile first"); _insertHint.color = Theme.DangerHover; }
+                return;
+            }
+            if (_insertHint != null) _insertHint.text = "";
             double[] rel = CurRel(sh, v);
             bool[] mask = v.Twirls;
             bool rotate = _rotate.TryGetValue(Key(sh, v), out var rv) && rv;
@@ -580,7 +592,7 @@ namespace Sapphire
             var txt = UIBuilder.Tmp(tGo, text ?? "", 12f, TextAnchor.MiddleLeft, Theme.Text); txt.richText = false;
             var field = UIBuilder.BuildInputField(go, txt);
             field.lineType = TMP_InputField.LineType.SingleLine;
-            if (integer) field.contentType = TMP_InputField.ContentType.IntegerNumber;
+            if (integer) UIBuilder.MakeNumericField(field);
             field.text = text ?? "";
             if (onEnd != null) field.onEndEdit.AddListener(s => onEnd(s));
             return field;

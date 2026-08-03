@@ -405,8 +405,10 @@ namespace Sapphire
             var ed = scnEditor.instance;
             if (evt == null || ed == null) { Close(); return; }
 
+            // Assign only on success: TryParse zeroes its out param on failure, which silently
+            // turned an unparseable field into 0 → clamped to 4, not the intended default of 10.
             int n = 10;
-            try { int.TryParse(_segField.text, out n); } catch { }
+            try { int parsed; if (ExprEval.TryParseInt(_segField.text, out parsed)) n = parsed; } catch { }
             n = Mathf.Clamp(n, 4, 32);
 
             float dur = NumOf(evt, "duration", 0f);

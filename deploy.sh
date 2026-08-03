@@ -1,7 +1,18 @@
 #!/bin/bash
 set -e
 
-MODS_DIR="$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice/UMMMods/Sapphire"
+GAME_DIR="${ADOFAI_ROOT:-$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice}"
+
+# Two loader layouts in the wild: MelonLoader + UMMCompat reads UMMMods/, native UMM reads
+# Mods/. Pick whichever this machine actually has instead of assuming one.
+if [ -d "$GAME_DIR/UMMMods" ]; then
+    MODS_DIR="$GAME_DIR/UMMMods/Sapphire"
+elif [ -d "$GAME_DIR/Mods" ]; then
+    MODS_DIR="$GAME_DIR/Mods/Sapphire"
+else
+    echo "ERROR: no UMMMods/ or Mods/ under $GAME_DIR (set ADOFAI_ROOT?)" >&2
+    exit 1
+fi
 
 # Release: the Debug config sets <Optimize>false</Optimize>, and nothing in the source is
 # gated on the DEBUG symbol, so shipping Debug bought us nothing but slower IL.

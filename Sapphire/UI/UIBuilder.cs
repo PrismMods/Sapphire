@@ -56,6 +56,18 @@ namespace Sapphire.UI
             return t;
         }
 
+        /* Mark a field as numeric-with-arithmetic. Deliberately NOT ContentType.DecimalNumber /
+           IntegerNumber: those filter keystrokes, so '*', '/', '(' and ')' can never be typed and
+           expressions are impossible. Every numeric commit path parses via ExprEval, which
+           rejects malformed text anyway — so the keystroke filter bought nothing the parse
+           doesn't already do, at the cost of the feature. */
+        public static void MakeNumericField(TMP_InputField input)
+        {
+            if (input == null) return;
+            input.contentType = TMP_InputField.ContentType.Standard;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+        }
+
         // TMP_InputField factory. TMP needs a viewport RectTransform with the text
         // component nested inside it (the caret is spawned under the viewport), so the
         // field GO becomes the viewport and `txt` its child. Returns the field; caller
@@ -801,8 +813,7 @@ namespace Sapphire.UI
             valT.richText = false;
 
             var input = BuildInputField(valGo, valT);
-            input.contentType = TMP_InputField.ContentType.DecimalNumber;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            MakeNumericField(input);
             input.caretBlinkRate = 0.6f;
             input.text = Mathf.Clamp(value, min, max).ToString(format);
 
@@ -918,7 +929,7 @@ namespace Sapphire.UI
             float captureMin = min, captureMax = max, captureStep = step;
             string captureFormat = format;
             input.onEndEdit.AddListener(committed => {
-                if (float.TryParse(committed, out float v))
+                if (ExprEval.TryParseFloat(committed, out float v))
                 {
                     v = Mathf.Clamp(v, captureMin, captureMax);
                     if (captureStep > 0f) v = Mathf.Round(v / captureStep) * captureStep;

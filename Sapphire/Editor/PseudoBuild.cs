@@ -22,10 +22,28 @@ namespace Sapphire
     {
         private const char ArbitraryChar = (char)163;
 
+        /* A placement needs a selected tile to build from. scnEditor.CreateFloor bails on its
+           first line when the selection isn't single, so with nothing selected every append
+           SILENTLY does nothing — but the twirl seqIDs were still being computed and written, so
+           the level ended up with Twirl events pointing at floors that were never created. That
+           is the "invalid sequence of tiles" corruption: the events outlive the tiles.
+
+           Refusing up front is the fix. Callers that want an implicit target must select a tile
+           themselves first, so the anchor is always something the user can see. */
+        internal static bool HasAnchor(scnEditor ed)
+        {
+            try { return ed != null && ed.SelectionIsSingle() && ed.selectedFloors[0] != null; }
+            catch { return false; }
+        }
+
         public static int Build(scnEditor ed, IList<PseudoStep> unit, PseudoContext ctx)
         {
             if (ed == null || unit == null || unit.Count == 0 || ctx == null) return 0;
             if (ed.lockPathEditing) { SapphireLog.Log("PseudoBuild: path editing locked"); return 0; }
+            // ReplaceSeqs selects its own anchor inside DeleteAndReselect; everything else must
+            // already have one.
+            if (ctx.ReplaceSeqs == null && !HasAnchor(ed))
+            { SapphireLog.Log("PseudoBuild: no tile selected — nothing placed"); return 0; }
             int n = Mathf.Max(1, ctx.RepeatN);
             using (new SaveStateScope(ed))
             {
@@ -49,14 +67,14 @@ namespace Sapphire
                             // A 999 midspin is TRANSPARENT to the heading — it spins in place, the
                             // tile angle carries straight through it (does NOT reverse the ball's
                             // heading). The caller closes a midspin run with an explicit straight tile.
-                            AppendMidspin(ed);
+                            if (!AppendMidspin(ed)) return Abort(ed, twirlSeqs, placed);
                             placed++;
                             continue;
                         }
                         bool tw = st.Swirl;
                         if (!ctx.Fixed && tw) localSign = -localSign;          // anchor: flip BEFORE
                         dir = Norm360(dir + localSign * (180.0 - st.Angle));
-                        AppendAbs(ed, dir);
+                        if (!AppendAbs(ed, dir)) return Abort(ed, twirlSeqs, placed);
                         if (tw)
                         {
                             bool gate = ctx.Fixed ? (!firstTwirl || spin == ts) : true;
@@ -73,18 +91,49 @@ namespace Sapphire
             }
         }
 
-        // ── primitives ──
-        private static void AppendAbs(scnEditor ed, double abs) => ed.CreateFloorWithCharOrAngle((float)abs, ArbitraryChar, false, false);
-        private static void AppendMidspin(scnEditor ed) => ed.CreateFloorWithCharOrAngle(999f, '!', false, true);
+        /* ── primitives ──
+           Both report whether a floor ACTUALLY appeared. CreateFloor has several silent bail-outs
+           (selection not single, fullSpin on tile 0, an angle it reads as backspace), and a caller
+           that assumes success goes on to emit twirls for tiles that don't exist. Counting floors
+           is the only honest signal the game gives us here. */
+        private static bool AppendAbs(scnEditor ed, double abs)
+            => Appended(ed, () => ed.CreateFloorWithCharOrAngle((float)abs, ArbitraryChar, false, false));
+
+        private static bool AppendMidspin(scnEditor ed)
+            => Appended(ed, () => ed.CreateFloorWithCharOrAngle(999f, '!', false, true));
+
+        private static bool Appended(scnEditor ed, Action create)
+        {
+            int before = -1;
+            try { before = ed.floors.Count; } catch { }
+            create();
+            if (before < 0) return true;   // couldn't measure; don't block the build on that
+            try { return ed.floors.Count > before; } catch { return true; }
+        }
 
         private static void AddTwirl(scnEditor ed, int seq)
         { try { ed.events.Add(new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Twirl)); } catch (Exception ex) { SapphireLog.Log("PseudoBuild: twirl failed: " + ex.Message); } }
         private static double Norm360(double a) { a %= 360.0; if (a < 0) a += 360.0; return a; }
 
+        /* An append that didn't land means every seqID after it is wrong. Drop the pending twirls
+           rather than writing events onto floors that were never created — that mismatch is what
+           corrupts a level, and it survives saving. Build runs inside a SaveStateScope, so the
+           partial run undoes in one Ctrl+Z. */
+        private static int Abort(scnEditor ed, List<int> twirlSeqs, int placed)
+        {
+            twirlSeqs.Clear();
+            SapphireLog.Log("PseudoBuild: append rejected after " + placed + " tile(s) — twirls dropped, undo to restore");
+            try { ed.RemakePath(true, true); } catch { }
+            return placed;
+        }
+
+        // No selection = no anchor. Build refuses before reaching here, so the old
+        // "fall back to the last tile in the level" guess is gone: it produced a plausible seqID
+        // for appends that could never happen.
         private static int AnchorSeq(scnEditor ed)
         {
             try { return ed.selectedFloors != null && ed.selectedFloors.Count > 0
-                ? ed.selectedFloors[ed.selectedFloors.Count - 1].seqID : ADOBase.lm.floorAngles.Length - 1; }
+                ? ed.selectedFloors[ed.selectedFloors.Count - 1].seqID : -1; }
             catch { return -1; }
         }
         private static double StartDir(scnEditor ed)

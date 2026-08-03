@@ -171,6 +171,15 @@ namespace Sapphire
         // Flips the wheel direction on Sapphire's scroll surfaces (timeline, graph, docks).
         public bool InvertScroll = false;
 
+        // ── updater ──
+        // Check GitHub releases once per session and toast when something newer exists.
+        public bool AutoCheckUpdates = true;
+        // Sapphire's own releases are prereleases today (1.0.0-aN), so defaulting this off
+        // would mean the updater never finds anything for current users.
+        public bool UpdateIncludePrerelease = true;
+        // Tag the user pressed "skip" on; that exact release stays hidden.
+        public string SkippedUpdateTag = "";
+
         /* ── Feature categories (July 18) ──────────────────────────────────────────────
            The settings model is now four categories, all default ON and all gated behind
            the in-editor master switch (EditorSuiteOn). The many granular Editor* flags

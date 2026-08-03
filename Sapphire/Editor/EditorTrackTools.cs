@@ -308,7 +308,7 @@ namespace Sapphire
             y = PairRow(y, explode ? Loc.T("Window (rel)") : Loc.T("Move window"), () => s.WinFrom, () => s.WinTo,
                 (a, b) => { s.WinFrom = a; s.WinTo = b; });
             y = FieldRow(y, Loc.T("Duration"), s.Duration.ToString("0.###"), v =>
-            { float f; if (float.TryParse(v, out f)) s.Duration = Mathf.Max(0f, f); });
+            { float f; if (ExprEval.TryParseFloat(v, out f)) s.Duration = Mathf.Max(0f, f); });
             if (!explode)
             {
                 ToggleRow(y, Loc.T("Duration follows BPM"), s.MatchBpm, v => s.MatchBpm = v);
@@ -324,7 +324,7 @@ namespace Sapphire
                 y = ToggleFieldRow(y, Loc.T("Land scale"), () => s.RevertOn, v => s.RevertOn = v,
                     () => s.RevertTo, v => s.RevertTo = v);
             y = FieldRow(y, explode ? Loc.T("Step angle") : Loc.T("Angle offset"), s.AngleOffset.ToString("0.###"), v =>
-            { float f; if (float.TryParse(v, out f)) s.AngleOffset = f; });
+            { float f; if (ExprEval.TryParseFloat(v, out f)) s.AngleOffset = f; });
             y = EaseRow(y, () => s.Ease, v => s.Ease = v);
             y -= 4f;
             K.Cell(Loc.T("Apply"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoFade, true, true);
@@ -360,7 +360,7 @@ namespace Sapphire
                 y -= RowH + Gap;
                 if (_muCentral)
                     y = FieldRow(y, Loc.T("Rotation"), _muRotation.ToString("0.###"), v =>
-                    { float f; if (float.TryParse(v, out f)) _muRotation = f; });
+                    { float f; if (ExprEval.TryParseFloat(v, out f)) _muRotation = f; });
                 ToggleRow(y, Loc.T("Fake planets"), _muPlanet, v => _muPlanet = v);
                 y -= RowH + Gap;
                 ToggleRow(y, Loc.T("Planet events on first tile"), _muPlanetConc, v => _muPlanetConc = v);
@@ -382,9 +382,9 @@ namespace Sapphire
                 ToggleRow(y, Loc.T("Events per tile (off: first tile)"), _muDistributed, v => _muDistributed = v);
                 y -= RowH + Gap;
                 y = FieldRow(y, Loc.T("Copy # offset"), _muTagOffset.ToString(), v =>
-                { int n; if (int.TryParse(v, out n)) _muTagOffset = n; });
+                { int n; if (ExprEval.TryParseInt(v, out n)) _muTagOffset = n; });
                 y = FieldRow(y, Loc.T("Duration"), _muDuration.ToString("0.###"), v =>
-                { float f; if (float.TryParse(v, out f)) _muDuration = Mathf.Max(0f, f); });
+                { float f; if (ExprEval.TryParseFloat(v, out f)) _muDuration = Mathf.Max(0f, f); });
                 y = RandRow(y, Loc.T("X offset"), () => _muXOn, v => _muXOn = v, () => _muXMin, () => _muXMax, (a, b) => { _muXMin = a; _muXMax = b; });
                 y = RandRow(y, Loc.T("Y offset"), () => _muYOn, v => _muYOn = v, () => _muYMin, () => _muYMax, (a, b) => { _muYMin = a; _muYMax = b; });
                 y = RandRow(y, Loc.T("Rotation"), () => _muRotOn, v => _muRotOn = v, () => _muRotMin, () => _muRotMax, (a, b) => { _muRotMin = a; _muRotMax = b; });
@@ -397,7 +397,7 @@ namespace Sapphire
                     y = ToggleFieldRow(y, Loc.T("Land parallax"), () => _muPRevOn, v => _muPRevOn = v, () => _muPRevTo, v => _muPRevTo = v);
                 }
                 y = FieldRow(y, Loc.T("Angle offset"), _muAngle.ToString("0.###"), v =>
-                { float f; if (float.TryParse(v, out f)) _muAngle = f; });
+                { float f; if (ExprEval.TryParseFloat(v, out f)) _muAngle = f; });
                 y = EaseRow(y, () => _muEase, v => _muEase = v);
                 y -= 4f;
                 K.Cell(Loc.T("Apply"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoMulti, true, true);
@@ -411,7 +411,7 @@ namespace Sapphire
             float x = Pad + LblW + 4f;
             int atResolved = Mathf.Clamp(Resolve(_gtAt), 0, Len());
             K.InputField(x, y, 62f, atResolved.ToString(), v =>
-            { int n; if (int.TryParse(v, out n)) { _gtAt = Math.Max(0, n); PreviewRefresh(); } });
+            { int n; if (ExprEval.TryParseInt(v, out n)) { _gtAt = Math.Max(0, n); PreviewRefresh(); } });
             K.Cell(Loc.T("Sel"), x + 62f + Gap, y, 42f, RowH, () =>
             { if (SelectionRange(out _, out int max)) { _gtAt = max; Refresh(); PreviewRefresh(); } }, true);
             K.Cell(Loc.T("End"), x + 62f + Gap + 42f + Gap, y, 42f, RowH, () => { _gtAt = -1; Refresh(); PreviewRefresh(); }, true);
@@ -421,7 +421,7 @@ namespace Sapphire
             K.InputField(Pad, y, PanelW - Pad * 2f, _gtAngles, v => { _gtAngles = v; PreviewRefresh(); });
             y -= RowH + Gap;
             y = FieldRow(y, Loc.T("Repeat"), _gtCount.ToString(), v =>
-            { int n; if (int.TryParse(v, out n)) { _gtCount = Math.Max(1, n); PreviewRefresh(); } });
+            { int n; if (ExprEval.TryParseInt(v, out n)) { _gtCount = Math.Max(1, n); PreviewRefresh(); } });
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _gtPreview, v => { _gtPreview = v; });
             y -= RowH + Gap + 4f;
             K.Cell(Loc.T("Generate"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoGenerate, true, true);

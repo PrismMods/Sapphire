@@ -355,21 +355,50 @@ namespace Sapphire
 
         private static string DecoTag(ADOFAI.LevelEvent evt) => DecoDataStr(evt, "tag");
 
+        private static string DecoTypeName(ADOFAI.LevelEventType type)
+        {
+            switch (type)
+            {
+                case ADOFAI.LevelEventType.AddDecoration: return Loc.T("image");
+                case ADOFAI.LevelEventType.AddText: return Loc.T("text");
+                case ADOFAI.LevelEventType.AddObject: return Loc.T("object");
+                case ADOFAI.LevelEventType.AddParticle: return Loc.T("particle");
+                case ADOFAI.LevelEventType.AddComponent: return Loc.T("component");
+            }
+            return type.ToString();
+        }
+
         private static string DecoType(ADOFAI.LevelEvent evt)
         {
-            try
-            {
-                switch (evt.eventType)
-                {
-                    case ADOFAI.LevelEventType.AddDecoration: return Loc.T("image");
-                    case ADOFAI.LevelEventType.AddText: return Loc.T("text");
-                    case ADOFAI.LevelEventType.AddObject: return Loc.T("object");
-                    case ADOFAI.LevelEventType.AddParticle: return Loc.T("particle");
-                    case ADOFAI.LevelEventType.AddComponent: return Loc.T("component");
-                }
-                return evt.eventType.ToString();
-            }
+            try { return DecoTypeName(evt.eventType); }
             catch { return "?"; }
+        }
+
+        // Every event type AddDecoration accepts. Filtered through the game's own
+        // LevelEventInfo.isDecoration so a game version that drops or renames one just
+        // drops it from the menu instead of producing an event nothing can render.
+        private static readonly ADOFAI.LevelEventType[] DecoAddTypes =
+        {
+            ADOFAI.LevelEventType.AddDecoration,
+            ADOFAI.LevelEventType.AddText,
+            ADOFAI.LevelEventType.AddObject,
+            ADOFAI.LevelEventType.AddParticle,
+            ADOFAI.LevelEventType.AddComponent,
+        };
+
+        private static System.Collections.Generic.List<ADOFAI.LevelEventType> AddableDecoTypes()
+        {
+            var list = new System.Collections.Generic.List<ADOFAI.LevelEventType>(DecoAddTypes.Length);
+            foreach (var t in DecoAddTypes)
+            {
+                var info = InfoOf(t);
+                if (info == null) continue;
+                bool isDeco;
+                try { isDeco = info.isDecoration; } catch { isDeco = false; }
+                if (isDeco) list.Add(t);
+            }
+            if (list.Count == 0) list.Add(ADOFAI.LevelEventType.AddDecoration);
+            return list;
         }
 
         // Tile the deco is anchored to, if any: data["relativeTo"] is a Tuple<int, TileRelativeTo>
@@ -402,50 +431,95 @@ namespace Sapphire
             return DecoType(evt) + "  " + name + (tile.HasValue ? "   · T" + tile.Value : "");
         }
 
+        // Select by LevelEvent, never by index: the int overload indexes
+        // scrDecorationManager.allDecorations, which is a DIFFERENT list from
+        // levelData.decorations (our _decoSel space) and drifts whenever a deco fails to
+        // instantiate — an off-by-N there means acting on the wrong decoration.
+        private static void SelectDecoEvent(scnEditor ed, ADOFAI.LevelEvent evt)
+        {
+            ed.SelectDecoration(evt, false, false, false, false); // no camera jump, no game panel
+        }
+
         private static void SelectDeco(scnEditor ed, int i)
         {
             _decoSel = (_decoSel == i) ? -1 : i;
             try
             {
-                if (_decoSel >= 0) ed.SelectDecoration(_decoSel, false, false, false, false); // no camera jump, no game panel
+                var decos = DecoList(ed);
+                if (_decoSel >= 0 && decos != null && _decoSel < decos.Count) SelectDecoEvent(ed, decos[_decoSel]);
                 else ed.DeselectAllDecorations();
             }
             catch { }
             _sig = 0;
         }
 
-        private static void AddDeco(scnEditor ed)
+        private static void AddDeco(scnEditor ed, ADOFAI.LevelEventType type)
         {
             try
             {
-                ed.AddDecoration(ADOFAI.LevelEventType.AddDecoration);   // append at end, returns the new event
+                var dec = ed.AddDecoration(type);   // append at end, returns the new event
                 ed.UpdateDecorationObjects();
                 var decos = DecoList(ed);
-                _decoSel = decos != null ? decos.Count - 1 : -1;
+                _decoSel = decos != null && dec != null ? decos.IndexOf(dec) : -1;
+                // A fresh deco is untagged and tag folders start COLLAPSED — without this the
+                // new item (and its inspector) is invisible and the add looks like a no-op.
+                if (dec != null) _decoExpanded.Add(DecoTag(dec));
+                // Keep the game's selectedDecorations in sync so Delete/gizmos act on this one.
+                if (_decoSel >= 0) SelectDecoEvent(ed, dec);
             }
             catch (Exception ex) { SapphireLog.Log("Deco add failed: " + ex.Message); }
             _sig = 0;
         }
 
+        private static void DeleteDeco(scnEditor ed)
+        {
+            var decos = DecoList(ed);
+            if (decos == null || _decoSel < 0 || _decoSel >= decos.Count) return;
+            try
+            {
+                // The game deletes whatever sits in selectedDecorations, so re-assert our row as
+                // THE selection first (ignoreDeselection:false clears the rest) — otherwise a
+                // stale viewport multi-selection would get taken out with it.
+                SelectDecoEvent(ed, decos[_decoSel]);
+                ed.DeleteMultiSelectionDecorations();   // same path the game's Delete keybind uses
+            }
+            catch (Exception ex) { SapphireLog.Log("Deco delete failed: " + ex.Message); }
+            _decoSel = -1;
+            _sig = 0;
+        }
+
         private static float RenderDecoBrowser(scnEditor ed, float y)
         {
+            var decos = DecoList(ed);
+            if (decos != null && _decoSel >= decos.Count) _decoSel = -1;
+            bool hasSel = _decoSel >= 0;
+
             float w = _ctx.PanelW - Pad * 2f;
-            float bw = (w - Gap) * 0.5f;
-            EventRows.Cell(_content, Loc.T("+ Decoration"), Pad, y, bw, RowH, () => AddDeco(ed), true);
+            float bw = (w - Gap * 2f) / 3f;
+            // Add is a type picker, not an image-only button — image/text/object/particle all
+            // route through the same scnEditor.AddDecoration(type).
+            var types = AddableDecoTypes();
+            var typeLabels = new System.Collections.Generic.List<string>(types.Count);
+            foreach (var t in types) typeLabels.Add(DecoTypeName(t));
+            RoundedRectGraphic addBg = null;
+            addBg = EventRows.Cell(_content, Loc.T("+ Decoration") + "  ▾", Pad, y, bw, RowH,
+                () => UI.EditorDropdown.Open((RectTransform)addBg.transform, typeLabels, 0,
+                    i => AddDeco(ed, types[i])), true);
             EventRows.Cell(_content, Loc.T("Duplicate"), Pad + bw + Gap, y, bw, RowH,
                 () => { try { ed.DuplicateDecorations(); } catch { } _sig = 0; }, true);
+            var delBg = EventRows.Cell(_content, Loc.T("Delete"), Pad + (bw + Gap) * 2f, y, bw, RowH,
+                () => DeleteDeco(ed), true);
+            if (!hasSel) delBg.color = new Color(1f, 1f, 1f, 0.03f);   // nothing selected → inert
             y -= RowH + Gap;
             EventRows.Cell(_content, _decoGrid ? Loc.T("View: Grid (thumbnails)") : Loc.T("View: List"), Pad, y, w, RowH,
                 () => { _decoGrid = !_decoGrid; _sig = 0; }, true);
             y -= RowH + Gap * 2f;
 
-            var decos = DecoList(ed);
             if (decos == null || decos.Count == 0)
             {
                 EventRows.Label(_content, Loc.T("(no decorations)"), Pad, y, w, RowH, Theme.TextMuted);
                 return y - RowH - Gap;
             }
-            if (_decoSel >= decos.Count) _decoSel = -1;
             if (_decoGrid) return RenderDecoGridBody(ed, decos, y);
 
             // group indices by tag, preserving first-seen order

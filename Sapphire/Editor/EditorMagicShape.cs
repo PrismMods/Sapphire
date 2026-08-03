@@ -257,10 +257,10 @@ namespace Sapphire
 
             if (_mMode == 0)
                 y = FieldRow(y, Loc.T("BPM"), _mBpm.ToString("0.###"), v =>
-                { float f; if (float.TryParse(v, out f)) _mBpm = Mathf.Clamp(f, 0.001f, 10000f); });
+                { float f; if (ExprEval.TryParseFloat(v, out f)) _mBpm = Mathf.Clamp(f, 0.001f, 10000f); });
             else
                 y = FieldRow(y, "×", _mMult.ToString("0.#####"), v =>
-                { float f; if (float.TryParse(v, out f)) _mMult = Mathf.Clamp(f, 1e-7f, 128f); });
+                { float f; if (ExprEval.TryParseFloat(v, out f)) _mMult = Mathf.Clamp(f, 1e-7f, 128f); });
 
             if (!(_mMode == 1 && _mReshape))
             {
@@ -286,7 +286,7 @@ namespace Sapphire
         {
             y = RangeRow(y, () => _cStart, () => _cEnd, (a, b) => { _cStart = a; _cEnd = b; }, false);
             y = FieldRow(y, Loc.T("Vertices"), _cVerts.ToString(), v =>
-            { int n; if (int.TryParse(v, out n)) _cVerts = Mathf.Max(2, n); });
+            { int n; if (ExprEval.TryParseInt(v, out n)) _cVerts = Mathf.Max(2, n); });
             ToggleRow(y, Loc.T("Inverse direction"), _cInverse, v => _cInverse = v);
             y -= RowH + Gap;
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _cPreview, v => { _cPreview = v; });
@@ -299,7 +299,7 @@ namespace Sapphire
         {
             y = RangeRow(y, () => _rStart, () => _rEnd, (a, b) => { _rStart = a; _rEnd = b; }, true);
             y = FieldRow(y, Loc.T("Degrees"), _rDeg.ToString("0.###"), v =>
-            { float f; if (float.TryParse(v, out f)) _rDeg = f; });
+            { float f; if (ExprEval.TryParseFloat(v, out f)) _rDeg = f; });
             y -= 4f;
             K.Cell(Loc.T("Rotate range"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoRotate, true, true);
             return y - (RowH + 2f) - 10f;

@@ -807,21 +807,35 @@ namespace Sapphire
             return v.ToString();
         }
 
+        // Throws (not NaN) so CoerceTo's catch leaves a malformed pair as the original string.
+        private static float ParseFloatOrThrow(string s)
+        {
+            float f;
+            if (!ExprEval.TryParseFloat(s, out f)) throw new FormatException(s);
+            return f;
+        }
+
         private static object CoerceTo(string raw, Type target)
         {
             raw = raw.Trim();
             try
             {
                 if (target == typeof(bool)) return raw == "true" || raw == "1";
-                if (target == typeof(int)) return (int)float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                if (target == typeof(float)) return float.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
-                if (target == typeof(double)) return double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+                // Arithmetic allowed here too — these are user-typed filter property fields.
+                if (target == typeof(int) || target == typeof(float) || target == typeof(double))
+                {
+                    double d;
+                    if (!ExprEval.TryParseDouble(raw, out d)) throw new FormatException(raw);
+                    if (target == typeof(int)) return (int)d;
+                    if (target == typeof(float)) return (float)d;
+                    return d;
+                }
                 if (target == typeof(Vector2))
                 {
                     var parts = raw.Trim('[', ']').Split(',');
                     return new Vector2(
-                        float.Parse(parts[0].Trim(), System.Globalization.CultureInfo.InvariantCulture),
-                        float.Parse(parts[1].Trim(), System.Globalization.CultureInfo.InvariantCulture));
+                        ParseFloatOrThrow(parts[0]),
+                        ParseFloatOrThrow(parts[1]));
                 }
             }
             catch { }

@@ -1128,12 +1128,11 @@ namespace Sapphire
             var ft = UIBuilder.Tmp(ftGo, "2", 13f, TextAnchor.MiddleCenter, Theme.Text);
             ft.richText = false;
             _fZipBeats = UIBuilder.BuildInputField(fGo, ft);
-            _fZipBeats.contentType = TMP_InputField.ContentType.DecimalNumber;
-            _fZipBeats.lineType = TMP_InputField.LineType.SingleLine;
+            UIBuilder.MakeNumericField(_fZipBeats);
             _fZipBeats.text = _zipBeats.ToString("0.##", CultureInfo.InvariantCulture);
             _fZipBeats.onValueChanged.AddListener(t =>
             {
-                if (double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0.0)
+                if (ExprEval.TryParseDouble(t, out var v) && v > 0.0)
                     _zipBeats = v;
             });
 
@@ -1612,9 +1611,9 @@ namespace Sapphire
                     num.ToString(), () => { _pseudoN = num; SyncPseudoMenuHighlight(); });
             }
             _fPseudoN = MakeMiniField("PseudoN", nBoxX, row1Y, nBoxW, bh, _pseudoN.ToString(),
-                TMP_InputField.ContentType.IntegerNumber, t =>
+                t =>
                 {
-                    if (int.TryParse(t, out var v) && v >= 2) { _pseudoN = v; SyncPseudoMenuHighlight(); }
+                    if (ExprEval.TryParseInt(t, out var v) && v >= 2) { _pseudoN = v; SyncPseudoMenuHighlight(); }
                 });
             _pseudoMidspinBg = MakeMiniBtn("Midspin", mspinX, row1Y, mspinW, bh, Loc.T("Midspin"),
                 () => { _pseudoMidspin = !_pseudoMidspin; SyncPseudoMidspin(); });
@@ -1635,9 +1634,9 @@ namespace Sapphire
             // tap-angle textbox (drives _pseudoTapAngle; presets fill it)
             _fPseudoTap = MakeMiniField("TapAngle", tbX, row2Y, tapW, bh,
                 _pseudoTapAngle.ToString("0.##", CultureInfo.InvariantCulture),
-                TMP_InputField.ContentType.DecimalNumber, t =>
+                t =>
                 {
-                    if (double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+                    if (ExprEval.TryParseDouble(t, out var v))
                         _pseudoTapAngle = v;
                     SyncPseudoAngle();
                 });
@@ -1743,7 +1742,7 @@ namespace Sapphire
 
         // Small numeric input box in the pseudo submenu (matches MakeMiniBtn's frame).
         private static TMP_InputField MakeMiniField(string name, float x, float y, float w, float h,
-            string initial, TMP_InputField.ContentType ctype, UnityEngine.Events.UnityAction<string> onChanged)
+            string initial, UnityEngine.Events.UnityAction<string> onChanged)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(_pseudoMenuGo.transform, false);
@@ -1766,8 +1765,7 @@ namespace Sapphire
             var txt = UIBuilder.Tmp(txtGo, initial, 13f, TextAnchor.MiddleCenter, Theme.Text);
             txt.richText = false;
             var input = UIBuilder.BuildInputField(go, txt);
-            input.contentType = ctype;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            UIBuilder.MakeNumericField(input);
             input.text = initial;
             if (onChanged != null) input.onValueChanged.AddListener(onChanged);
             return input;
@@ -1958,7 +1956,17 @@ namespace Sapphire
             for (int k = 0; k < charters.Length; k++)
             {
                 facing = Norm360(facing + localSign * (180.0 - charters[k]));
-                AppendAbs(ed, facing); seq++;
+                // The clicked tile is already gone at this point, so a silently-failed append
+                // would leave a hole and then chain the rest onto the wrong tile. Stop and say
+                // so — the caller's SaveStateScope means Ctrl+Z puts the tile back.
+                if (!AppendAbs(ed, facing))
+                {
+                    SapphireLog.Log("Zip: append rejected at key " + (k + 1) + "/" + charters.Length
+                                    + " (facing " + facing.ToString("0.###") + ") — undo to restore");
+                    try { ed.RemakePath(true, true); } catch { }
+                    return;
+                }
+                seq++;
                 localSign = -localSign;
             }
             // Zips invert the first-tile parity: the whole swirl chain must resolve RED, and the
@@ -3193,9 +3201,46 @@ namespace Sapphire
         // Insert a tile at an ABSOLUTE facing (angleData value), bypassing the relative/isCCW
         // math — used by the reference-matched mid-spin circle, whose facings are a monotonic
         // sequence the game reads directly.
-        private static void AppendAbs(scnEditor ed, double abs)
+        /* scnEditor.CreateFloor OVERLOADS "an absolute angle that points straight back" as
+           BACKSPACE: FloorPointsBackwards(angle) → DeleteFloor(selected) and return, so the call
+           DESTROYS a tile instead of appending one. Every builder here walks absolute facings and
+           can land on that angle by arithmetic (the zip tool did, which is why zipping ate the
+           clicked tile instead of replacing it).
+
+           The game's test is Mathf.Approximately against |450 − entryangle°| % 360, so nudging a
+           hundredth of a degree clears it — several orders above that tolerance, and far below
+           anything visible in a chart. Reproduced exactly, including the game's own float-widened
+           Rad2Deg constant, so the comparison matches its arithmetic rather than approximating it. */
+        private const double GameRad2Deg = 57.295780181884766;
+
+        private static double AvoidBackspaceAngle(scnEditor ed, double abs)
         {
-            ed.CreateFloorWithCharOrAngle((float)abs, ArbitraryChar, false, false);
+            try
+            {
+                if (!ed.SelectionIsSingle()) return abs;
+                scrFloor sel = ed.selectedFloors[0];
+                if (sel == null) return abs;
+                float a = (float)abs % 360f;
+                float back = Mathf.Abs(450f - (float)(sel.entryangle * GameRad2Deg)) % 360f;
+                if (!Mathf.Approximately(back, a)) return abs;
+                SapphireLog.Log("Toolbar: angle " + abs.ToString("0.###") +
+                                " would backspace tile " + sel.seqID + " — nudged");
+                return abs + 0.01;
+            }
+            catch { return abs; }
+        }
+
+        // Returns whether a floor was actually added, so builders can stop instead of silently
+        // chaining onto a tile that never appeared.
+        private static bool AppendAbs(scnEditor ed, double abs)
+        {
+            int before = -1;
+            try { before = ed.floors.Count; } catch { }
+            ed.CreateFloorWithCharOrAngle((float)AvoidBackspaceAngle(ed, abs), ArbitraryChar, false, false);
+            if (before < 0) return true;   // couldn't measure; assume the game did its job
+            int after = -1;
+            try { after = ed.floors.Count; } catch { return true; }
+            return after > before;
         }
 
         // A SetSpeed (multiplier) event on the given floor, added straight to the editor's
@@ -3264,8 +3309,7 @@ namespace Sapphire
             txt.richText = false;
 
             var input = UIBuilder.BuildInputField(boxGo, txt);
-            input.contentType = TMP_InputField.ContentType.DecimalNumber;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            UIBuilder.MakeNumericField(input);
             input.text = initial;
             return input;
         }
@@ -3416,13 +3460,13 @@ namespace Sapphire
         private static int ParseInt(TMP_InputField f, int fallback)
         {
             if (f == null) return fallback;
-            return int.TryParse(f.text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+            return ExprEval.TryParseInt(f.text, out var v) ? v : fallback;
         }
 
         private static double ParseDouble(TMP_InputField f, double fallback)
         {
             if (f == null) return fallback;
-            return double.TryParse(f.text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+            return ExprEval.TryParseDouble(f.text, out var v) ? v : fallback;
         }
 
         private class CellHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler

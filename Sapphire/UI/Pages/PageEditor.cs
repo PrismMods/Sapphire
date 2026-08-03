@@ -33,6 +33,9 @@ namespace Sapphire.UI.Pages
                 v => { s.InvertScroll = v; notify?.Invoke(); }, null);
 
             UIBuilder.Spacer(content);
+            BuildUpdates(content, s, notify);
+
+            UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Features",
                 "Turn whole feature groups on or off. The in-editor master\nswitch (top-right power " +
                 "button in the level editor) gates all\nof them together; these choose which groups it enables.");
@@ -115,6 +118,71 @@ namespace Sapphire.UI.Pages
                 EditorUiLayout.ResetAllToGame();
                 notify?.Invoke();
             });
+        }
+
+        /* Updates section. The status line is rebuilt from UpdateService on a poll rather than
+           an event, matching how UpdateToast reads it — the service runs on a worker thread and
+           must not call back into Unity. */
+        private static void BuildUpdates(Transform content, Settings s, System.Action notify)
+        {
+            UIBuilder.SectionHeaderWithHelp(content, "Updates",
+                "Sapphire checks its GitHub releases once per session and\nshows a toast when a " +
+                "newer build exists. Clicking the toast\ndownloads and installs it over this copy; " +
+                "the new version\nloads after you restart the game.\n\nDownloads are verified " +
+                "against the checksum GitHub\npublishes for the release asset.");
+
+            UIBuilder.Label(content, "Installed: " + MainClass.ModVersion);
+            var status = UIBuilder.Label(content, StatusLine());
+
+            UIBuilder.Collapsible(content, "Check for updates automatically", s.AutoCheckUpdates,
+                v => { s.AutoCheckUpdates = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "Include pre-release builds", s.UpdateIncludePrerelease,
+                v => { s.UpdateIncludePrerelease = v; notify?.Invoke(); }, null);
+
+            // A poller keeps the status line live across the check's worker thread without the
+            // page needing a rebuild (which would collapse the section under the user).
+            var poll = UIBuilder.Rect("UpdateStatusPoll", content).AddComponent<StatusPoller>();
+            poll.Label = status;
+
+            UIBuilder.Button(content, "Check now", () => UpdateService.Check(true));
+            UIBuilder.Button(content, "Preview the update toast", UpdateToast.ShowPreview);
+            if (!string.IsNullOrEmpty(s.SkippedUpdateTag))
+                UIBuilder.Button(content, "Un-skip " + s.SkippedUpdateTag, UpdateService.ClearSkip);
+        }
+
+        private static string StatusLine()
+        {
+            switch (UpdateService.Status)
+            {
+                case UpdateStatus.Checking:  return "Checking…";
+                case UpdateStatus.UpToDate:  return "Up to date";
+                case UpdateStatus.Available:
+                    return "Available: " + (UpdateService.Available != null ? UpdateService.Available.Tag : "?");
+                case UpdateStatus.Installing:
+                    float p = UpdateService.Progress;
+                    return p >= 0f ? "Downloading… " + Mathf.RoundToInt(p * 100f) + "%" : "Downloading…";
+                case UpdateStatus.Installed: return "Installed — restart the game to apply";
+                case UpdateStatus.Failed:    return "Failed: " + UpdateService.Message;
+                default:                     return "Not checked yet";
+            }
+        }
+
+        private class StatusPoller : MonoBehaviour
+        {
+            public TextMeshProUGUI Label;
+            private string _last;
+            private int _cd;
+
+            private void Update()
+            {
+                if (Label == null) return;
+                if (--_cd > 0) return;
+                _cd = 10;   // ~6/s: enough for a progress readout, far below a per-frame cost
+                string now = StatusLine();
+                if (now == _last) return;
+                _last = now;
+                Label.text = now;
+            }
         }
 
         private static string KeyLabel(KeyCode kc) =>

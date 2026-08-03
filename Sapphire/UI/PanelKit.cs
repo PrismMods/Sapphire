@@ -716,10 +716,10 @@ namespace Sapphire.UI
         }
 
         internal float FloatRow(float y, string label, float value, Action<float> set, string fmt = "0.###")
-            => FieldRow(y, label, value.ToString(fmt), v => { float f; if (float.TryParse(v, out f)) set(f); });
+            => FieldRow(y, label, value.ToString(fmt), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
 
         internal float IntRow(float y, string label, int value, Action<int> set)
-            => FieldRow(y, label, value.ToString(), v => { int n; if (int.TryParse(v, out n)) set(n); });
+            => FieldRow(y, label, value.ToString(), v => { int n; if (ExprEval.TryParseInt(v, out n)) set(n); });
 
         // [label] [a] [b] — two int fields
         internal float PairRow(float y, string label, Func<int> getA, Func<int> getB, Action<int, int> set)
@@ -727,8 +727,8 @@ namespace Sapphire.UI
             Label(label, Pad, y, LblW, RowH, Theme.TextMuted);
             float x = Pad + LblW + 4f;
             const float fw = 56f;
-            InputField(x, y, fw, getA().ToString(), v => { int n; if (int.TryParse(v, out n)) set(n, getB()); });
-            InputField(x + fw + Gap, y, fw, getB().ToString(), v => { int n; if (int.TryParse(v, out n)) set(getA(), n); });
+            InputField(x, y, fw, getA().ToString(), v => { int n; if (ExprEval.TryParseInt(v, out n)) set(n, getB()); });
+            InputField(x + fw + Gap, y, fw, getB().ToString(), v => { int n; if (ExprEval.TryParseInt(v, out n)) set(getA(), n); });
             return y - (RowH + Gap);
         }
 
@@ -738,8 +738,8 @@ namespace Sapphire.UI
             Label(label, Pad, y, LblW, RowH, Theme.TextMuted);
             float x = Pad + LblW + 4f;
             float fw = (W - Pad * 2f - LblW - 4f - Gap) * 0.5f;
-            InputField(x, y, fw, getA().ToString("0.###"), v => { float f; if (float.TryParse(v, out f)) set(f, getB()); });
-            InputField(x + fw + Gap, y, fw, getB().ToString("0.###"), v => { float f; if (float.TryParse(v, out f)) set(getA(), f); });
+            InputField(x, y, fw, getA().ToString("0.###"), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f, getB()); });
+            InputField(x + fw + Gap, y, fw, getB().ToString("0.###"), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(getA(), f); });
             return y - (RowH + Gap);
         }
 
@@ -756,8 +756,8 @@ namespace Sapphire.UI
             bgRef.color = Tint(getOn());
             float x = Pad + LblW + 4f;
             float fw = (W - Pad * 2f - LblW - 4f - Gap) * 0.5f;
-            InputField(x, y, fw, getA().ToString("0.###"), v => { float f; if (float.TryParse(v, out f)) set(f, getB()); });
-            InputField(x + fw + Gap, y, fw, getB().ToString("0.###"), v => { float f; if (float.TryParse(v, out f)) set(getA(), f); });
+            InputField(x, y, fw, getA().ToString("0.###"), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f, getB()); });
+            InputField(x + fw + Gap, y, fw, getB().ToString("0.###"), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(getA(), f); });
             return y - (RowH + Gap);
         }
 
@@ -773,7 +773,7 @@ namespace Sapphire.UI
             }, false, false, TextAnchor.MiddleLeft);
             bgRef.color = Tint(getOn());
             InputField(Pad + LblW + 4f, y, W - Pad * 2f - LblW - 4f, get().ToString("0.###"),
-                v => { float f; if (float.TryParse(v, out f)) set(f); });
+                v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
             return y - (RowH + Gap);
         }
 
@@ -821,10 +821,10 @@ namespace Sapphire.UI
             float x = Pad + 44f;
             const float fw = 56f;
             InputField(x, y, fw, Mathf.Clamp(ResolveTile(getA()), 0, LevelLen()).ToString(), v =>
-            { int n; if (int.TryParse(v, out n)) set(Math.Max(0, n), getB()); });
+            { int n; if (ExprEval.TryParseInt(v, out n)) set(Math.Max(0, n), getB()); });
             x += fw + Gap;
             InputField(x, y, fw, Mathf.Clamp(ResolveTile(getB()), 0, LevelLen()).ToString(), v =>
-            { int n; if (int.TryParse(v, out n)) set(getA(), Math.Max(0, n)); });
+            { int n; if (ExprEval.TryParseInt(v, out n)) set(getA(), Math.Max(0, n)); });
             x += fw + Gap;
             Cell(Loc.T("Sel"), x, y, 42f, RowH, () =>
             {

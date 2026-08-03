@@ -1088,7 +1088,7 @@ namespace Sapphire
                     {
                         if (togglable && evt.disabled != null && evt.disabled.ContainsKey(key)) evt.disabled[key] = true;
                     }
-                    else if (float.TryParse(s, out float f))
+                    else if (ExprEval.TryParseFloat(s, out float f))
                     {
                         evt[key] = f;
                         if (evt.disabled != null && evt.disabled.ContainsKey(key)) evt.disabled[key] = false;
@@ -1111,7 +1111,7 @@ namespace Sapphire
                 using (new SaveStateScope(ed))
                 {
                     float f = string.IsNullOrWhiteSpace(s) ? float.NaN
-                        : (float.TryParse(s, out float pf) ? pf : (isX ? p.x : p.y));
+                        : (ExprEval.TryParseFloat(s, out float pf) ? pf : (isX ? p.x : p.y));
                     var np = isX ? new Vector2(f, p.y) : new Vector2(p.x, f);
                     evt["position"] = np;
                     bool any = !float.IsNaN(np.x) || !float.IsNaN(np.y);

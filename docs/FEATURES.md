@@ -99,13 +99,49 @@ key-count variants, inserted as a repeating pseudo.
   - **Repeats (n)** — how many units to append (per-variant default).
   - **Preview** — a live path render: rounded ADOFAI-style tiles, red/blue swirl markers
     (blue when a tile's resulting angle ≥ 180°), planet at the start.
-  - **Insert** — appends the run onto the selected tile / level end (one undo).
+  - **Insert** — appends the run onto the selected tile (one undo). With no tile selected it
+    does nothing and says so — there is no anchor to build from.
   - **Rotate** — mirrors the shape along its x-axis (the other of the two valid twirl parities).
 - **Custom shapes** — `+ Shape` opens a form: name, category, and an **angle expression**
   (same `30t 30t 180` notation), or **From selection** to capture the selected editor tiles'
   angles + twirls. Custom shapes and categories **persist** across restarts.
 - **Resizeable** — drag any edge/corner; the rail and preview columns reflow to the new size,
   and to docking.
+
+---
+
+## Level settings & decorations
+
+The level-settings panel is Sapphire-native, rendered from the game's own property registry.
+
+- **Decoration browser** — list grouped by tag (collapsible folders) or a thumbnail grid.
+  `+ Decoration` picks the type (**image / text / object / particle / component**), `Duplicate`
+  copies the selection, and `Delete` removes it. Selecting a row opens an inline inspector for
+  that decoration's own properties.
+
+---
+
+## Numeric fields
+
+Every numeric field in Sapphire accepts **arithmetic**, the way the vanilla inspector does:
+type `180*2`, `100/3`, `(1+2)*45` or `360/8` and the field evaluates on commit. Also supports
+`^`, `%` and the constants `pi` / `tau` / `e`. Unlike vanilla, division is not integer division
+— `10/4` is `2.5`, not `2`. Text fields (tags, image paths) are never evaluated.
+
+---
+
+## Updates
+
+Sapphire checks its GitHub releases once per session and shows a toast when a newer build
+exists. Clicking it downloads and installs over the current copy; the new version loads after
+a game restart. Downloads are checked against the SHA-256 digest GitHub publishes for the
+release asset, and archive entries that would escape the mods folder are rejected.
+
+- **Settings → Updates** — installed version, live status, automatic-check and pre-release
+  toggles, `Check now`, and a toast preview.
+- **Plays nicely with other mods** — the toast parks top-right, the same corner Quartz uses.
+  Sapphire detects another mod's update toast there and stacks below it instead of drawing on
+  top, so both stay readable.
 
 ---
 
