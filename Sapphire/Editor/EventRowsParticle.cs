@@ -150,8 +150,12 @@ namespace Sapphire
                     var cg = SlotGrad(Grad(evt, key, val), slot);
                     var arr = cg.colorKeys;
                     if (arr == null || idx >= arr.Length) return;
-                    var kk = arr[idx]; kk.time = d; arr[idx] = kk;
-                    cg.colorKeys = arr;
+                    // Clone: the array is the SAME reference the undo snapshot's shallow-copied
+                    // boxed gradient points at (SaveStateScope's ctor snapshots BEFORE this runs) —
+                    // mutating in place corrupts undo. Append/RemoveAt already allocate fresh arrays.
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
+                    cg.colorKeys = arr2;
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.InputRow(c.Content, x + tw + Gap, y, hw, keys[i].color ?? "", s =>
@@ -159,8 +163,9 @@ namespace Sapphire
                     var cg = SlotGrad(Grad(evt, key, val), slot);
                     var arr = cg.colorKeys;
                     if (arr == null || idx >= arr.Length) return;
-                    var kk = arr[idx]; kk.color = (s ?? "").Trim().TrimStart('#'); arr[idx] = kk;
-                    cg.colorKeys = arr;
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.color = (s ?? "").Trim().TrimStart('#'); arr2[idx] = kk;
+                    cg.colorKeys = arr2;
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.Cell(c.Content, "×", x + tw + hw + Gap * 2f, y, bw, RowH, () =>
@@ -203,8 +208,10 @@ namespace Sapphire
                     var cg = SlotGrad(Grad(evt, key, val), slot);
                     var arr = cg.alphaKeys;
                     if (arr == null || idx >= arr.Length) return;
-                    var kk = arr[idx]; kk.time = d; arr[idx] = kk;
-                    cg.alphaKeys = arr;
+                    // Clone: see ColorStops — mutating the live array corrupts the undo snapshot.
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
+                    cg.alphaKeys = arr2;
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.InputRow(c.Content, x + tw + Gap, y, aw, D(keys[i].alpha), s =>
@@ -214,8 +221,9 @@ namespace Sapphire
                     var cg = SlotGrad(Grad(evt, key, val), slot);
                     var arr = cg.alphaKeys;
                     if (arr == null || idx >= arr.Length) return;
-                    var kk = arr[idx]; kk.alpha = d; arr[idx] = kk;
-                    cg.alphaKeys = arr;
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.alpha = d; arr2[idx] = kk;
+                    cg.alphaKeys = arr2;
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.Cell(c.Content, "×", x + tw + aw + Gap * 2f, y, bw, RowH, () =>
