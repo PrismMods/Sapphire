@@ -274,7 +274,11 @@ namespace Sapphire
             h = h * 31 + floor;
             foreach (var t in _expandedTypes) h += (t + 1) * 733;   // commutative — set order varies
             foreach (var k in _expandedInst) h += (k + 1) * 977;
-            foreach (var e in events) h = h * 31 + (int)e.eventType;
+            foreach (var e in events)
+            {
+                h = h * 31 + (int)e.eventType;
+                h = h * 31 + TargetTag(e).GetHashCode();
+            }
             return h;
         }
 
@@ -377,8 +381,8 @@ namespace Sapphire
             bool tExp = _expandedTypes.Contains(type);
             bool single = list.Count == 1;
             string title = (tExp ? "− " : "+ ") + EventTitle(list[0])
-                + (single ? "" : "  ×" + list.Count);
-            string preview = single ? Preview(list[0]) : "";
+                + (single ? TagSuffix(list[0]) : "  ×" + list.Count);
+            string preview = single ? Preview(list[0]) : TagList(list);
 
             float pw = _size.x; // live panel width — headers/× must track it like the value rows do
             float headW = pw - Pad * 2f - (single ? 26f : 0f);
@@ -405,7 +409,7 @@ namespace Sapphire
                 long key = type * 1000L + i;
                 bool iExp = _expandedInst.Contains(key);
                 string prev = Preview(evt);
-                string label = (iExp ? "− " : "+ ") + (i + 1) + ".";
+                string label = (iExp ? "− " : "+ ") + (i + 1) + "." + TagSuffix(evt);
                 var sub = HeaderCell(label, prev, Pad + 12f, y, pw - Pad * 2f - 12f - 26f, () =>
                 {
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
@@ -441,6 +445,44 @@ namespace Sapphire
             }
             catch { }
             return "";
+        }
+
+        /* Decoration-targeting events (MoveDecorations, SetText, SetObject, SetParticle,
+           EmitParticle) carry their target in `tag`. Seven MoveDecorations on one tile were
+           seven identical "+ 1." rows without it. Kept separate from Preview() — Preview owns
+           the RIGHT-hand slot (eventTag / filter), this owns the left label. */
+        private static string TargetTag(ADOFAI.LevelEvent evt)
+        {
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                object v;
+                if (d != null && d.TryGetValue("tag", out v) && v is string s) return s;
+            }
+            catch { }
+            return "";
+        }
+
+        private static string TagSuffix(ADOFAI.LevelEvent evt)
+        {
+            string t = TargetTag(evt);
+            return t.Length > 0 ? "  " + t : "";
+        }
+
+        // Distinct target tags across a collapsed group, first-seen order. No manual
+        // truncation: the preview TMP is NoWrap + Ellipsis, so it clips to the panel width.
+        private static string TagList(List<ADOFAI.LevelEvent> list)
+        {
+            var seen = new HashSet<string>();
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in list)
+            {
+                string t = TargetTag(e);
+                if (t.Length == 0 || !seen.Add(t)) continue;
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(t);
+            }
+            return sb.ToString();
         }
 
         private static float InstanceBody(scnEditor ed, ADOFAI.LevelEvent evt, float y)
