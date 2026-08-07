@@ -114,10 +114,22 @@ key-count variants, inserted as a repeating pseudo.
 
 The level-settings panel is Sapphire-native, rendered from the game's own property registry.
 
+- **Artist permission status** — a colour-coded chip at the top of the Level tab shows the
+  artist's approval status; click it to expand the full condition text. Hidden when no artist
+  is set.
 - **Decoration browser** — list grouped by tag (collapsible folders) or a thumbnail grid.
   `+ Decoration` picks the type (**image / text / object / particle / component**), `Duplicate`
-  copies the selection, and `Delete` removes it. Selecting a row opens an inline inspector for
-  that decoration's own properties.
+  copies the selection, and `Delete` removes it. Selecting a row opens the **decoration
+  inspector** in its own floating, resizable, dockable window (closing it also clears the
+  selection) — the browser list itself never reflows.
+- **Particle and object decorations are fully editable** — gradient colours (mode: single /
+  two colours / gradient / two gradients / random, plus colour-stop and alpha-stop editors),
+  float-pair and velocity-range fields, and a Play / Stop / Restart particle preview. Object
+  decorations expose their full property set, including the `objectType`-dependent rows.
+- **Decoration event target tags** — the event tree shows each decoration event's target tag:
+  beside the number on every expanded row, and as a list of the group's distinct tags on a
+  collapsed group's header (a tile with seven `MoveDecorations` events no longer renders as
+  seven identical rows).
 
 ---
 
@@ -153,6 +165,9 @@ release asset, and archive entries that would escape the mods folder are rejecte
 - **Layout overrides + on-screen drag editor** for game editor chrome.
 - **Floating windows** — level-settings popup and dialogs are blocker-less, draggable, and
   remember their position (some also resize).
+- **On-screen key hints** — a card in the bottom-right lists the keys live in the current
+  context. It rides above the event timeline, sizes itself to its content, collapses to a
+  header, and can be turned off (`Ctrl+E` → Editor).
 
 ---
 
