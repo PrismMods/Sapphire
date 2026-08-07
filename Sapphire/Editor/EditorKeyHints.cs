@@ -13,22 +13,29 @@ namespace Sapphire
     {
         // context bits
         private const int Always = 0, NoSel = 1, Sel = 2, ToolNum = 4, Quick = 8;
+        // Exactly one tile selected AND tile actions enabled — TickFreeAngle's real Alt gate
+        // (plain Sel overclaimed for 2+ selected tiles or Sapphire-tools-off).
+        private const int FreeAngle = 16;
 
         private struct Hint
         {
-            public readonly int Ctx; public readonly string Keys, What;
-            public Hint(int ctx, string keys, string what) { Ctx = ctx; Keys = keys; What = what; }
+            public readonly int Ctx, Not; public readonly string Keys, What;
+            public Hint(int ctx, string keys, string what, int not = 0)
+            { Ctx = ctx; Not = not; Keys = keys; What = what; }
         }
 
         private static readonly Hint[] Table =
         {
             new Hint(Always, "Ctrl+E",  "Sapphire settings"),
             new Hint(Always, "ESC",     "Close panel / disarm tool"),
-            new Hint(NoSel,  "1–0",     "Select tool"),
-            new Hint(NoSel,  ",",       "Previous tool"),
-            new Hint(NoSel,  ".",       "Saved tool slot"),
-            new Hint(NoSel,  "Shift+.", "Save current tool to slot"),
-            new Hint(Sel,    "Alt",     "Hold: free-angle aim"),
+            // TickToolHotkeys is the only one of these three gated on selection; TickToolSwap
+            // (,/./Shift+.) has no selection check at all — tagging it NoSel hid live hotkeys
+            // the instant a tile was selected, the most common editing state.
+            new Hint(NoSel,  "1–0",     "Select tool", not: ToolNum),
+            new Hint(Always, ",",       "Previous tool"),
+            new Hint(Always, ".",       "Saved tool slot"),
+            new Hint(Always, "Shift+.", "Save current tool to slot"),
+            new Hint(FreeAngle, "Alt",  "Hold: free-angle aim"),
             new Hint(ToolNum,"Digits",  "Set key count"),
             new Hint(Quick,  "I",       "Swirl on/off"),
             new Hint(Quick,  "O",       "Set speed"),
@@ -74,6 +81,7 @@ namespace Sapphire
             ctx |= sel == 0 ? NoSel : Sel;
             try { if (EditorToolbar.PseudoToolOn) ctx |= ToolNum; } catch { }
             try { if (s.FeatQuickChart) ctx |= Quick; } catch { }
+            try { if (s.EditorTileActions && ed.SelectionIsSingle()) ctx |= FreeAngle; } catch { }
             if (_collapsed) ctx |= 1 << 20;   // collapse is part of the layout signature
             return ctx;
         }
@@ -82,9 +90,12 @@ namespace Sapphire
         {
             _rows.Clear();
             foreach (var h in Table)
-                if (h.Ctx == Always || (ctx & h.Ctx) != 0) _rows.Add(h);
+                // Any-bit match on Ctx, but Not is a veto: a row whose keys are being consumed by
+                // an active tool must not claim it still does its normal job.
+                if ((h.Ctx == Always || (ctx & h.Ctx) != 0) && (h.Not == 0 || (ctx & h.Not) == 0))
+                    _rows.Add(h);
 
-            K.Rebuild(Loc.T("Keys"), () => { _collapsed = !_collapsed; _sig = int.MinValue; },
+            K.Rebuild(Loc.T("Shortcuts"), () => { _collapsed = !_collapsed; _sig = int.MinValue; },
                 new Vector2(0f, 0f));
             float y = -HeadH - 2f;
             if (!_collapsed)
