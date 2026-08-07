@@ -49,19 +49,25 @@ namespace Sapphire
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
             bool live = _evt != null && ed != null && !ed.playMode && MainClass.EditorSuiteOn;
-            // A delete or an undo can drop our event out of the level; don't render a ghost.
-            if (live)
-            {
-                bool present = false;
-                try { present = ed.decorations != null && ed.decorations.Contains(_evt); } catch { }
-                if (!present) { Close(); live = false; }
-            }
             if (!live) { K.Show(false); return; }
 
             bool dirty = _sig == 0 || !K.Built || _built != _evt;
             if (--_scanCd <= 0) { _scanCd = 12; dirty = true; }
             if (dirty)
             {
+                // A delete or an undo can drop our event out of the level; don't render a
+                // ghost. Gated on `dirty` (not every frame) — Contains is an O(n) scan with
+                // no overridden Equals on LevelEvent, and this used to run unthrottled.
+                bool present = false;
+                try { present = ed.decorations != null && ed.decorations.Contains(_evt); } catch { }
+                if (!present)
+                {
+                    Close();
+                    EditorLevelMenu.ClearDecoSelection();
+                    K.Show(false);
+                    return;
+                }
+
                 if (!K.Built || _built != _evt) { BuildShell(); _built = _evt; }
                 long sig = Sig();
                 if (sig != _sig || _content == null || _content.childCount == 0)

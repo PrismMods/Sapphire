@@ -477,8 +477,9 @@ namespace Sapphire
                 // new item (and its inspector) is invisible and the add looks like a no-op.
                 if (dec != null) _decoExpanded.Add(DecoTag(dec));
                 // Keep the game's selectedDecorations in sync so Delete/gizmos act on this one.
-                if (_decoSel >= 0) SelectDecoEvent(ed, dec);
-                if (dec != null) EditorDecoInspector.Show(dec);
+                // Same guard for both: an IndexOf miss must leave the browser and the inspector
+                // agreeing on "unselected", not just one of them.
+                if (_decoSel >= 0) { SelectDecoEvent(ed, dec); EditorDecoInspector.Show(dec); }
             }
             catch (Exception ex) { SapphireLog.Log("Deco add failed: " + ex.Message); }
             _sig = 0;

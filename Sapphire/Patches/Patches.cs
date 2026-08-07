@@ -188,7 +188,8 @@ namespace Sapphire
         {
             public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
                 && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
-                && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered;
+                && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered
+                && !EditorDecoInspector.Hovered;
         }
 
         /* The beta-build label (scrEnableIfBeta) decides its own visibility in Awake and, on a
