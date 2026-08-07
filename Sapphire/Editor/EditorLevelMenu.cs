@@ -211,6 +211,7 @@ namespace Sapphire
         {
             long h = 17;
             h = h * 31 + _tab;
+            h = h * 31 + (_approvalOpen ? 1 : 0);
             if (Tabs[_tab].Type == ADOFAI.LevelEventType.DecorationSettings)
             {
                 h = h * 31 + _decoSel;
@@ -312,6 +313,9 @@ namespace Sapphire
                 return;
             }
 
+            if (Tabs[_tab].Type == ADOFAI.LevelEventType.LevelSettings)
+                y = ArtistApprovalChip(ed, y);
+
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);
             if (evt == null || info == null)
@@ -322,6 +326,90 @@ namespace Sapphire
             else y = EventRows.Render(_ctx, ed, info, evt, y);
             _content.sizeDelta = new Vector2(0f, -y + 6f);
             ClampScroll();
+        }
+
+        // ── artist approval chip (Level tab) ──────────────────────────────────
+        private static bool _approvalOpen;   // chip expanded to show the condition text
+
+        // The game evaluates artist permission OUTSIDE the settings registry (ApprovalLevel +
+        // its disclaimer strings), so the registry-driven rows can't show it. Chip at the top
+        // of the Level tab; click expands the condition text.
+        private static float ArtistApprovalChip(scnEditor ed, float y)
+        {
+            string artist = "";
+            try { artist = (ed.levelData.artist ?? "").Trim(); } catch { }
+            if (artist.Length == 0) return y;   // nothing to evaluate
+            ApprovalLevel lvl;
+            try { lvl = ed.ApprovalLevelForArtist(artist); } catch { return y; }
+
+            float w = _ctx.PanelW - Pad * 2f;
+            var bg = EventRows.Cell(_content,
+                Loc.T("Artist permission") + ": " + ApprovalText(lvl) + "   " + (_approvalOpen ? "‹" : "›"),
+                Pad, y, w, RowH,
+                () => { _approvalOpen = !_approvalOpen; _sig = 0; }, false, TextAnchor.MiddleLeft);
+            bg.color = ApprovalTint(lvl);
+            y -= RowH + Gap;
+
+            if (_approvalOpen)
+            {
+                string detail = ApprovalDetail(lvl);
+                // ~46 chars/line at 11.5pt in this width; 4 lines is enough for every string.
+                float h = Mathf.Max(RowH, Mathf.Ceil(detail.Length / 46f) * 16f + 8f);
+                var lbl = EventRows.Cell(_content, "", Pad, y, w, h, () => { }, false);
+                lbl.color = new Color(1f, 1f, 1f, 0.03f);
+                var tGo = new GameObject("D", typeof(RectTransform));
+                tGo.transform.SetParent(lbl.transform, false);
+                var tr = (RectTransform)tGo.transform;
+                tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+                tr.offsetMin = new Vector2(8f, 4f); tr.offsetMax = new Vector2(-8f, -4f);
+                var tmp = UIBuilder.Tmp(tGo, detail, 11f, TextAnchor.UpperLeft, Theme.TextMuted);
+                tmp.enableWordWrapping = true;
+                tmp.raycastTarget = false;
+                y -= h + Gap;
+            }
+            return y - Gap;
+        }
+
+        private static string ApprovalText(ApprovalLevel lvl)
+        {
+            try
+            {
+                bool ex;
+                var s = RDString.GetWithCheck("editor.artistDisclaimer." + lvl, out ex, null);
+                if (ex && !string.IsNullOrEmpty(s)) return s;
+            }
+            catch { }
+            return lvl.ToString();
+        }
+
+        private static string ApprovalDetail(ApprovalLevel lvl)
+        {
+            string key = lvl == ApprovalLevel.Declined
+                ? "editor.artistDisclaimer.conditionDeclinedDescription"
+                : lvl == ApprovalLevel.ListingRejected
+                    ? "editor.artistDisclaimer.conditionListingRejectedDescription"
+                    : "editor.artistDisclaimer.conditionDescription";
+            try
+            {
+                bool ex;
+                var s = RDString.GetWithCheck(key, out ex, null);
+                if (ex && !string.IsNullOrEmpty(s)) return s;
+            }
+            catch { }
+            return "";
+        }
+
+        private static Color ApprovalTint(ApprovalLevel lvl)
+        {
+            switch (lvl)
+            {
+                case ApprovalLevel.Allowed:           return new Color(0.42f, 0.78f, 0.48f, 0.28f);
+                case ApprovalLevel.MostlyAllowed:
+                case ApprovalLevel.PartiallyDeclined: return new Color(0.95f, 0.72f, 0.32f, 0.28f);
+                case ApprovalLevel.Declined:
+                case ApprovalLevel.ListingRejected:   return new Color(0.89f, 0.40f, 0.43f, 0.28f);
+            }
+            return new Color(1f, 1f, 1f, 0.06f);
         }
 
         // ── decoration browser (Sapphire-native; replaces the game's deco panel) ──

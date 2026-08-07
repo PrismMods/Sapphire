@@ -360,6 +360,7 @@ namespace Sapphire
             ["object"] = "오브젝트",
             ["particle"] = "파티클",
             ["component"] = "컴포넌트",
+            ["Artist permission"] = "아티스트 허가",
             // ── updater ──
             ["Update available"] = "업데이트 있음",
             ["Click to update"] = "클릭해서 업데이트",
