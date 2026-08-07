@@ -384,6 +384,27 @@ namespace Sapphire
             UI.EditorDropdown.Dispose();
         }
 
+        /* Unpatch only OUR id, on either loader. Neither call site is portable as written:
+           the instance UnpatchAll(string) is Obsolete(error:true) from HarmonyX 2.10 (won't
+           COMPILE against MelonLoader's 0Harmony), and its replacement — the static
+           UnpatchID(string) — is absent from native UMM's older Harmony (MissingMethodException
+           at unload, leaving every patch live). UnpatchSelf() is 2.10-only for the same reason.
+           Bind whichever this loader actually ships. */
+        private static void UnpatchOurId()
+        {
+            try
+            {
+                var t = typeof(Harmony);
+                var inst = t.GetMethod("UnpatchAll", new[] { typeof(string) });
+                if (inst != null && !inst.IsStatic) { inst.Invoke(harmony, new object[] { harmony.Id }); return; }
+                var stat = t.GetMethod("UnpatchID", BindingFlags.Public | BindingFlags.Static,
+                                       null, new[] { typeof(string) }, null);
+                if (stat != null) { stat.Invoke(null, new object[] { harmony.Id }); return; }
+                SapphireLog.Log("Unpatch: no UnpatchAll(string) or UnpatchID(string) on this Harmony");
+            }
+            catch (Exception ex) { SapphireLog.Log("Unpatch failed: " + ex); }
+        }
+
         private static void StopMod(UnityModManager.ModEntry modEntry)
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
@@ -396,10 +417,7 @@ namespace Sapphire
             DisposeEditorModules();
             EditorUiEditor.Close();
             UI.UpdateToast.Dispose();
-            // NOT UnpatchSelf(): that's HarmonyX 2.10-only, so on native UMM's older Harmony it
-            // throws MissingMethodException at unload and leaves every patch live. UnpatchAll(id)
-            // is the same operation and exists in both.
-            harmony.UnpatchAll(harmony.Id);
+            UnpatchOurId();
             if (_tickerGo != null)
             {
                 UnityEngine.Object.Destroy(_tickerGo);
