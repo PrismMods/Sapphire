@@ -117,7 +117,48 @@ namespace Sapphire
             ADOFAI.Editor.Models.SerializedMinMaxGradient mm, int slot)
         {
             var gr = slot == 1 ? mm.gradient1 : mm.gradient2;
-            return gr.HasValue ? gr.Value : new ADOFAI.Editor.Models.SerializedGradient();
+            // Not `new SerializedGradient()`: that leaves BOTH key arrays null, so adding only a
+            // colour stop still ships a null alphaKeys into ToGradient's unguarded Select.
+            return gr.HasValue ? gr.Value : DefaultGrad();
+        }
+
+        /* Vanilla's PropertyControl_MinMaxGradient backfills on every mode change, and it must:
+           ToMinMaxGradient derefs gradient1/2 and ToGradient walks their key arrays, both without
+           a null check — so a mode switch that leaves them null writes an event the game throws on
+           at load. */
+        private static void Backfill(ref ADOFAI.Editor.Models.SerializedMinMaxGradient g)
+        {
+            switch (g.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    if (g.color1 == null) g.color1 = "ffffff";
+                    break;
+                case ParticleSystemGradientMode.TwoColors:
+                    if (g.color1 == null) g.color1 = "ffffff";
+                    if (g.color2 == null) g.color2 = "ffffff";
+                    break;
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:   // reads gradient1, not color1
+                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
+                    break;
+                case ParticleSystemGradientMode.TwoGradients:
+                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
+                    if (!g.gradient2.HasValue) g.gradient2 = DefaultGrad();
+                    break;
+            }
+        }
+
+        // mirrors the game's private PropertyControl_MinMaxGradient.DefaultGradient()
+        private static ADOFAI.Editor.Models.SerializedGradient DefaultGrad()
+        {
+            var g = new ADOFAI.Editor.Models.SerializedGradient();
+            var c0 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c0.time = 0m; c0.color = "ffffff";
+            var c1 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c1.time = 1m; c1.color = "ffffff";
+            var a0 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a0.time = 0m; a0.alpha = 1m;
+            var a1 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a1.time = 1m; a1.alpha = 1m;
+            g.colorKeys = new[] { c0, c1 };
+            g.alphaKeys = new[] { a0, a1 };
+            return g;
         }
 
         private static void PutSlotGrad(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
@@ -171,6 +212,9 @@ namespace Sapphire
                 EventRows.Cell(c.Content, "×", x + tw + hw + Gap * 2f, y, bw, RowH, () =>
                 {
                     var cg = SlotGrad(Grad(evt, key, val), slot);
+                    // Re-read the LIVE array: the rebuild is deferred, so two quick clicks would
+                    // otherwise empty it — and ToGradient/SetKeys can't take a zero-length array.
+                    if (cg.colorKeys == null || cg.colorKeys.Length <= 1) return;
                     cg.colorKeys = RemoveAt(cg.colorKeys, idx);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 }, true);
@@ -229,6 +273,7 @@ namespace Sapphire
                 EventRows.Cell(c.Content, "×", x + tw + aw + Gap * 2f, y, bw, RowH, () =>
                 {
                     var cg = SlotGrad(Grad(evt, key, val), slot);
+                    if (cg.alphaKeys == null || cg.alphaKeys.Length <= 1) return;   // see ColorStops
                     cg.alphaKeys = RemoveAt(cg.alphaKeys, idx);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 }, true);
@@ -284,6 +329,7 @@ namespace Sapphire
                 {
                     var g = Grad(evt, key, val);
                     g.mode = modes[i];
+                    Backfill(ref g);   // before Commit: Commit writes evt[key] first, so a bad value lands
                     EventRows.Commit(c, ed, evt, pi, key, g);
                 }), false, TextAnchor.MiddleLeft);
             y -= RowH + Gap;
@@ -291,7 +337,6 @@ namespace Sapphire
             switch (val.mode)
             {
                 case ParticleSystemGradientMode.Color:
-                case ParticleSystemGradientMode.RandomColor:
                     y = HexRow(c, ed, evt, pi, key, val, 1, x, w, y);
                     break;
                 case ParticleSystemGradientMode.TwoColors:
@@ -299,6 +344,7 @@ namespace Sapphire
                     y = HexRow(c, ed, evt, pi, key, val, 2, x, w, y);
                     break;
                 case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:   // ToMinMaxGradient reads gradient1 here too
                     y = ColorStops(c, ed, evt, pi, key, val, 1, x, w, y);
                     y = AlphaStops(c, ed, evt, pi, key, val, 1, x, w, y);
                     break;
