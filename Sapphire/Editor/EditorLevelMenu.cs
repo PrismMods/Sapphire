@@ -352,19 +352,22 @@ namespace Sapphire
 
             if (_approvalOpen)
             {
-                string detail = ApprovalDetail(lvl);
-                // ~46 chars/line at 11.5pt in this width; 4 lines is enough for every string.
-                float h = Mathf.Max(RowH, Mathf.Ceil(detail.Length / 46f) * 16f + 8f);
+                string detail = ApprovalDetail(lvl, artist);
+                var tGo = new GameObject("D", typeof(RectTransform));
+                var tmp = UIBuilder.Tmp(tGo, detail, 11f, TextAnchor.UpperLeft, Theme.TextMuted);
+                tmp.enableWordWrapping = true;
+                tmp.raycastTarget = false;
+                // Measured, not estimated: the string is game-localized (CJK is ~2x the width per
+                // character) and the panel font is user-swappable, so a chars-per-line guess
+                // under-estimates and TMP has no clip here — the overflow lands on the rows below.
+                float textW = w - 16f;                       // the cell's 8f horizontal insets
+                float h = Mathf.Max(RowH, tmp.GetPreferredValues(detail, textW, 0f).y + 8f);
                 var lbl = EventRows.Cell(_content, "", Pad, y, w, h, () => { }, false);
                 lbl.color = new Color(1f, 1f, 1f, 0.03f);
-                var tGo = new GameObject("D", typeof(RectTransform));
                 tGo.transform.SetParent(lbl.transform, false);
                 var tr = (RectTransform)tGo.transform;
                 tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
                 tr.offsetMin = new Vector2(8f, 4f); tr.offsetMax = new Vector2(-8f, -4f);
-                var tmp = UIBuilder.Tmp(tGo, detail, 11f, TextAnchor.UpperLeft, Theme.TextMuted);
-                tmp.enableWordWrapping = true;
-                tmp.raycastTarget = false;
                 y -= h + Gap;
             }
             return y - Gap;
@@ -382,7 +385,7 @@ namespace Sapphire
             return lvl.ToString();
         }
 
-        private static string ApprovalDetail(ApprovalLevel lvl)
+        private static string ApprovalDetail(ApprovalLevel lvl, string artist)
         {
             string key = lvl == ApprovalLevel.Declined
                 ? "editor.artistDisclaimer.conditionDeclinedDescription"
@@ -391,8 +394,11 @@ namespace Sapphire
                     : "editor.artistDisclaimer.conditionDescription";
             try
             {
+                // The game's own ArtistUIDisclaimer always passes the artist name for these keys;
+                // with a null dict RDString leaves the [artist] token unreplaced.
+                var args = new System.Collections.Generic.Dictionary<string, object> { ["artist"] = artist };
                 bool ex;
-                var s = RDString.GetWithCheck(key, out ex, null);
+                var s = RDString.GetWithCheck(key, out ex, args);
                 if (ex && !string.IsNullOrEmpty(s)) return s;
             }
             catch { }
