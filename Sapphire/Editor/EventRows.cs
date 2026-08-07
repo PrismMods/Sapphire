@@ -228,6 +228,8 @@ namespace Sapphire
                 return EventRowsParticle.FloatPairRow(c, ed, e2, p2, k, fpv, lbl, lblCol, x, w, y);
             if (val is Tuple<Vector2, Vector2> vrv)
                 return EventRowsParticle.Vector2RangeRow(c, ed, e2, p2, k, vrv, lbl, lblCol, x, w, y);
+            if (val is ADOFAI.Editor.Models.SerializedMinMaxGradient mmg)
+                return EventRowsParticle.GradientRow(c, ed, e2, p2, k, mmg, lbl, lblCol, x, w, y);
 
             bool isColor = false;
             try { isColor = pi.controlType.ToString().IndexOf("Color", StringComparison.OrdinalIgnoreCase) >= 0; }

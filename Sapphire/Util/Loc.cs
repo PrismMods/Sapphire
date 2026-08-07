@@ -381,6 +381,8 @@ namespace Sapphire
             ["select a tile first"] = "먼저 타일을 선택하세요",
             [" tile"] = " 타일",
             [" placed"] = " 배치됨",
+            ["Colour stops"] = "색상 지점",
+            ["Alpha stops"] = "투명도 지점",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short
