@@ -22,6 +22,9 @@ namespace Sapphire
         {
             public RectTransform Content;     // rows are parented here
             public float PanelW;              // for full-width row math
+            // Decoration inspector only: AddParticle marks ~25 of its properties
+            // "control": "Hidden" and edits them in a dedicated panel. We render them.
+            public bool ShowHidden;
             public Action MarkDirty;          // toggles/enums need a content redraw
             public Action<scnEditor, ADOFAI.LevelEvent, ADOFAI.PropertyInfo> AfterCommit;
         }
@@ -38,9 +41,17 @@ namespace Sapphire
                 string key = kvp.Key;
                 if (pi == null) continue;
                 try { if (pi.invisible) continue; } catch { }
-                string ctl = "";
-                try { ctl = pi.controlType.ToString(); } catch { }
-                if (ctl == "Note" || ctl == "Export") continue;
+                // PropertyType, not ControlType: Note/Export are PropertyType members, so the
+                // old controlType.ToString() test never matched anything.
+                var pt = ADOFAI.PropertyType.NotAssigned;
+                try { pt = pi.type; } catch { }
+                if (pt == ADOFAI.PropertyType.Note || pt == ADOFAI.PropertyType.Export) continue;
+                if (!c.ShowHidden)
+                {
+                    bool hidden = false;
+                    try { hidden = pi.controlType == ADOFAI.ControlType.Hidden; } catch { }
+                    if (hidden) continue;
+                }
                 bool shown = true;
                 try { shown = pi.CheckIfShown(evt, null); } catch { }
                 if (!shown) continue;
@@ -220,6 +231,16 @@ namespace Sapphire
             bool isFile = false;
             try { isFile = pi.controlType.ToString() == "File"; } catch { }
             Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
+            /* data[key] holds the BOXED, TYPED value. Anything the branches above didn't claim
+               would be rendered by FormatVal as a type name and written back by CommitText as
+               a STRING — that is what destroys a particle's FloatPair/gradient values. Show it
+               read-only instead of offering an edit that corrupts. */
+            if (!(val == null || val is string || val is int || val is long
+                  || val is float || val is double))
+            {
+                Label(content, FormatVal(val), x, y, w, RowH, new Color(0.45f, 0.45f, 0.5f, 1f));
+                return y - (RowH + Gap);
+            }
             float rightW = isFile ? 30f : (isColor ? RowH : 0f);
             float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
             InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
@@ -231,27 +252,14 @@ namespace Sapphire
             }
             else if (isColor)
             {
-                var swGo = new GameObject("Sw", typeof(RectTransform));
-                swGo.transform.SetParent(content, false);
-                var sr = (RectTransform)swGo.transform;
-                sr.anchorMin = sr.anchorMax = new Vector2(0f, 1f);
-                sr.pivot = new Vector2(0f, 1f);
-                sr.anchoredPosition = new Vector2(x + inputW + Gap, y);
-                sr.sizeDelta = new Vector2(RowH, RowH);
-                var swBg = swGo.AddComponent<RoundedRectGraphic>();
-                swBg.Radius = 5f;
-                Color col;
-                swBg.color = ColorUtility.TryParseHtmlString("#" + FormatVal(val).TrimStart('#'), out col)
-                    ? col : Color.magenta;
-                swBg.BorderWidth = 1f;
-                swBg.BorderColor = new Color(1f, 1f, 1f, 0.2f);
+                Swatch(content, FormatVal(val), x + inputW + Gap, y);
             }
             return y - (RowH + Gap);
         }
 
         // ── commits ──────────────────────────────────────────────────────────
 
-        private static void Commit(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi, string key, object v)
+        internal static void Commit(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi, string key, object v)
         {
             try
             {
@@ -394,6 +402,26 @@ namespace Sapphire
             bg.color = new Color(0f, 0f, 0f, 0.01f); // invisible but catches the click
             bg.raycastTarget = true;
             UI.ClickHandler.Attach(go, onClick);
+        }
+
+        // RowH-square colour chip for a hex string; magenta marks an unparseable value.
+        internal static void Swatch(RectTransform content, string hex, float x, float y)
+        {
+            var go = new GameObject("Sw", typeof(RectTransform));
+            go.transform.SetParent(content, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
+            r.pivot = new Vector2(0f, 1f);
+            r.anchoredPosition = new Vector2(x, y);
+            r.sizeDelta = new Vector2(RowH, RowH);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            Color col;
+            bg.color = ColorUtility.TryParseHtmlString("#" + (hex ?? "").TrimStart('#'), out col)
+                ? col : Color.magenta;
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.2f);
+            bg.raycastTarget = false;
         }
 
         internal static void Label(RectTransform content, string text, float x, float y, float w, float h, Color color)
