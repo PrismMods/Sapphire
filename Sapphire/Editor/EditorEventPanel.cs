@@ -14,8 +14,9 @@ namespace Sapphire
        (GCS.levelEventsInfo): localized labels, showIf gating, per-property disable
        toggles, and control types matched to the value. Floating + resizable.
 
-       Scope guard: shown only for a SINGLE selected floor. Selecting a decoration
-       un-hides the game panel — decoration editing still lives there for now. */
+       Scope guard: shown only for a SINGLE selected floor. Decorations are NOT this
+       panel's job — EditorDecoInspector owns them — but the game panel stays hidden for
+       them too, so a selected decoration can't resurrect the vanilla inspector on top. */
     internal static class EditorEventPanel
     {
         private static readonly PanelKit K = new PanelKit("SapphireEventPanel", 902, PanelW, focusable: true);
@@ -48,25 +49,24 @@ namespace Sapphire
                        && ed != null && !ed.playMode;
 
             int floor = -1;
-            bool decorationSelected = false;
             if (active)
             {
                 try
                 {
                     if (ed.selectedFloors != null && ed.selectedFloors.Count == 1 && ed.selectedFloors[0] != null)
                         floor = ed.selectedFloors[0].seqID;
-                    decorationSelected = ed.selectedDecorations != null && ed.selectedDecorations.Count > 0;
                 }
                 catch { }
             }
 
-            // hide the game panel only while WE are the inspector; decorations still need it
-            bool hideGame = active && !decorationSelected;
-            SyncGamePanelHidden(ed, hideGame);
+            // Sapphire owns the decoration inspector now (EditorDecoInspector) — a selected
+            // decoration must not resurrect the game's panel behind it (SelectDecoration sets
+            // decorationSelected, which un-hides it at alpha 1 with raycasts on).
+            SyncGamePanelHidden(ed, active);
 
             // Collapsible like the event selector: × collapses to a reopen chip (keeping the tile
             // SELECTED — better chart visibility, esp. in quick-chart), the chip reopens it.
-            bool baseWant = active && floor >= 0 && !decorationSelected;
+            bool baseWant = active && floor >= 0;
             ShowChip(baseWant && _userHidden, floor);
             if (!baseWant || _userHidden)
             {
