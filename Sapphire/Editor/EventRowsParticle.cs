@@ -329,5 +329,36 @@ namespace Sapphire
             EventRows.Swatch(c.Content, hex, x + fw + Gap, y);
             return y - (RowH + Gap);
         }
+
+        // ── ParticlePlayback ─────────────────────────────────────────────────
+
+        /* AddParticle's `playbackControl` is a transport, not a value: it has NO entry in
+           LevelEvent.data, so EventRows.Render must dispatch it before its TryGetValue bail.
+           Preview only — writes nothing, takes no SaveStateScope. */
+        internal static float PlaybackRow(EventRows.Ctx c, ADOFAI.LevelEvent evt,
+            float x, float w, float y)
+        {
+            EventRows.Label(c.Content, Loc.T("Particle preview"), x, y, w, 16f, Theme.TextMuted);
+            y -= 18f;
+            float bw = (w - Gap * 2f) / 3f;
+            EventRows.Cell(c.Content, Loc.T("Play"), x, y, bw, RowH, () => Transport(evt, 0), true);
+            EventRows.Cell(c.Content, Loc.T("Stop"), x + bw + Gap, y, bw, RowH, () => Transport(evt, 1), true);
+            EventRows.Cell(c.Content, Loc.T("Restart"), x + (bw + Gap) * 2f, y, bw, RowH, () => Transport(evt, 2), true);
+            return y - (RowH + Gap);
+        }
+
+        private static void Transport(ADOFAI.LevelEvent evt, int mode)
+        {
+            try
+            {
+                var p = scrDecorationManager.GetDecoration(evt) as scrParticleDecoration;
+                if (p == null) return;
+                if (mode == 2) { p.ResetParticle(evt, true); return; }
+                var ps = p.particleSystem;
+                if (ps == null) return;
+                if (mode == 0) ps.Play(true); else ps.Stop(true);
+            }
+            catch (Exception ex) { SapphireLog.Log("EventRows: particle transport failed: " + ex.Message); }
+        }
     }
 }

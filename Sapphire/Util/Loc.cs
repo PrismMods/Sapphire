@@ -383,6 +383,10 @@ namespace Sapphire
             [" placed"] = " 배치됨",
             ["Colour stops"] = "색상 지점",
             ["Alpha stops"] = "투명도 지점",
+            ["Particle preview"] = "입자 미리보기",
+            ["Play"] = "재생",
+            ["Stop"] = "정지",
+            ["Restart"] = "다시 시작",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short

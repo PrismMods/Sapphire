@@ -46,6 +46,11 @@ namespace Sapphire
                 var pt = ADOFAI.PropertyType.NotAssigned;
                 try { pt = pi.type; } catch { }
                 if (pt == ADOFAI.PropertyType.Note || pt == ADOFAI.PropertyType.Export) continue;
+                if (pt == ADOFAI.PropertyType.ParticlePlayback)
+                {
+                    y = EventRowsParticle.PlaybackRow(c, evt, Pad, c.PanelW - Pad * 2f, y);
+                    continue;
+                }
                 if (!c.ShowHidden)
                 {
                     bool hidden = false;
