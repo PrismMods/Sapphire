@@ -233,6 +233,7 @@ namespace Sapphire
                 EditorCameraPath.Tick(); Acc(9);
                 EditorPitch.Tick(); Acc(10);
                 EditorLevelMenu.Tick(); Acc(11);
+                EditorDecoInspector.Tick();
                 EditorGameSettings.Tick(); Acc(12);
                 EditorVfxPreview.Tick(); Acc(13);
                 EditorHelp.Tick(); Acc(14);
@@ -364,6 +365,7 @@ namespace Sapphire
             EditorCameraPath.Dispose();
             EditorPitch.Dispose();
             EditorLevelMenu.Dispose();
+            EditorDecoInspector.Dispose();
             EditorGameSettings.Dispose();
             EditorVfxPreview.Dispose();
             EditorHelp.Dispose();

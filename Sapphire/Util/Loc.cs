@@ -350,6 +350,7 @@ namespace Sapphire
             ["Place"] = "배치",
             ["Duplicate"] = "복제",
             ["+ Decoration"] = "+ 장식",
+            ["Decoration"] = "장식",
             ["(no decorations)"] = "(장식 없음)",
             ["(untagged)"] = "(태그 없음)",
             ["View: List"] = "보기: 목록",

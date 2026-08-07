@@ -152,6 +152,7 @@
         <Compile Include="Editor\EditorShapeLibrary.cs" />
         <Compile Include="Editor\PseudoBuild.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
+        <Compile Include="Editor\EditorDecoInspector.cs" />
         <Compile Include="Editor\EditorUiLayout.cs" />
         <Compile Include="Patches\Patches.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />

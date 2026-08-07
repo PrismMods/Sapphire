@@ -330,11 +330,6 @@ namespace Sapphire
         // Folders are COLLAPSED by default — track the ones the user has expanded.
         private static readonly System.Collections.Generic.HashSet<string> _decoExpanded =
             new System.Collections.Generic.HashSet<string>();
-        private static readonly EventRows.Ctx _decoCtx = new EventRows.Ctx
-        {
-            MarkDirty = () => _sig = 0,
-            AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } },
-        };
 
         private static System.Collections.Generic.List<ADOFAI.LevelEvent> DecoList(scnEditor ed)
         {
@@ -354,8 +349,17 @@ namespace Sapphire
         }
 
         private static string DecoTag(ADOFAI.LevelEvent evt) => DecoDataStr(evt, "tag");
+        internal static string DecoTagOf(ADOFAI.LevelEvent evt) => DecoTag(evt);
 
-        private static string DecoTypeName(ADOFAI.LevelEventType type)
+        // The inspector's × clears the browser's selection too, so "which decoration is
+        // selected" never has two answers.
+        internal static void ClearDecoSelection()
+        {
+            _decoSel = -1;
+            _sig = 0;
+        }
+
+        internal static string DecoTypeName(ADOFAI.LevelEventType type)
         {
             switch (type)
             {
@@ -450,6 +454,14 @@ namespace Sapphire
                 else ed.DeselectAllDecorations();
             }
             catch { }
+            try
+            {
+                var decos2 = DecoList(ed);
+                if (_decoSel >= 0 && decos2 != null && _decoSel < decos2.Count)
+                    EditorDecoInspector.Show(decos2[_decoSel]);
+                else EditorDecoInspector.Close();
+            }
+            catch { }
             _sig = 0;
         }
 
@@ -466,6 +478,7 @@ namespace Sapphire
                 if (dec != null) _decoExpanded.Add(DecoTag(dec));
                 // Keep the game's selectedDecorations in sync so Delete/gizmos act on this one.
                 if (_decoSel >= 0) SelectDecoEvent(ed, dec);
+                if (dec != null) EditorDecoInspector.Show(dec);
             }
             catch (Exception ex) { SapphireLog.Log("Deco add failed: " + ex.Message); }
             _sig = 0;
@@ -485,6 +498,7 @@ namespace Sapphire
             }
             catch (Exception ex) { SapphireLog.Log("Deco delete failed: " + ex.Message); }
             _decoSel = -1;
+            EditorDecoInspector.Close();
             _sig = 0;
         }
 
@@ -555,21 +569,9 @@ namespace Sapphire
                         () => SelectDeco(ed, i), false, TextAnchor.MiddleLeft);
                     if (sel) rbg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f);
                     y -= RowH + Gap;
-                    if (sel) y = DecoInspector(ed, decos[i], y);
                 }
             }
             return y;
-        }
-
-        // Inline property inspector for one decoration (its OWN event type), shared by list + grid.
-        private static float DecoInspector(scnEditor ed, ADOFAI.LevelEvent evt, float y)
-        {
-            var info = InfoOf(evt.eventType);   // image/text/object/particle differ
-            if (info == null) return y;
-            _decoCtx.Content = _content;
-            _decoCtx.PanelW = _ctx.PanelW;
-            y = EventRows.Render(_decoCtx, ed, info, evt, y);
-            return y - Gap;
         }
 
         // The game already loaded each decoration's sprite — reuse it (no file IO / path resolution).
@@ -608,8 +610,6 @@ namespace Sapphire
             }
             int rows = (decos.Count + cols - 1) / cols;
             y = gridTop - rows * (cellH + gap) - Gap;
-
-            if (_decoSel >= 0 && _decoSel < decos.Count) y = DecoInspector(ed, decos[_decoSel], y);
             return y;
         }
 
