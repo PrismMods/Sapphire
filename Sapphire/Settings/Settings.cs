@@ -192,6 +192,7 @@ namespace Sapphire
         public bool FeatToolsMods = true;     // MSM & MH tools (magic shape, track, deco)
         public bool FeatFileBar = true;       // Sapphire file chip / menu bar
         public bool FeatQuickChart = false;   // quick-chart mode (toolbar Q): keybinds + angle pad, hides timeline
+        public bool EditorKeyHints = true;    // bottom-right on-screen keybind card
 
         // ── granular facades over the categories (do not assign; read only) ──
         // Passive tile-angle readout: NOT a tool — stays up whenever the suite is on (its

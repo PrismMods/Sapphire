@@ -49,6 +49,8 @@ namespace Sapphire.UI.Pages
                 v => { s.FeatToolsMods = v; notify?.Invoke(); }, null);
             UIBuilder.Collapsible(content, "File menu bar", s.FeatFileBar,
                 v => { s.FeatFileBar = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, "On-screen key hints", s.EditorKeyHints,
+                v => { s.EditorKeyHints = v; notify?.Invoke(); }, null);
 
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeaderWithHelp(content, "Quick chart",

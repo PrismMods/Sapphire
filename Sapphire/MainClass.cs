@@ -251,6 +251,7 @@ namespace Sapphire
                 EditorQuickChart.Tick(); Acc(26);
                 EditorShapeLibrary.Tick(); Acc(27);
                 EditorMasterSwitch.Tick(); Acc(23);
+                EditorKeyHints.Tick();
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
                 // Run unconditionally: when the master switch turns off, the modules hide their
                 // panels this frame and TickDocks then finds nothing visible and tears its own
@@ -381,6 +382,7 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorMasterSwitch.Dispose();
+            EditorKeyHints.Dispose();
             EditorShapeLibrary.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             UI.EditorDropdown.Dispose();

@@ -130,6 +130,7 @@
         <Compile Include="Editor\EditorVfxPreview.cs" />
         <Compile Include="Editor\EditorHelp.cs" />
         <Compile Include="Editor\EditorHelpKo.cs" />
+        <Compile Include="Editor\EditorKeyHints.cs" />
         <Compile Include="Editor\ShapeLibrary.cs" />
         <Compile Include="Editor\ShapeStore.cs" />
         <Compile Include="Editor\EditorPresets.cs" />

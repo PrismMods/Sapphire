@@ -389,6 +389,21 @@ namespace Sapphire
             ["Play"] = "재생",
             ["Stop"] = "정지",
             ["Restart"] = "다시 시작",
+
+            // ── on-screen key hints card ──
+            ["On-screen key hints"] = "화면 단축키 도움말",
+            ["Sapphire settings"] = "Sapphire 설정",
+            ["Close panel / disarm tool"] = "패널 닫기 / 도구 해제",
+            ["Select tool"] = "도구 선택",
+            ["Previous tool"] = "이전 도구",
+            ["Saved tool slot"] = "저장한 도구 슬롯",
+            ["Save current tool to slot"] = "현재 도구를 슬롯에 저장",
+            ["Hold: free-angle aim"] = "누르는 동안 자유 각도 조준",
+            ["Set key count"] = "키 수 설정",
+            ["Swirl on/off"] = "소용돌이 켜기/끄기",
+            ["Halve / double speed"] = "속도 절반 / 두 배",
+            ["Pause event"] = "정지 이벤트",
+            ["Tile location event"] = "타일 위치 이벤트",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short
