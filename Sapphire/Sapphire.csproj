@@ -144,6 +144,7 @@
         <Compile Include="Editor\DecoToolsEngine.cs" />
         <Compile Include="Editor\EditorDecoTools.cs" />
         <Compile Include="Editor\EventRows.cs" />
+        <Compile Include="Editor\EventRowsParticle.cs" />
         <Compile Include="Editor\EditorQuickChart.cs" />
         <Compile Include="Editor\EditorEventPanel.cs" />
         <Compile Include="Editor\EditorEventSelector.cs" />
