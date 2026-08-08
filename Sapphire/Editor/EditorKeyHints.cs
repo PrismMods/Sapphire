@@ -45,7 +45,9 @@ namespace Sapphire
             new Hint(Quick,  "Shift+G", "Angle pad"),
         };
 
-        private static readonly PanelKit K = new PanelKit("SapphireKeyHints", 904, CardW);
+        // 935: top of PanelKit's docked band (901..), just below FloatZBase (936) — this card is
+        // non-focusable so it never gets a ReRankFocus slot and must not tie with one.
+        private static readonly PanelKit K = new PanelKit("SapphireKeyHints", 935, CardW);
         private const float CardW = 236f, RowH = 18f, Pad = 8f, HeadH = 20f;
         private static bool _collapsed;
         private static int _sig = int.MinValue;
