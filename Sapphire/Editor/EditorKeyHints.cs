@@ -31,7 +31,7 @@ namespace Sapphire
             // TickToolHotkeys is the only one of these three gated on selection; TickToolSwap
             // (,/./Shift+.) has no selection check at all — tagging it NoSel hid live hotkeys
             // the instant a tile was selected, the most common editing state.
-            new Hint(NoSel,  "1–0",     "Select tool", not: ToolNum),
+            new Hint(NoSel,  "1-0",     "Select tool", not: ToolNum),
             new Hint(Always, ",",       "Previous tool"),
             new Hint(Always, ".",       "Saved tool slot"),
             new Hint(Always, "Shift+.", "Save current tool to slot"),
