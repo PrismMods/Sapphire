@@ -8,8 +8,9 @@ namespace Sapphire
        (EditorLevelMenu's Decorations tab) owns the selection and hands the event here; this
        panel renders it and nothing else. It used to render INLINE under the browser's list
        row, which reflowed the list on every select and buried it entirely for a particle
-       (35+ properties). ShowHidden is on: the game marks most AddParticle properties
-       "control": "Hidden" because it edits them in a dedicated panel — this IS that panel. */
+       (35+ properties). The game marks most AddParticle properties "control": "Hidden"
+       because it edits them in a dedicated panel — this IS that panel, so EventRows
+       renders them all. */
     internal static class EditorDecoInspector
     {
         private static readonly PanelKit K = new PanelKit("SapphireDecoInspector", 903, PanelW, focusable: true);
@@ -39,7 +40,6 @@ namespace Sapphire
         private static readonly EventRows.Ctx _ctx = new EventRows.Ctx
         {
             PanelW = PanelW,
-            ShowHidden = true,
             MarkDirty = () => _sig = 0,
             AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } },
         };

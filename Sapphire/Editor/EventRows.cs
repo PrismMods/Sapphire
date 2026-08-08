@@ -22,9 +22,6 @@ namespace Sapphire
         {
             public RectTransform Content;     // rows are parented here
             public float PanelW;              // for full-width row math
-            // Decoration inspector only: AddParticle marks ~25 of its properties
-            // "control": "Hidden" and edits them in a dedicated panel. We render them.
-            public bool ShowHidden;
             public Action MarkDirty;          // toggles/enums need a content redraw
             public Action<scnEditor, ADOFAI.LevelEvent, ADOFAI.PropertyInfo> AfterCommit;
         }
@@ -51,12 +48,10 @@ namespace Sapphire
                     y = EventRowsParticle.PlaybackRow(c, evt, Pad, c.PanelW - Pad * 2f, y);
                     continue;
                 }
-                if (!c.ShowHidden)
-                {
-                    bool hidden = false;
-                    try { hidden = pi.controlType == ADOFAI.ControlType.Hidden; } catch { }
-                    if (hidden) continue;
-                }
+                // No ControlType.Hidden skip: the game hides those because IT edits them in
+                // dedicated panels, and Sapphire hides those panels — skipping them dropped 18
+                // rows (MoveCamera's randomization block, SetFilterAdvanced.targetType, …) with
+                // no fallback UI anywhere.
                 bool shown = true;
                 try { shown = pi.CheckIfShown(evt, null); } catch { }
                 if (!shown) continue;
