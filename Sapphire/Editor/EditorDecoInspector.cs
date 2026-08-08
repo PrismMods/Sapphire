@@ -35,13 +35,17 @@ namespace Sapphire
             _scroll = 0f;
         }
 
-        internal static void Close() { _evt = null; _sig = 0; }
+        // Nulling _built also drops the dead LevelEvent reference it was pinning after close.
+        internal static void Close() { _evt = null; _built = null; _sig = 0; }
 
         private static readonly EventRows.Ctx _ctx = new EventRows.Ctx
         {
             PanelW = PanelW,
             MarkDirty = () => _sig = 0,
-            AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } },
+            // AfterCommit fires for every committed edit (toggle, enum, or text like `tag`) —
+            // unlike MarkDirty, CommitText doesn't call that. Null _built here so a same-evt
+            // edit still rebuilds the shell and picks up the new title (e.g. tag changed).
+            AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } _built = null; },
         };
 
         internal static void Tick()
