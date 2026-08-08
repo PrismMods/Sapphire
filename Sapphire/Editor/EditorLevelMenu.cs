@@ -579,6 +579,32 @@ namespace Sapphire
             _sig = 0;
         }
 
+        // DuplicateDecorations() -> MultiCopyDecorations() + PasteDecorations(true), which ends
+        // with the GAME's selectedDecorations pointing at the copies while _decoSel/inspector
+        // still point at the original. Resync to the copy (last of the game's selection) the
+        // same way AddDeco resyncs a freshly-added row — same guard shape, leave selection alone
+        // on any miss rather than guessing.
+        private static void DuplicateDeco(scnEditor ed)
+        {
+            try
+            {
+                ed.DuplicateDecorations();
+                var sel = ed.selectedDecorations;
+                if (sel == null || sel.Count == 0) { _sig = 0; return; }
+                var copy = sel[sel.Count - 1];
+                var decos = DecoList(ed);
+                int idx = decos != null && copy != null ? decos.IndexOf(copy) : -1;
+                if (idx >= 0)
+                {
+                    _decoSel = idx;
+                    _decoExpanded.Add(DecoTag(copy));
+                    EditorDecoInspector.Show(copy);
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("Deco duplicate failed: " + ex.Message); }
+            _sig = 0;
+        }
+
         private static void DeleteDeco(scnEditor ed)
         {
             var decos = DecoList(ed);
@@ -615,7 +641,7 @@ namespace Sapphire
                 () => UI.EditorDropdown.Open((RectTransform)addBg.transform, typeLabels, 0,
                     i => AddDeco(ed, types[i])), true);
             EventRows.Cell(_content, Loc.T("Duplicate"), Pad + bw + Gap, y, bw, RowH,
-                () => { try { ed.DuplicateDecorations(); } catch { } _sig = 0; }, true);
+                () => { DuplicateDeco(ed); }, true);
             var delBg = EventRows.Cell(_content, Loc.T("Delete"), Pad + (bw + Gap) * 2f, y, bw, RowH,
                 () => DeleteDeco(ed), true);
             if (!hasSel) delBg.color = new Color(1f, 1f, 1f, 0.03f);   // nothing selected → inert
