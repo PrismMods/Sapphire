@@ -393,7 +393,6 @@ namespace Sapphire
             // ── on-screen key hints card ──
             // Own key, NOT the existing "Keys" (that one means "key count" for pseudo/zip tools) —
             // this card's header means "shortcuts" and the two must not share a Loc entry.
-            ["Shortcuts"] = "단축키",
             ["On-screen key hints"] = "화면 단축키 도움말",
             ["Sapphire settings"] = "Sapphire 설정",
             ["Close panel / disarm tool"] = "패널 닫기 / 도구 해제",

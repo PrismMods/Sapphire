@@ -1,14 +1,20 @@
 using System.Collections.Generic;
+using System.Text;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Sapphire.UI;
 
 namespace Sapphire
 {
-    /* Bottom-right key card. Rides above the event timeline (EditorEvents.BottomStripTop),
-       heights itself to its rows, and shows only the keys that are live in the CURRENT
-       context — the full list is long and mostly irrelevant at any one moment. The table is
-       hand-maintained here; EditorHelp's per-topic "Keys" sections are prose and parsing them
-       would break on the first rewrite. */
+    /* Bottom-right key hints — a plain TEXT OVERLAY, not a window: no plate, no header, no
+       close button, no drag, and nothing raycastable, so it can never eat a click over the
+       level. One TMP for the whole list rather than two labels per row.
+
+       Bottom-anchored above the event timeline (EditorEvents.BottomStripTop), so the list
+       grows UPWARD and is content-height-aware for free — no height math. Shows only the keys
+       live in the CURRENT context; the table is hand-maintained here because EditorHelp's
+       per-topic "Keys" sections are prose and would break on the first rewrite. */
     internal static class EditorKeyHints
     {
         // context bits
@@ -45,14 +51,12 @@ namespace Sapphire
             new Hint(Quick,  "Shift+G", "Angle pad"),
         };
 
-        // 935: top of PanelKit's docked band (901..), just below FloatZBase (936) — this card is
-        // non-focusable so it never gets a ReRankFocus slot and must not tie with one.
-        private static readonly PanelKit K = new PanelKit("SapphireKeyHints", 935, CardW);
-        private const float CardW = 236f, RowH = 18f, Pad = 8f, HeadH = 20f;
-        private static bool _collapsed;
+        private const float BoxW = 260f, Margin = 12f, KeyCol = 74f, FontSize = 11f;
+        private static GameObject _canvasGo, _textGo;
+        private static TextMeshProUGUI _tmp;
         private static int _sig = int.MinValue;
-        private static float _lastBottom = -1f;
-        private static readonly List<Hint> _rows = new List<Hint>();
+        private static float _lastBottom = float.NaN;
+        private static readonly StringBuilder _sb = new StringBuilder();
 
         internal static void Tick()
         {
@@ -61,18 +65,26 @@ namespace Sapphire
             try { ed = scnEditor.instance; } catch { }
             bool want = ed != null && !ed.playMode && MainClass.EditorSuiteOn
                         && s != null && s.EditorKeyHints;
-            if (!want) { K.Show(false); return; }
+            if (!want)
+            {
+                if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
+                return;
+            }
+
+            EnsureBuilt();
+            if (_canvasGo == null) return;
+            if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
             int ctx = Context(ed, s);
-            if (ctx != _sig || !K.Built) { _sig = ctx; Build(ctx); }
-            K.Show(true);
+            if (ctx != _sig) { _sig = ctx; Compose(ctx); }
             Place();
         }
 
         internal static void Dispose()
         {
-            K.Dispose();
-            _sig = int.MinValue; _lastBottom = -1f;
+            if (_canvasGo != null) Object.Destroy(_canvasGo);
+            _canvasGo = null; _textGo = null; _tmp = null;
+            _sig = int.MinValue; _lastBottom = float.NaN;
         }
 
         private static int Context(scnEditor ed, Settings s)
@@ -84,58 +96,69 @@ namespace Sapphire
             try { if (EditorToolbar.PseudoToolOn) ctx |= ToolNum; } catch { }
             try { if (s.FeatQuickChart) ctx |= Quick; } catch { }
             try { if (s.EditorTileActions && ed.SelectionIsSingle()) ctx |= FreeAngle; } catch { }
-            if (_collapsed) ctx |= 1 << 20;   // collapse is part of the layout signature
             return ctx;
         }
 
-        private static void Build(int ctx)
+        private static void EnsureBuilt()
         {
-            _rows.Clear();
-            foreach (var h in Table)
-                // Any-bit match on Ctx, but Not is a veto: a row whose keys are being consumed by
-                // an active tool must not claim it still does its normal job.
-                if ((h.Ctx == Always || (ctx & h.Ctx) != 0) && (h.Not == 0 || (ctx & h.Not) == 0))
-                    _rows.Add(h);
+            if (_canvasGo != null) return;
+            _canvasGo = new GameObject("SapphireKeyHints", typeof(RectTransform));
+            Object.DontDestroyOnLoad(_canvasGo);
+            var canvas = _canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 935;
+            var scaler = _canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            // No GraphicRaycaster: nothing here is interactive, so the EventSystem should never
+            // walk this canvas.
 
-            K.Rebuild(Loc.T("Shortcuts"), () => { _collapsed = !_collapsed; _sig = int.MinValue; },
-                new Vector2(0f, 0f));
-            float y = -HeadH - 2f;
-            if (!_collapsed)
-            {
-                const float keyW = 74f;
-                foreach (var h in _rows)
-                {
-                    K.Label(h.Keys, Pad, y, keyW, RowH, Theme.Text, 10.5f);
-                    K.Label(Loc.T(h.What), Pad + keyW + 4f, y, CardW - Pad * 2f - keyW - 4f, RowH,
-                        Theme.TextMuted, 10.5f);
-                    y -= RowH;
-                }
-                y -= 4f;
-            }
-            K.SetHeight(y);
-            _lastBottom = -1f;   // force a reposition at the new height
+            _textGo = new GameObject("Hints", typeof(RectTransform));
+            _textGo.transform.SetParent(_canvasGo.transform, false);
+            var r = (RectTransform)_textGo.transform;
+            // Bottom-right anchor + pivot: text is bottom-aligned, so the list grows upward and
+            // the rect height never has to be recomputed.
+            r.anchorMin = r.anchorMax = new Vector2(1f, 0f);
+            r.pivot = new Vector2(1f, 0f);
+            r.sizeDelta = new Vector2(BoxW, 0f);
+            _tmp = UIBuilder.Tmp(_textGo, "", FontSize, TextAnchor.LowerLeft, Theme.Text);
+            _tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            _tmp.lineSpacing = 6f;
+            // No background plate, so the text has to survive a bright level on its own.
+            TmpShadow.Attach(_textGo, new Color(0f, 0f, 0f, 0.85f), new Vector2(1.5f, -1.5f));
         }
 
-        /* Bottom-right, clear of the timeline strip. The card is deliberately position-LOCKED:
-           PanelKit gives its header a DragHandle, but this re-asserts the anchored position
-           every frame, so a drag snaps straight back. Only writes when something actually
-           moved — an unconditional transform write per frame re-batches the canvas. */
+        private static void Compose(int ctx)
+        {
+            if (_tmp == null) return;
+            string keyHex = ColorUtility.ToHtmlStringRGB(Theme.Text);
+            string descHex = ColorUtility.ToHtmlStringRGB(Theme.TextMuted);
+            _sb.Length = 0;
+            foreach (var h in Table)
+            {
+                // Any-bit match on Ctx, but Not is a veto: a row whose keys are being consumed by
+                // an active tool must not claim it still does its normal job.
+                if (!(h.Ctx == Always || (ctx & h.Ctx) != 0) || (h.Not != 0 && (ctx & h.Not) != 0)) continue;
+                if (_sb.Length > 0) _sb.Append('\n');
+                _sb.Append("<color=#").Append(keyHex).Append('>').Append(h.Keys).Append("</color>")
+                   .Append("<pos=").Append(KeyCol.ToString("0")).Append('>')
+                   .Append("<color=#").Append(descHex).Append('>').Append(Loc.T(h.What)).Append("</color>");
+            }
+            _tmp.text = _sb.ToString();
+        }
+
+        // Sits just above the timeline strip. Only writes when the strip actually moved — an
+        // unconditional transform write per frame re-batches the canvas.
         private static void Place()
         {
-            if (!K.Built) return;
             float strip = 0f;
             try { strip = EditorEvents.BottomStripTop; } catch { }
             float bottom = strip > 0f ? strip + 8f : 12f;
-            var r = (RectTransform)K.PanelGo.transform;
-            var canvas = (RectTransform)K.CanvasGo.transform;
-            float x = canvas.rect.width - r.sizeDelta.x - 12f;
-            float y = -(canvas.rect.height - bottom - r.sizeDelta.y);
-            var want = new Vector2(x, y);
-            if (!Mathf.Approximately(bottom, _lastBottom) || (r.anchoredPosition - want).sqrMagnitude > 0.5f)
-            {
-                r.anchoredPosition = want;
-                _lastBottom = bottom;
-            }
+            if (bottom == _lastBottom) return;
+            _lastBottom = bottom;
+            ((RectTransform)_textGo.transform).anchoredPosition = new Vector2(-Margin, bottom);
         }
     }
 }
