@@ -32,6 +32,66 @@ namespace Sapphire
 
         private static readonly Dictionary<string, string> Ko = new Dictionary<string, string>
         {
+
+            // ── settings panel (Ctrl+E) ──
+            ["Features"] = "기능",
+            ["FeaturesHelp"] = "기능 그룹을 통째로 켜고 끕니다. 에디터 우측 상단의 마스터 스위치가\n"
+                + "이 모두를 함께 제어하며, 여기서는 어떤 그룹을 켤지 고릅니다.",
+            ["Event timeline"] = "이벤트 타임라인",
+            ["Event panels"] = "이벤트 패널",
+            ["Sapphire tools"] = "Sapphire 도구",
+            ["MSM & MH tools"] = "MSM · MH 도구",
+            ["File menu bar"] = "파일 메뉴 바",
+            ["Key hints"] = "단축키 도움말",
+            ["Modes"] = "모드",
+            ["General"] = "일반",
+            ["Quick chart"] = "빠른 차팅",
+            ["Quick chart mode"] = "빠른 차팅 모드",
+            ["QuickChartHelp"] = "에디터 툴바의 Q 버튼으로 켜는 차팅 모드입니다. 켜져 있는 동안에는 화면을\n"
+                + "비우기 위해 이벤트 타임라인이 숨겨지고 아래 단축키가 활성화됩니다.",
+            ["I — swirl on/off on the selected tile(s)"] = "I — 선택한 타일의 소용돌이 켜기/끄기",
+            ["O — set speed on the selected tile"] = "O — 선택한 타일에 속도 설정",
+            ["[ / ] — halve / double that tile's speed"] = "[ / ] — 해당 타일 속도를 절반 / 두 배로",
+            ["Shift+P — Pause event (prompts for beats)"] = "Shift+P — 정지 이벤트 (박자를 입력받습니다)",
+            ["Shift+L — tile-location event (prompts X / Y)"] = "Shift+L — 타일 위치 이벤트 (X / Y를 입력받습니다)",
+            ["Shift+G — angle pad: space-separated RELATIVE angles (180 = straight; math ok), Place a whole run"]
+                = "Shift+G — 각 패드: 공백으로 구분한 상대 각도를 입력해 (180 = 직진, 수식 가능) 한 번에 배치합니다",
+            ["These keys never clash with the game's tile placement."]
+                = "이 키들은 게임의 타일 배치 키와 절대 겹치지 않습니다",
+            ["Editor mode"] = "에디터 모드",
+            ["EditorModeHelp1"] = "차팅을 위한 깨끗한 화면입니다. 에디터에 있는 동안(플레이 테스트 포함)\n"
+                + "Sapphire 오버레이와 키 뷰어가 물러나고, 게임의 난이도·노페일·자동플레이\n"
+                + "아이콘과 자동플레이 문구, 판정 오차 미터가 숨겨집니다.",
+            ["EditorModeHelp2"] = "설정은 하나도 바뀌지 않습니다. 에디터를 나가거나 이 항목을 끄면\n"
+                + "모두 원래대로 돌아옵니다.",
+            ["Autoplay pause"] = "자동플레이 일시정지",
+            ["Enable autoplay pause"] = "자동플레이 일시정지 사용",
+            ["AutoplayHelp"] = "에디터에서 플레이 테스트하는 동안 자동플레이를 멈추고 다시 재생합니다\n"
+                + "(게임은 Space로 고정되어 있습니다). 버튼을 누른 뒤 원하는 키를 눌러 바꿉니다.",
+            ["Press a key…"] = "키를 누르세요…",
+            ["Pause key"] = "일시정지 키",
+            ["Language"] = "언어",
+            ["LanguageHelp"] = "Sapphire 에디터 UI와 도움말의 언어입니다. 자동은 게임 설정을 따릅니다.",
+            ["Auto (follow game)"] = "자동 (게임 설정)",
+            ["English"] = "English",
+            ["Invert scroll direction"] = "스크롤 방향 반전",
+            ["Updates"] = "업데이트",
+            ["UpdatesHelp"] = "Sapphire는 세션마다 한 번 GitHub 릴리스를 확인하고, 더 새로운 빌드가 있으면\n"
+                + "토스트를 띄웁니다. 토스트를 누르면 내려받아 이 사본 위에 설치하며, 새 버전은\n"
+                + "게임을 다시 시작한 뒤 적용됩니다. 내려받은 파일은 GitHub가 게시한 체크섬으로\n"
+                + "검증합니다.",
+            ["Installed"] = "설치됨",
+            ["Check for updates automatically"] = "업데이트 자동 확인",
+            ["Include pre-release builds"] = "시험판 빌드 포함",
+            ["Check now"] = "지금 확인",
+            ["Un-skip"] = "건너뛰기 해제",
+            ["Checking…"] = "확인 중…",
+            ["Up to date"] = "최신 버전입니다",
+            ["Available"] = "새 버전",
+            ["Downloading…"] = "내려받는 중…",
+            ["Installed — restart the game to apply"] = "설치됨 — 게임을 다시 시작하면 적용됩니다",
+            ["Failed"] = "실패",
+            ["Not checked yet"] = "아직 확인하지 않음",
             // ── toolbar tooltips / tool names ──
             ["Circular path"] = "원형 경로",
             ["Free angle"] = "자유 각도",
@@ -110,6 +170,23 @@ namespace Sapphire
             ["All"] = "전체",
             ["None"] = "없음",
             ["Paste filter"] = "붙여넣기 필터",
+
+            // ── bulk edit / batch event actions ──
+            ["Bulk edit"] = "일괄 편집",
+            ["matching events"] = "개 이벤트 일치",
+            ["field(s) set"] = "개 항목 지정됨",
+            ["Tag filter (blank = all)"] = "태그 필터 (비우면 전체)",
+            ["Apply to"] = "적용 대상",
+            ["Reset fields"] = "항목 초기화",
+            ["events"] = "개 이벤트",
+            ["selected"] = "개 선택됨",
+            ["Delete all events"] = "모든 이벤트 삭제",
+            ["Delete all events on this tile?"] = "이 타일의 모든 이벤트를 삭제할까요?",
+            ["Delete selected events?"] = "선택한 이벤트를 삭제할까요?",
+            ["Delete this event group?"] = "이 이벤트 그룹을 삭제할까요?",
+            ["Nothing to apply — change a field first, or widen the tag filter."]
+                = "적용할 항목이 없습니다 — 값을 먼저 바꾸거나 태그 필터를 넓히세요.",
+            ["OK"] = "확인",
             ["Event save inspired by EditorCustomModules"] = "이벤트 저장 기능은 EditorCustomModules에서 영감을 받았습니다",
             ["(no events)"] = "(이벤트 없음)",
             ["Gameplay"] = "게임플레이",
@@ -369,7 +446,6 @@ namespace Sapphire
             ["Update installed"] = "업데이트 설치됨",
             ["Restart the game to apply it"] = "게임을 재시작하면 적용됩니다",
             ["Update failed"] = "업데이트 실패",
-            ["Preview — nothing will be installed"] = "미리보기 — 실제로 설치되지 않습니다",
             ["GitHub rate limit — try again later"] = "GitHub 요청 제한 — 나중에 다시 시도하세요",
             ["Release feed not found"] = "릴리스 목록을 찾을 수 없음",
             ["No connection"] = "연결할 수 없음",
@@ -397,6 +473,9 @@ namespace Sapphire
             ["Sapphire settings"] = "Sapphire 설정",
             ["Close panel / disarm tool"] = "패널 닫기 / 도구 해제",
             ["Select tool"] = "도구 선택",
+            ["Pan camera"] = "카메라 이동",
+            ["Add/remove event row"] = "이벤트 행 추가/제거",
+            ["Select event range"] = "이벤트 범위 선택",
             ["Previous tool"] = "이전 도구",
             ["Saved tool slot"] = "저장한 도구 슬롯",
             ["Save current tool to slot"] = "현재 도구를 슬롯에 저장",

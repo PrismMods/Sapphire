@@ -18,13 +18,11 @@ Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens
 ## Architecture
 
 - `MainClass` — UMM entry; `SapphireTicker` (DDOL MonoBehaviour) drives all per-frame
-  `Tick()`s (EditorEvents, EditorSkin, EditorChrome, EditorUiLayout, Tweaks).
+  `Tick()`s (EditorEvents, EditorSkin, EditorChrome, Tweaks).
 - `Util/EditorEvents.cs` — event timeline strip (bottom-docked), transport, mode cluster.
 - `Util/EditorChrome.cs` — file chip/menu, panel rail, event dock (proxies the game's own
   buttons; never reimplements game logic).
 - `Util/EditorSkin.cs` — dark reskin of the game's editor UI (reversible, guard-based).
-- `Util/EditorUiLayout.cs` + `UI/EditorUiEditor.cs` — wrapper-based layout overrides +
-  on-screen drag editor for game editor chrome.
 - `Util/Tweaks.cs` — autoplay-pause key (transpiler target), Editor Mode, tile angle.
 - `UI/` — panel framework carried from Bismuth (UICore/UIBuilder/TabRail/PageStack/Theme).
   Settings tab: `UI/Pages/PageEditor.cs`.

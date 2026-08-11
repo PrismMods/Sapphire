@@ -117,6 +117,7 @@ namespace Sapphire
             sig = sig * 31 + _muMode;
             sig = sig * 31 + (_muCentral ? 1 : 0);
             sig = sig * 31 + (_muAppear ? 1 : 0);
+            if (K.SyncWidth()) _layoutSig = NoSig;   // resized/docked → rows relayout
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -265,6 +266,7 @@ namespace Sapphire
 
         // ── UI ───────────────────────────────────────────────────────────────
 
+        private const float MinW = 240f;
         private const float PanelW = 332f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
         private const float LblW = 104f;
@@ -272,10 +274,11 @@ namespace Sapphire
         private static void Build()
         {
             K.Rebuild(Loc.T("Track Tools"), Toggle, new Vector2(340f, -120f));
+            ResizeHandle.AttachWidth((RectTransform)K.PanelGo.transform, MinW);
 
             float y = -34f;
             var tabNames = new[] { Loc.T("Fade in"), Loc.T("Fade out"), Loc.T("Explode"), Loc.T("Size"), Loc.T("Multi"), Loc.T("Generate") };
-            float tabW = (PanelW - Pad * 2f - Gap * 2f) / 3f;
+            float tabW = (K.W - Pad * 2f - Gap * 2f) / 3f;
             for (int i = 0; i < 6; i++)
             {
                 int idx = i;
@@ -327,7 +330,7 @@ namespace Sapphire
             { float f; if (ExprEval.TryParseFloat(v, out f)) s.AngleOffset = f; });
             y = EaseRow(y, () => s.Ease, v => s.Ease = v);
             y -= 4f;
-            K.Cell(Loc.T("Apply"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoFade, true, true);
+            K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoFade, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
@@ -339,13 +342,13 @@ namespace Sapphire
             y = RandRow(y, Loc.T("Planets"), () => _szPlaOn, v => _szPlaOn = v, () => _szPlaA, () => _szPlaB, (a, b) => { _szPlaA = a; _szPlaB = b; });
             y = EaseRow(y, () => _szEase, v => _szEase = v);
             y -= 4f;
-            K.Cell(Loc.T("Apply"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoSize, true, true);
+            K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoSize, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
         private static float BuildMulti(float y)
         {
-            float half = (PanelW - Pad * 2f - Gap) * 0.5f;
+            float half = (K.W - Pad * 2f - Gap) * 0.5f;
             K.Cell(Loc.T("Copies"), Pad, y, half, RowH, () => { _muMode = 0; Refresh(); }, false).color = PanelKit.Tint(_muMode == 0);
             K.Cell(Loc.T("Animate"), Pad + half + Gap, y, half, RowH, () => { _muMode = 1; Refresh(); }, false).color = PanelKit.Tint(_muMode == 1);
             y -= RowH + Gap;
@@ -372,7 +375,7 @@ namespace Sapphire
                 ToggleRow(y, Loc.T("Parallax affects planets"), _muParaPlanet, v => _muParaPlanet = v);
                 y -= RowH + Gap;
                 y -= 4f;
-                K.Cell(Loc.T("Create copies"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoMulti, true, true);
+                K.Cell(Loc.T("Create copies"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoMulti, true, true);
             }
             else
             {
@@ -400,7 +403,7 @@ namespace Sapphire
                 { float f; if (ExprEval.TryParseFloat(v, out f)) _muAngle = f; });
                 y = EaseRow(y, () => _muEase, v => _muEase = v);
                 y -= 4f;
-                K.Cell(Loc.T("Apply"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoMulti, true, true);
+                K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoMulti, true, true);
             }
             return y - (RowH + 2f) - 10f;
         }
@@ -417,14 +420,14 @@ namespace Sapphire
             K.Cell(Loc.T("End"), x + 62f + Gap + 42f + Gap, y, 42f, RowH, () => { _gtAt = -1; Refresh(); PreviewRefresh(); }, true);
             y -= RowH + Gap;
 
-            K.Label(Loc.T("Angles (T = twirl)"), Pad, y, PanelW - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
-            K.InputField(Pad, y, PanelW - Pad * 2f, _gtAngles, v => { _gtAngles = v; PreviewRefresh(); });
+            K.Label(Loc.T("Angles (T = twirl)"), Pad, y, K.W - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
+            K.InputField(Pad, y, K.W - Pad * 2f, _gtAngles, v => { _gtAngles = v; PreviewRefresh(); });
             y -= RowH + Gap;
             y = FieldRow(y, Loc.T("Repeat"), _gtCount.ToString(), v =>
             { int n; if (ExprEval.TryParseInt(v, out n)) { _gtCount = Math.Max(1, n); PreviewRefresh(); } });
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _gtPreview, v => { _gtPreview = v; });
             y -= RowH + Gap + 4f;
-            K.Cell(Loc.T("Generate"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoGenerate, true, true);
+            K.Cell(Loc.T("Generate"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoGenerate, true, true);
             return y - (RowH + 2f) - 10f;
         }
 

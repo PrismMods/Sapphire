@@ -38,10 +38,14 @@ namespace Sapphire
             // (,/./Shift+.) has no selection check at all — tagging it NoSel hid live hotkeys
             // the instant a tile was selected, the most common editing state.
             new Hint(NoSel,  "1-0",     "Select tool", not: ToolNum),
+            // Tweaks.PanEligible bails once anything is selected, so this is NoSel too.
+            new Hint(NoSel,  "WASD",     "Pan camera"),
             new Hint(Always, ",",       "Previous tool"),
             new Hint(Always, ".",       "Saved tool slot"),
             new Hint(Always, "Shift+.", "Save current tool to slot"),
             new Hint(FreeAngle, "Alt",  "Hold: free-angle aim"),
+            new Hint(Sel,    "Ctrl+click",  "Add/remove event row"),
+            new Hint(Sel,    "Shift+click", "Select event range"),
             new Hint(ToolNum,"Digits",  "Set key count"),
             new Hint(Quick,  "I",       "Swirl on/off"),
             new Hint(Quick,  "O",       "Set speed"),
@@ -106,7 +110,10 @@ namespace Sapphire
             Object.DontDestroyOnLoad(_canvasGo);
             var canvas = _canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 935;
+            // Above every Sapphire surface (help is 949, dock chrome 948, popups 945-947):
+            // the hints are a reference you look at WHILE something else is open, so they must
+            // never be buried. Nothing here raycasts, so sitting on top costs no interaction.
+            canvas.sortingOrder = 960;
             var scaler = _canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
@@ -147,15 +154,24 @@ namespace Sapphire
                    .Append("<color=#").Append(descHex).Append('>').Append(Loc.T(h.What)).Append("</color>");
             }
             _tmp.text = _sb.ToString();
+            /* Right-flush with the mode chips below. The rect is right-anchored but the text is
+               left-aligned inside it (the <pos> key column needs a left origin), so a fixed BoxW
+               left a ragged gap on the right — shrink the rect to the text instead. Clamped: a
+               bogus preferred width must never push the list off-screen. */
+            _tmp.ForceMeshUpdate();
+            ((RectTransform)_textGo.transform).sizeDelta =
+                new Vector2(Mathf.Clamp(_tmp.preferredWidth, KeyCol + 80f, BoxW), 0f);
         }
 
-        // Sits just above the timeline strip. Only writes when the strip actually moved — an
-        // unconditional transform write per frame re-batches the canvas.
+        // Sits just above the timeline strip — and above the mode chips (EDITOR / NO FAIL /
+        // AUTO), which share this corner and used to sit under the hint text. Only writes when
+        // the strip actually moved — an unconditional transform write per frame re-batches the
+        // canvas.
         private static void Place()
         {
-            float strip = 0f;
-            try { strip = EditorEvents.BottomStripTop; } catch { }
-            float bottom = strip > 0f ? strip + 8f : 12f;
+            float below = 0f;
+            try { below = EditorEvents.BottomChromeTop; } catch { }
+            float bottom = below > 0f ? below : 12f;
             if (bottom == _lastBottom) return;
             _lastBottom = bottom;
             ((RectTransform)_textGo.transform).anchoredPosition = new Vector2(-Margin, bottom);

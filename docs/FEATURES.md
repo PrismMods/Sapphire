@@ -162,7 +162,6 @@ release asset, and archive entries that would escape the mods folder are rejecte
 - **Dark reskin** of the game's editor UI (reversible, guard-based) with a Sapphire-blue accent.
 - **File chip / menu**, panel rail, event dock — modern chrome that proxies the game's own
   buttons (never reimplements game logic).
-- **Layout overrides + on-screen drag editor** for game editor chrome.
 - **Floating windows** — level-settings popup and dialogs are blocker-less, draggable, and
   remember their position (some also resize).
 - **On-screen key hints** — a card in the bottom-right lists the keys live in the current

@@ -138,7 +138,7 @@ namespace Sapphire
             _viewport = (RectTransform)vpGo.transform;
             _viewport.anchorMin = new Vector2(0f, 0f);
             _viewport.anchorMax = new Vector2(1f, 1f);
-            _viewport.offsetMin = new Vector2(0f, 8f);
+            _viewport.offsetMin = new Vector2(0f, 3f);
             _viewport.offsetMax = new Vector2(0f, -HeaderH - 2f);
             vpGo.AddComponent<RectMask2D>();
             var vpImg = vpGo.AddComponent<Image>();

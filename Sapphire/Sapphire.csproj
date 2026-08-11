@@ -92,6 +92,8 @@
         <Compile Include="Settings\Settings.cs" />
         <Compile Include="Settings\ColorGradient.cs" />
         <Compile Include="UI\UIBuilder.cs" />
+        <Compile Include="UI\ConfirmBox.cs" />
+        <Compile Include="Editor\EditorBulkEdit.cs" />
         <Compile Include="UI\UICore.cs" />
         <Compile Include="UI\TabRail.cs" />
         <Compile Include="UI\PageStack.cs" />
@@ -99,7 +101,6 @@
         <Compile Include="UI\DragHandle.cs" />
         <Compile Include="UI\ResizeHandle.cs" />
         <Compile Include="Editor\EditorHandles.cs" />
-        <Compile Include="Editor\EditorUiEditor.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
@@ -154,7 +155,6 @@
         <Compile Include="Editor\PseudoBuild.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorDecoInspector.cs" />
-        <Compile Include="Editor\EditorUiLayout.cs" />
         <Compile Include="Patches\Patches.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

@@ -75,6 +75,7 @@ namespace Sapphire
             sig = sig * 31 + _tab;
             sig = sig * 31 + _mMode;
             sig = sig * 31 + (_mReshape ? 1 : 0);
+            if (K.SyncWidth()) _layoutSig = NoSig;   // resized/docked → rows relayout
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -214,6 +215,7 @@ namespace Sapphire
 
         // ── UI ──────────────────────────────────────────────────────────────
 
+        private const float MinW = 240f;
         private const float PanelW = 292f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
@@ -221,10 +223,11 @@ namespace Sapphire
         {
             K.LblW = 92f;
             K.Rebuild(Loc.T("Magic Shape"), Toggle, new Vector2(340f, -120f));
+            ResizeHandle.AttachWidth((RectTransform)K.PanelGo.transform, MinW);
 
             float y = -34f;
 
-            float tabW = (PanelW - Pad * 2f - Gap * 2f) / 3f;
+            float tabW = (K.W - Pad * 2f - Gap * 2f) / 3f;
             var tabNames = new[] { Loc.T("Multiply"), Loc.T("Create"), Loc.T("Rotate") };
             for (int i = 0; i < 3; i++)
             {
@@ -248,7 +251,7 @@ namespace Sapphire
 
         private static float BuildMultiply(float y)
         {
-            float half = (PanelW - Pad * 2f - Gap) * 0.5f;
+            float half = (K.W - Pad * 2f - Gap) * 0.5f;
             K.Cell(Loc.T("Target BPM"), Pad, y, half, RowH, () => { _mMode = 0; }, false)
                 .color = PanelKit.Tint(_mMode == 0);
             K.Cell(Loc.T("Multiplier"), Pad + half + Gap, y, half, RowH, () => { _mMode = 1; }, false)
@@ -278,7 +281,7 @@ namespace Sapphire
             }
 
             y -= 4f;
-            K.Cell(Loc.T("Apply to selection"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoMultiply, true, true);
+            K.Cell(Loc.T("Apply to selection"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoMultiply, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
@@ -291,7 +294,7 @@ namespace Sapphire
             y -= RowH + Gap;
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _cPreview, v => { _cPreview = v; });
             y -= RowH + Gap + 4f;
-            K.Cell(Loc.T("Create shape"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoCreate, true, true);
+            K.Cell(Loc.T("Create shape"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoCreate, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
@@ -301,7 +304,7 @@ namespace Sapphire
             y = FieldRow(y, Loc.T("Degrees"), _rDeg.ToString("0.###"), v =>
             { float f; if (ExprEval.TryParseFloat(v, out f)) _rDeg = f; });
             y -= 4f;
-            K.Cell(Loc.T("Rotate range"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoRotate, true, true);
+            K.Cell(Loc.T("Rotate range"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoRotate, true, true);
             return y - (RowH + 2f) - 10f;
         }
 

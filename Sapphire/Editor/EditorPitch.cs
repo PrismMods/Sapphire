@@ -40,7 +40,9 @@ namespace Sapphire
                 float y = 12f;
                 float top = EditorEvents.BottomStripTop;
                 if (top > 0f) y = top + 8f;
-                var pos = new Vector2(12f, y);
+                // Clear the left dock — the bar is screen-anchored, so a docked panel sat on top
+                // of it. 0 when nothing is docked left.
+                var pos = new Vector2(12f + UI.PanelKit.LeftDockWidth, y);
                 if (_rootRect.anchoredPosition != pos) _rootRect.anchoredPosition = pos;
             }
             catch { }

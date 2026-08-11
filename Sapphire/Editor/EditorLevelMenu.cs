@@ -94,7 +94,10 @@ namespace Sapphire
                 if (!inEditor) _sig = 0;
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
+            // ESC dismisses this as a POPUP only. Docked, it is workspace furniture, and ESC is
+            // the editor's constantly-pressed deselect key — it kept knocking the panel out of
+            // the dock, forcing a re-click on the rail chip to get it back.
+            if (K.DockSide == 0 && Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
 
             // same per-frame throttle as the event panel — Sig hashes the tab's settings data,
             // so only recompute on a tab click (_sig=0), first build, or a periodic rescan
@@ -247,7 +250,7 @@ namespace Sapphire
 
         private static void BuildShell()
         {
-            K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -40f));
+            K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -72f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
             ResizeHandle.AttachAll(panel, true, 300f, 320f); // allow narrow → rail collapses to icons
@@ -260,8 +263,8 @@ namespace Sapphire
             _railHost = (RectTransform)railGo.transform;
             _railHost.anchorMin = new Vector2(0f, 0f); _railHost.anchorMax = new Vector2(0f, 1f);
             _railHost.pivot = new Vector2(0f, 1f);
-            _railHost.offsetMin = new Vector2(Pad, Pad);
-            _railHost.offsetMax = new Vector2(Pad + RailW, -HeaderH - 2f);
+            _railHost.offsetMin = new Vector2(Pad, 3f);
+            _railHost.offsetMax = new Vector2(Pad + RailW, -HeaderH);
 
             // right scroll viewport
             var vpGo = new GameObject("View", typeof(RectTransform));
@@ -269,8 +272,8 @@ namespace Sapphire
             _viewport = (RectTransform)vpGo.transform;
             _viewport.anchorMin = new Vector2(0f, 0f);
             _viewport.anchorMax = new Vector2(1f, 1f);
-            _viewport.offsetMin = new Vector2(Pad + RailW + Pad, Pad);
-            _viewport.offsetMax = new Vector2(-Pad, -HeaderH - 2f);
+            _viewport.offsetMin = new Vector2(Pad + RailW + Pad, 3f);
+            _viewport.offsetMax = new Vector2(-Pad, -HeaderH);
             vpGo.AddComponent<RectMask2D>();
             var vpImg = vpGo.AddComponent<Image>();
             vpImg.color = new Color(0f, 0f, 0f, 0.01f);
@@ -292,8 +295,8 @@ namespace Sapphire
             // frame), so rows always use the correct content width.
             float railW = CurRailW();
             bool collapsed = railW < 100f;
-            if (_railHost != null) _railHost.offsetMax = new Vector2(Pad + railW, -HeaderH - 2f);
-            if (_viewport != null) _viewport.offsetMin = new Vector2(Pad + railW + Pad, Pad);
+            if (_railHost != null) _railHost.offsetMax = new Vector2(Pad + railW, -HeaderH);
+            if (_viewport != null) _viewport.offsetMin = new Vector2(Pad + railW + Pad, 3f);
             BuildRail(collapsed);
             if (_content == null) return;
             for (int i = _content.childCount - 1; i >= 0; i--)

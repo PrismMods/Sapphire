@@ -24,6 +24,9 @@ namespace Sapphire
             public float PanelW;              // for full-width row math
             public Action MarkDirty;          // toggles/enums need a content redraw
             public Action<scnEditor, ADOFAI.LevelEvent, ADOFAI.PropertyInfo> AfterCommit;
+            // The event being rendered isn't in the chart (bulk-edit template): skip the undo
+            // scope, or every keystroke on a scratch object pushes a level state nobody can use.
+            public bool Scratch;
         }
 
         // render every visible property of `evt` (from its registry info), return ending y
@@ -94,8 +97,8 @@ namespace Sapphire
                 {
                     try
                     {
-                        using (new SaveStateScope(ed))
-                            evt.disabled[key] = !isDisabled;
+                        if (c.Scratch) evt.disabled[key] = !isDisabled;
+                        else using (new SaveStateScope(ed)) evt.disabled[key] = !isDisabled;
                         c.AfterCommit?.Invoke(ed, evt, pi);
                     }
                     catch (Exception ex2) { SapphireLog.Log("EventRows: disable toggle failed: " + ex2.Message); }
@@ -269,8 +272,8 @@ namespace Sapphire
         {
             try
             {
-                using (new SaveStateScope(ed))
-                    evt[key] = v;
+                if (c.Scratch) evt[key] = v;
+                else using (new SaveStateScope(ed)) evt[key] = v;
                 c.AfterCommit?.Invoke(ed, evt, pi);
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: edit failed: " + ex.Message); }
@@ -302,8 +305,8 @@ namespace Sapphire
             try
             {
                 object v = CoerceLike(raw, oldVal);
-                using (new SaveStateScope(ed))
-                    evt[key] = v;
+                if (c.Scratch) evt[key] = v;
+                else using (new SaveStateScope(ed)) evt[key] = v;
                 c.AfterCommit?.Invoke(ed, evt, pi);
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: edit failed: " + ex.Message); }

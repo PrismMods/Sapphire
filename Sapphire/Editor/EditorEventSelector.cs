@@ -102,10 +102,10 @@ namespace Sapphire
 
         private static float BottomInset()
         {
-            float strip = 0f;
-            try { strip = EditorEvents.BottomStripTop; } catch { }
-            // clear the button rows riding above the strip (they hide with it)
-            return strip > 0f ? strip + 100f : 12f;
+            // Measured top of the whole bottom chrome — strip plus the chip rows above it.
+            float below = 0f;
+            try { below = EditorEvents.BottomChromeTop; } catch { }
+            return below > 0f ? below : 12f;
         }
 
         internal static void Dispose()

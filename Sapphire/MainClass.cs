@@ -82,7 +82,6 @@ namespace Sapphire
 
         private static bool OnUnload(UnityModManager.ModEntry modEntry)
         {
-            if (EditorUiEditor.IsActive) EditorUiEditor.Close();
             OnSaveGUI(modEntry);
             if (IsEnabled) StopMod(modEntry);
             return true;
@@ -178,7 +177,9 @@ namespace Sapphire
                restart per module per frame. */
             private static readonly string[] PerfNames =
             {
-                "Tweaks", "EditorEvents", "EditorUiLayout", "EditorChrome",
+                // Slot 2 is retired with the editor-UI layout module; Acc(2) is never called, so it
+                // stays at 0 and the report (which skips sub-threshold slots) never prints it.
+                "Tweaks", "EditorEvents", "(retired)", "EditorChrome",
                 "EditorInspector", "EditorPopups", "EditorToolbar", "EditorTileMenu",
                 "EditorCopyPanel", "EditorCameraPath", "EditorPitch", "EditorLevelMenu",
                 "EditorGameSettings", "EditorVfxPreview", "EditorHelp", "EditorPresets",
@@ -223,7 +224,6 @@ namespace Sapphire
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
-                EditorUiLayout.Tick(); Acc(2);
                 EditorChrome.Tick(); Acc(3);
                 EditorInspector.Tick(); Acc(4);
                 EditorPopups.Tick(); Acc(5);
@@ -246,6 +246,7 @@ namespace Sapphire
                 EditorTrackTools.Tick(); Acc(21);
                 EditorDecoTools.Tick(); Acc(22);
                 EditorEventPanel.Tick(); Acc(24);
+                EditorBulkEdit.Tick();
                 EditorEventSelector.Tick(); Acc(25);
                 UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
                 EditorQuickChart.Tick(); Acc(26);
@@ -258,9 +259,9 @@ namespace Sapphire
                 // chrome (dividers / drop indicator / canvas) down — gating it on EditorSuiteOn
                 // left that chrome stranded on screen.
                 {
-                    float strip = 0f;
-                    try { strip = EditorEvents.BottomStripTop; } catch { }
-                    UI.PanelKit.TickDocks(56f, strip > 0f ? strip + 100f : 12f);
+                    float below = 0f;
+                    try { below = EditorEvents.BottomChromeTop; } catch { }
+                    UI.PanelKit.TickDocks(56f, below > 0f ? below : 12f);
                 }
 
                 if (++_perfFrames >= 900) // ≈15s at 60fps
@@ -353,7 +354,7 @@ namespace Sapphire
         // selection on its next Tick, so this is reused two ways: StopMod (final teardown) and
         // the language-flip handler (drop the overlays so they rebuild with the new language).
         // Deliberately excludes non-overlay state that can't be recreated cheaply (Tweaks'
-        // editor-mode / control-tip / tile-angle patches, EditorUiLayout's game-UI wrappers).
+        // editor-mode / control-tip / tile-angle patches).
         private static void DisposeEditorModules()
         {
             EditorEvents.Dispose();
@@ -367,6 +368,8 @@ namespace Sapphire
             EditorPitch.Dispose();
             EditorLevelMenu.Dispose();
             EditorDecoInspector.Dispose();
+            EditorBulkEdit.Dispose();
+            UI.ConfirmBox.Close();
             EditorGameSettings.Dispose();
             EditorVfxPreview.Dispose();
             EditorHelp.Dispose();
@@ -417,9 +420,7 @@ namespace Sapphire
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();
             Tweaks.DisposeTileAngle();
-            EditorUiLayout.RestoreAll();
             DisposeEditorModules();
-            EditorUiEditor.Close();
             UI.UpdateToast.Dispose();
             UnpatchOurId();
             if (_tickerGo != null)

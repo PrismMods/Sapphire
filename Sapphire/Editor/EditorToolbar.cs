@@ -1316,6 +1316,10 @@ namespace Sapphire
         // The presets menu reads/loads the capture buffer directly.
         internal static System.Collections.Generic.List<ADOFAI.LevelEvent> InspectorBuffer => _inspEvents;
 
+        // Copy actions elsewhere (the event panel's row/group copy) arm the tool for the user, so
+        // a captured set is pasteable with the next right-click instead of needing the toolbar.
+        internal static void ArmInspector() { if (!_inspectorTool) ToggleInspector(); }
+
         internal static void LoadInspectorBuffer(System.Collections.Generic.List<ADOFAI.LevelEvent> evs)
         {
             _inspEvents.Clear();
