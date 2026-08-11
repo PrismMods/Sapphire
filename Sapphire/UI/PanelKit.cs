@@ -16,7 +16,11 @@ namespace Sapphire.UI
 
         private readonly string _canvasName;
         private readonly int _sortingOrder;
-        internal readonly float W;
+        /* LIVE template width every row helper lays out against. Not readonly: a panel can be
+           resized by its width grips or stretched by the dock, and rows have to follow — a fixed
+           W left the tool palettes drawing 292-wide rows inside a 700-wide window. */
+        internal float W;
+        private bool _wDirty;   // width moved; rebuild owed once the drag releases
         internal GameObject CanvasGo, PanelGo;
         private Canvas _canvas;
         private GraphicRaycaster _raycaster;
@@ -105,6 +109,35 @@ namespace Sapphire.UI
                 if (p._canvas == null) continue;
                 p._canvas.sortingOrder = p.DockSide == 0 ? FloatZBase + fi++ : DockedZBase + di++;
             }
+        }
+
+        /* Width the LEFT sidebar is currently occupying, 0 when nothing visible is docked there.
+           Screen-anchored bottom-left chrome (the pitch bar) offsets by this so a docked panel
+           doesn't sit on top of it. */
+        internal static float LeftDockWidth
+        {
+            get
+            {
+                for (int i = 0; i < _dockL.Count; i++)
+                    if (_dockL[i] != null && _dockL[i].Visible) return _sideWL;
+                return 0f;
+            }
+        }
+
+        /* Is any floating Sapphire window under the pointer right now? Overlays that draw at the
+           cursor (the timeline's event tooltip) ask this so they don't print on top of a window
+           the user is actually working in. Focusable panels only — that's every real window. */
+        internal static bool AnyPanelHovered()
+        {
+            Vector2 m = Input.mousePosition;
+            for (int i = 0; i < _focusReg.Count; i++)
+            {
+                var p = _focusReg[i];
+                if (!p.Visible || p.PanelGo == null) continue;
+                if (RectTransformUtility.RectangleContainsScreenPoint(
+                        (RectTransform)p.PanelGo.transform, m, null)) return true;
+            }
+            return false;
         }
 
         // Called once per frame (MainClass ticker): a pointer-down over the top-most focusable
@@ -580,6 +613,22 @@ namespace Sapphire.UI
             var xtmp = UIBuilder.Tmp(xlGo, "×", 12f, TextAnchor.MiddleCenter, Theme.Text);
             xtmp.raycastTarget = false;
             ClickHandler.Attach(xGo, onClose);
+        }
+
+        /* Adopt the panel's real width as the layout width. True when it changed, which is the
+           caller's cue to rebuild its rows (these palettes are built imperatively, so a resize
+           only shows up on the next build). */
+        internal bool SyncWidth()
+        {
+            if (PanelGo == null) return false;
+            float w = ((RectTransform)PanelGo.transform).sizeDelta.x;
+            if (w >= 1f && Mathf.Abs(w - W) >= 0.5f) { W = w; _wDirty = true; }
+            /* Hold the rebuild until the drag releases. The caller's rebuild destroys PanelGo,
+               and the handle under the cursor with it, so reporting mid-drag ended the drag on
+               its first frame. Rows lag the edge during the drag and catch up on release. */
+            if (!_wDirty || ResizeHandle.Dragging) return false;
+            _wDirty = false;
+            return true;
         }
 
         internal void SetHeight(float yEnd)

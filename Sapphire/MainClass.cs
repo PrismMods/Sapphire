@@ -82,7 +82,6 @@ namespace Sapphire
 
         private static bool OnUnload(UnityModManager.ModEntry modEntry)
         {
-            if (EditorUiEditor.IsActive) EditorUiEditor.Close();
             OnSaveGUI(modEntry);
             if (IsEnabled) StopMod(modEntry);
             return true;
@@ -178,7 +177,9 @@ namespace Sapphire
                restart per module per frame. */
             private static readonly string[] PerfNames =
             {
-                "Tweaks", "EditorEvents", "EditorUiLayout", "EditorChrome",
+                // Slot 2 is retired with the editor-UI layout module; Acc(2) is never called, so it
+                // stays at 0 and the report (which skips sub-threshold slots) never prints it.
+                "Tweaks", "EditorEvents", "(retired)", "EditorChrome",
                 "EditorInspector", "EditorPopups", "EditorToolbar", "EditorTileMenu",
                 "EditorCopyPanel", "EditorCameraPath", "EditorPitch", "EditorLevelMenu",
                 "EditorGameSettings", "EditorVfxPreview", "EditorHelp", "EditorPresets",
@@ -223,7 +224,6 @@ namespace Sapphire
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
-                EditorUiLayout.Tick(); Acc(2);
                 EditorChrome.Tick(); Acc(3);
                 EditorInspector.Tick(); Acc(4);
                 EditorPopups.Tick(); Acc(5);
@@ -233,6 +233,7 @@ namespace Sapphire
                 EditorCameraPath.Tick(); Acc(9);
                 EditorPitch.Tick(); Acc(10);
                 EditorLevelMenu.Tick(); Acc(11);
+                EditorDecoInspector.Tick();
                 EditorGameSettings.Tick(); Acc(12);
                 EditorVfxPreview.Tick(); Acc(13);
                 EditorHelp.Tick(); Acc(14);
@@ -245,20 +246,22 @@ namespace Sapphire
                 EditorTrackTools.Tick(); Acc(21);
                 EditorDecoTools.Tick(); Acc(22);
                 EditorEventPanel.Tick(); Acc(24);
+                EditorBulkEdit.Tick();
                 EditorEventSelector.Tick(); Acc(25);
                 UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
                 EditorQuickChart.Tick(); Acc(26);
                 EditorShapeLibrary.Tick(); Acc(27);
                 EditorMasterSwitch.Tick(); Acc(23);
+                EditorKeyHints.Tick();
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
                 // Run unconditionally: when the master switch turns off, the modules hide their
                 // panels this frame and TickDocks then finds nothing visible and tears its own
                 // chrome (dividers / drop indicator / canvas) down — gating it on EditorSuiteOn
                 // left that chrome stranded on screen.
                 {
-                    float strip = 0f;
-                    try { strip = EditorEvents.BottomStripTop; } catch { }
-                    UI.PanelKit.TickDocks(56f, strip > 0f ? strip + 100f : 12f);
+                    float below = 0f;
+                    try { below = EditorEvents.BottomChromeTop; } catch { }
+                    UI.PanelKit.TickDocks(56f, below > 0f ? below : 12f);
                 }
 
                 if (++_perfFrames >= 900) // ≈15s at 60fps
@@ -351,7 +354,7 @@ namespace Sapphire
         // selection on its next Tick, so this is reused two ways: StopMod (final teardown) and
         // the language-flip handler (drop the overlays so they rebuild with the new language).
         // Deliberately excludes non-overlay state that can't be recreated cheaply (Tweaks'
-        // editor-mode / control-tip / tile-angle patches, EditorUiLayout's game-UI wrappers).
+        // editor-mode / control-tip / tile-angle patches).
         private static void DisposeEditorModules()
         {
             EditorEvents.Dispose();
@@ -364,6 +367,9 @@ namespace Sapphire
             EditorCameraPath.Dispose();
             EditorPitch.Dispose();
             EditorLevelMenu.Dispose();
+            EditorDecoInspector.Dispose();
+            EditorBulkEdit.Dispose();
+            UI.ConfirmBox.Close();
             EditorGameSettings.Dispose();
             EditorVfxPreview.Dispose();
             EditorHelp.Dispose();
@@ -379,9 +385,31 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorMasterSwitch.Dispose();
+            EditorKeyHints.Dispose();
             EditorShapeLibrary.Dispose();
             UI.PanelKit.DisposeDockChrome(); // shared dock canvas isn't owned by any module
             UI.EditorDropdown.Dispose();
+        }
+
+        /* Unpatch only OUR id, on either loader. Neither call site is portable as written:
+           the instance UnpatchAll(string) is Obsolete(error:true) from HarmonyX 2.10 (won't
+           COMPILE against MelonLoader's 0Harmony), and its replacement — the static
+           UnpatchID(string) — is absent from native UMM's older Harmony (MissingMethodException
+           at unload, leaving every patch live). UnpatchSelf() is 2.10-only for the same reason.
+           Bind whichever this loader actually ships. */
+        private static void UnpatchOurId()
+        {
+            try
+            {
+                var t = typeof(Harmony);
+                var inst = t.GetMethod("UnpatchAll", new[] { typeof(string) });
+                if (inst != null && !inst.IsStatic) { inst.Invoke(harmony, new object[] { harmony.Id }); return; }
+                var stat = t.GetMethod("UnpatchID", BindingFlags.Public | BindingFlags.Static,
+                                       null, new[] { typeof(string) }, null);
+                if (stat != null) { stat.Invoke(null, new object[] { harmony.Id }); return; }
+                SapphireLog.Log("Unpatch: no UnpatchAll(string) or UnpatchID(string) on this Harmony");
+            }
+            catch (Exception ex) { SapphireLog.Log("Unpatch failed: " + ex); }
         }
 
         private static void StopMod(UnityModManager.ModEntry modEntry)
@@ -392,14 +420,9 @@ namespace Sapphire
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();
             Tweaks.DisposeTileAngle();
-            EditorUiLayout.RestoreAll();
             DisposeEditorModules();
-            EditorUiEditor.Close();
             UI.UpdateToast.Dispose();
-            // NOT UnpatchSelf(): that's HarmonyX 2.10-only, so on native UMM's older Harmony it
-            // throws MissingMethodException at unload and leaves every patch live. UnpatchAll(id)
-            // is the same operation and exists in both.
-            harmony.UnpatchAll(harmony.Id);
+            UnpatchOurId();
             if (_tickerGo != null)
             {
                 UnityEngine.Object.Destroy(_tickerGo);

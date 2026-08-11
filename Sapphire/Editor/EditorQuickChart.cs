@@ -63,9 +63,27 @@ namespace Sapphire
 
             if (!Input.anyKeyDown) return; // hotkeys below are all GetKeyDown
             // Prompt-local keys (handled BEFORE the typing gate, since a prompt field is focused).
+            if (_picking)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) { EndPick(); return; }
+                for (int i = 0; i < _pads.Count && i < 9; i++)
+                    if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))
+                    { var target = _pads[i]; EndPick(); DoPlace(target); return; }
+                return;   // swallow everything else while the pick is armed
+            }
             if (_promptGo != null && Input.GetKeyDown(KeyCode.Escape)) { ClosePrompt(); return; }
             if (_promptGo != null && Input.GetKeyDown(KeyCode.Tab)) { CyclePromptFocus(); return; }
             if (Typing(ed)) return;
+
+            /* Enter places from the pads without one being focused — DoPlace hands focus back to
+               the tile, so "nothing focused" is the normal state between runs. A focused field
+               never reaches here (Typing above), so its own onSubmit still handles Enter. */
+            if (_pads.Count > 0 && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+            {
+                if (_pads.Count == 1) DoPlace(_pads[0]);
+                else BeginPick();
+                return;
+            }
 
             // Ctrl/Cmd/Alt belong to game chords — never quick-chart.
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
@@ -583,7 +601,14 @@ namespace Sapphire
             internal GameObject Root;
             internal TMP_InputField Field;
             internal TextMeshProUGUI Hint;
+            internal GameObject Badge;          // "1".."9" overlay, shown only while picking
         }
+
+        /* Enter places. With one pad open that's unambiguous; with several it can't be, so Enter
+           ARMS a pick instead — every pad gets a number badge and the matching digit places that
+           one. Esc cancels. Beats making the user click into the right pad first, which is the
+           whole point of a keyboard flow. */
+        private static bool _picking;
 
         private static void SpawnPad(Vector2? at, string initial)
         {
@@ -719,13 +744,55 @@ namespace Sapphire
                 pw.Hint.text = n > 0 ? (n + Loc.T(" tile") + (n == 1 ? "" : "s") + Loc.T(" placed"))
                                      : Loc.T("select a tile / open a level");
             }
-            // re-arm the field so the next Enter repeats the run
-            try { pw.Field.ActivateInputField(); } catch { }
+            // Focus goes back to the TILE, not the pad: after placing you almost always want the
+            // editor's own keys (and the next Enter re-places from wherever the caret isn't).
+            Deselect();
+        }
+
+        // ── pad pick (Enter with more than one pad open) ──────────────────────
+
+        private static void BeginPick()
+        {
+            _picking = true;
+            for (int i = 0; i < _pads.Count && i < 9; i++) ShowBadge(_pads[i], i + 1);
+        }
+
+        private static void EndPick()
+        {
+            _picking = false;
+            foreach (var p in _pads)
+                if (p.Badge != null) { UnityEngine.Object.Destroy(p.Badge); p.Badge = null; }
+        }
+
+        // Accent square on the pad's top-left corner carrying its digit.
+        private static void ShowBadge(Pad pw, int n)
+        {
+            if (pw == null || pw.Root == null) return;
+            if (pw.Badge != null) UnityEngine.Object.Destroy(pw.Badge);
+            var go = new GameObject("PickBadge", typeof(RectTransform));
+            go.transform.SetParent(pw.Root.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
+            r.pivot = new Vector2(0f, 1f);
+            r.anchoredPosition = new Vector2(6f, -6f);
+            r.sizeDelta = new Vector2(22f, 22f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 6f;
+            bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.9f);
+            bg.raycastTarget = false;
+            var lGo = new GameObject("N", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = lr.offsetMax = Vector2.zero;
+            UIBuilder.Tmp(lGo, n.ToString(), 13f, TextAnchor.MiddleCenter, Color.black).raycastTarget = false;
+            pw.Badge = go;
         }
 
         private static void ClosePad(Pad pw)
         {
             if (pw == null) return;
+            if (_picking) EndPick();   // indices shift; a stale badge would point at the wrong pad
             _pads.Remove(pw);
             if (pw.Root != null) UnityEngine.Object.Destroy(pw.Root);
             pw.Root = null;
@@ -950,6 +1017,7 @@ namespace Sapphire
         // ── teardown ───────────────────────────────────────────────────────────
         internal static void Dispose()
         {
+            _picking = false;
             _pads.Clear();
             ClosePrompt();
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);

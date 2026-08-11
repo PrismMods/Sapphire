@@ -1,0 +1,410 @@
+using System;
+using System.Globalization;
+using UnityEngine;
+using Sapphire.UI;
+
+namespace Sapphire
+{
+    /* Property rows for the value shapes AddParticle uses that EventRows' primitive branches
+       don't cover. data[key] holds these BOXED and TYPED (LevelEvent.Get<T> is TryGetValue +
+       cast, no parsing), so every commit must write the SAME type back — a string here stops
+       the decoration loading. */
+    internal static class EventRowsParticle
+    {
+        private const float RowH = PanelKit.RowH, Gap = PanelKit.Gap;
+
+        private static string F(float v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+
+        // Re-read at commit time: the captured `val` is a snapshot and each field commits
+        // independently, so writing from the snapshot would clobber the sibling field.
+        private static object Raw(ADOFAI.LevelEvent evt, string key)
+        {
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                object v;
+                if (d != null && d.TryGetValue(key, out v)) return v;
+            }
+            catch { }
+            return null;
+        }
+
+        // [label]
+        // [item1] [item2]
+        internal static float FloatPairRow(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, Tuple<float, float> val,
+            string lbl, Color lblCol, float x, float w, float y)
+        {
+            EventRows.Label(c.Content, lbl, x, y, w, 16f, lblCol); y -= 18f;
+            float fw = (w - Gap) * 0.5f;
+            EventRows.InputRow(c.Content, x, y, fw, F(val.Item1),
+                s => SetPair(c, ed, evt, pi, key, val, s, true));
+            EventRows.InputRow(c.Content, x + fw + Gap, y, fw, F(val.Item2),
+                s => SetPair(c, ed, evt, pi, key, val, s, false));
+            return y - (RowH + Gap);
+        }
+
+        private static void SetPair(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, Tuple<float, float> fallback, string raw, bool first)
+        {
+            float f;
+            if (!ExprEval.TryParseFloat(raw, out f)) return;
+            var cur = Raw(evt, key) as Tuple<float, float> ?? fallback;
+            EventRows.Commit(c, ed, evt, pi, key,
+                first ? Tuple.Create(f, cur.Item2) : Tuple.Create(cur.Item1, f));
+        }
+
+        // [label]
+        // [from x] [from y]
+        // [to x]   [to y]
+        internal static float Vector2RangeRow(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, Tuple<Vector2, Vector2> val,
+            string lbl, Color lblCol, float x, float w, float y)
+        {
+            EventRows.Label(c.Content, lbl, x, y, w, 16f, lblCol); y -= 18f;
+            float fw = (w - Gap) * 0.5f;
+            EventRows.InputRow(c.Content, x, y, fw, F(val.Item1.x),
+                s => SetRange(c, ed, evt, pi, key, val, s, 0));
+            EventRows.InputRow(c.Content, x + fw + Gap, y, fw, F(val.Item1.y),
+                s => SetRange(c, ed, evt, pi, key, val, s, 1));
+            y -= RowH + Gap;
+            EventRows.InputRow(c.Content, x, y, fw, F(val.Item2.x),
+                s => SetRange(c, ed, evt, pi, key, val, s, 2));
+            EventRows.InputRow(c.Content, x + fw + Gap, y, fw, F(val.Item2.y),
+                s => SetRange(c, ed, evt, pi, key, val, s, 3));
+            return y - (RowH + Gap);
+        }
+
+        private static void SetRange(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, Tuple<Vector2, Vector2> fallback, string raw, int slot)
+        {
+            float f;
+            if (!ExprEval.TryParseFloat(raw, out f)) return;
+            var cur = Raw(evt, key) as Tuple<Vector2, Vector2> ?? fallback;
+            Vector2 a = cur.Item1, b = cur.Item2;
+            switch (slot)
+            {
+                case 0: a.x = f; break;
+                case 1: a.y = f; break;
+                case 2: b.x = f; break;
+                default: b.y = f; break;
+            }
+            EventRows.Commit(c, ed, evt, pi, key, Tuple.Create(a, b));
+        }
+
+        // ── MinMaxGradient ───────────────────────────────────────────────────
+
+        private static string D(decimal v)
+            => ((double)v).ToString("0.####", CultureInfo.InvariantCulture);
+
+        private static bool TryDec(string raw, out decimal d)
+        {
+            d = 0m;
+            double v;
+            if (!ExprEval.TryParseDouble(raw, out v)) return false;
+            d = (decimal)v;
+            return true;
+        }
+
+        private static ADOFAI.Editor.Models.SerializedMinMaxGradient Grad(
+            ADOFAI.LevelEvent evt, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient fallback)
+        {
+            var v = Raw(evt, key);
+            return v is ADOFAI.Editor.Models.SerializedMinMaxGradient g ? g : fallback;
+        }
+
+        private static ADOFAI.Editor.Models.SerializedGradient SlotGrad(
+            ADOFAI.Editor.Models.SerializedMinMaxGradient mm, int slot)
+        {
+            var gr = slot == 1 ? mm.gradient1 : mm.gradient2;
+            // Not `new SerializedGradient()`: that leaves BOTH key arrays null, so adding only a
+            // colour stop still ships a null alphaKeys into ToGradient's unguarded Select.
+            return gr.HasValue ? gr.Value : DefaultGrad();
+        }
+
+        /* Vanilla's PropertyControl_MinMaxGradient backfills on every mode change, and it must:
+           ToMinMaxGradient derefs gradient1/2 and ToGradient walks their key arrays, both without
+           a null check — so a mode switch that leaves them null writes an event the game throws on
+           at load. */
+        private static void Backfill(ref ADOFAI.Editor.Models.SerializedMinMaxGradient g)
+        {
+            switch (g.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    if (g.color1 == null) g.color1 = "ffffff";
+                    break;
+                case ParticleSystemGradientMode.TwoColors:
+                    if (g.color1 == null) g.color1 = "ffffff";
+                    if (g.color2 == null) g.color2 = "ffffff";
+                    break;
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:   // reads gradient1, not color1
+                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
+                    break;
+                case ParticleSystemGradientMode.TwoGradients:
+                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
+                    if (!g.gradient2.HasValue) g.gradient2 = DefaultGrad();
+                    break;
+            }
+        }
+
+        // mirrors the game's private PropertyControl_MinMaxGradient.DefaultGradient()
+        private static ADOFAI.Editor.Models.SerializedGradient DefaultGrad()
+        {
+            var g = new ADOFAI.Editor.Models.SerializedGradient();
+            var c0 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c0.time = 0m; c0.color = "ffffff";
+            var c1 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c1.time = 1m; c1.color = "ffffff";
+            var a0 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a0.time = 0m; a0.alpha = 1m;
+            var a1 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a1.time = 1m; a1.alpha = 1m;
+            g.colorKeys = new[] { c0, c1 };
+            g.alphaKeys = new[] { a0, a1 };
+            return g;
+        }
+
+        private static void PutSlotGrad(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
+            int slot, ADOFAI.Editor.Models.SerializedGradient g)
+        {
+            var mm = Grad(evt, key, val);
+            if (slot == 1) mm.gradient1 = g; else mm.gradient2 = g;
+            EventRows.Commit(c, ed, evt, pi, key, mm);
+        }
+
+        // [time] [hex] [×] per stop, then a [+] add row
+        private static float ColorStops(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
+            int slot, float x, float w, float y)
+        {
+            var g = SlotGrad(Grad(evt, key, val), slot);
+            var keys = g.colorKeys ?? new ADOFAI.Editor.Models.SerializedGradient.ColorKey[0];
+            EventRows.Label(c.Content, Loc.T("Colour stops"), x, y, w, 16f, Theme.TextMuted);
+            y -= 18f;
+            const float tw = 52f, bw = 24f;
+            float hw = w - tw - bw - Gap * 2f;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                int idx = i;
+                EventRows.InputRow(c.Content, x, y, tw, D(keys[i].time), s =>
+                {
+                    decimal d;
+                    if (!TryDec(s, out d)) return;
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    var arr = cg.colorKeys;
+                    if (arr == null || idx >= arr.Length) return;
+                    // Clone: the array is the SAME reference the undo snapshot's shallow-copied
+                    // boxed gradient points at (SaveStateScope's ctor snapshots BEFORE this runs) —
+                    // mutating in place corrupts undo. Append/RemoveAt already allocate fresh arrays.
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
+                    cg.colorKeys = arr2;
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                });
+                EventRows.InputRow(c.Content, x + tw + Gap, y, hw, keys[i].color ?? "", s =>
+                {
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    var arr = cg.colorKeys;
+                    if (arr == null || idx >= arr.Length) return;
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.color = (s ?? "").Trim().TrimStart('#'); arr2[idx] = kk;
+                    cg.colorKeys = arr2;
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                });
+                EventRows.Cell(c.Content, "×", x + tw + hw + Gap * 2f, y, bw, RowH, () =>
+                {
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    // Re-read the LIVE array: the rebuild is deferred, so two quick clicks would
+                    // otherwise empty it — and ToGradient/SetKeys can't take a zero-length array.
+                    if (cg.colorKeys == null || cg.colorKeys.Length <= 1) return;
+                    cg.colorKeys = RemoveAt(cg.colorKeys, idx);
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                }, true);
+                y -= RowH + Gap;
+            }
+            EventRows.Cell(c.Content, "+", x, y, w, RowH, () =>
+            {
+                var cg = SlotGrad(Grad(evt, key, val), slot);
+                var add = new ADOFAI.Editor.Models.SerializedGradient.ColorKey();
+                add.time = 1m; add.color = "ffffff";
+                cg.colorKeys = Append(cg.colorKeys, add);
+                PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+            }, true);
+            return y - (RowH + Gap);
+        }
+
+        // [time] [alpha 0–1] [×] per stop, then a [+] add row
+        private static float AlphaStops(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
+            int slot, float x, float w, float y)
+        {
+            var g = SlotGrad(Grad(evt, key, val), slot);
+            var keys = g.alphaKeys ?? new ADOFAI.Editor.Models.SerializedGradient.AlphaKey[0];
+            EventRows.Label(c.Content, Loc.T("Alpha stops"), x, y, w, 16f, Theme.TextMuted);
+            y -= 18f;
+            const float tw = 52f, bw = 24f;
+            float aw = w - tw - bw - Gap * 2f;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                int idx = i;
+                EventRows.InputRow(c.Content, x, y, tw, D(keys[i].time), s =>
+                {
+                    decimal d;
+                    if (!TryDec(s, out d)) return;
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    var arr = cg.alphaKeys;
+                    if (arr == null || idx >= arr.Length) return;
+                    // Clone: see ColorStops — mutating the live array corrupts the undo snapshot.
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
+                    cg.alphaKeys = arr2;
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                });
+                EventRows.InputRow(c.Content, x + tw + Gap, y, aw, D(keys[i].alpha), s =>
+                {
+                    decimal d;
+                    if (!TryDec(s, out d)) return;
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    var arr = cg.alphaKeys;
+                    if (arr == null || idx >= arr.Length) return;
+                    var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
+                    var kk = arr2[idx]; kk.alpha = d; arr2[idx] = kk;
+                    cg.alphaKeys = arr2;
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                });
+                EventRows.Cell(c.Content, "×", x + tw + aw + Gap * 2f, y, bw, RowH, () =>
+                {
+                    var cg = SlotGrad(Grad(evt, key, val), slot);
+                    if (cg.alphaKeys == null || cg.alphaKeys.Length <= 1) return;   // see ColorStops
+                    cg.alphaKeys = RemoveAt(cg.alphaKeys, idx);
+                    PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+                }, true);
+                y -= RowH + Gap;
+            }
+            EventRows.Cell(c.Content, "+", x, y, w, RowH, () =>
+            {
+                var cg = SlotGrad(Grad(evt, key, val), slot);
+                var add = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey();
+                add.time = 1m; add.alpha = 1m;
+                cg.alphaKeys = Append(cg.alphaKeys, add);
+                PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
+            }, true);
+            return y - (RowH + Gap);
+        }
+
+        private static T[] Append<T>(T[] arr, T item)
+        {
+            int n = arr == null ? 0 : arr.Length;
+            var outArr = new T[n + 1];
+            for (int i = 0; i < n; i++) outArr[i] = arr[i];
+            outArr[n] = item;
+            return outArr;
+        }
+
+        private static T[] RemoveAt<T>(T[] arr, int idx)
+        {
+            if (arr == null || idx < 0 || idx >= arr.Length) return arr;
+            var outArr = new T[arr.Length - 1];
+            for (int i = 0, j = 0; i < arr.Length; i++)
+                if (i != idx) outArr[j++] = arr[i];
+            return outArr;
+        }
+
+        // [label] / [mode ▾] / colour hex rows or stop lists, by mode
+        internal static float GradientRow(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
+            string lbl, Color lblCol, float x, float w, float y)
+        {
+            EventRows.Label(c.Content, lbl, x, y, w, 16f, lblCol); y -= 18f;
+
+            var modes = (ParticleSystemGradientMode[])Enum.GetValues(typeof(ParticleSystemGradientMode));
+            var names = new System.Collections.Generic.List<string>(modes.Length);
+            int cur = 0;
+            for (int i = 0; i < modes.Length; i++)
+            {
+                names.Add(EventRows.LocEnum("ParticleSystemGradientMode", modes[i].ToString()));
+                if (modes[i] == val.mode) cur = i;
+            }
+            RoundedRectGraphic mb = null;
+            mb = EventRows.Cell(c.Content, names[cur] + "  ▾", x, y, w, RowH,
+                () => UI.EditorDropdown.Open((RectTransform)mb.transform, names, cur, i =>
+                {
+                    var g = Grad(evt, key, val);
+                    g.mode = modes[i];
+                    Backfill(ref g);   // before Commit: Commit writes evt[key] first, so a bad value lands
+                    EventRows.Commit(c, ed, evt, pi, key, g);
+                }), false, TextAnchor.MiddleLeft);
+            y -= RowH + Gap;
+
+            switch (val.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    y = HexRow(c, ed, evt, pi, key, val, 1, x, w, y);
+                    break;
+                case ParticleSystemGradientMode.TwoColors:
+                    y = HexRow(c, ed, evt, pi, key, val, 1, x, w, y);
+                    y = HexRow(c, ed, evt, pi, key, val, 2, x, w, y);
+                    break;
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:   // ToMinMaxGradient reads gradient1 here too
+                    y = ColorStops(c, ed, evt, pi, key, val, 1, x, w, y);
+                    y = AlphaStops(c, ed, evt, pi, key, val, 1, x, w, y);
+                    break;
+                case ParticleSystemGradientMode.TwoGradients:
+                    y = ColorStops(c, ed, evt, pi, key, val, 1, x, w, y);
+                    y = AlphaStops(c, ed, evt, pi, key, val, 1, x, w, y);
+                    y = ColorStops(c, ed, evt, pi, key, val, 2, x, w, y);
+                    y = AlphaStops(c, ed, evt, pi, key, val, 2, x, w, y);
+                    break;
+            }
+            return y;
+        }
+
+        // hex field + swatch for color1 / color2
+        private static float HexRow(EventRows.Ctx c, scnEditor ed, ADOFAI.LevelEvent evt,
+            ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
+            int slot, float x, float w, float y)
+        {
+            string hex = (slot == 1 ? val.color1 : val.color2) ?? "";
+            float fw = w - RowH - Gap;
+            EventRows.InputRow(c.Content, x, y, fw, hex, s =>
+            {
+                var g = Grad(evt, key, val);
+                string h = (s ?? "").Trim().TrimStart('#');
+                if (slot == 1) g.color1 = h; else g.color2 = h;
+                EventRows.Commit(c, ed, evt, pi, key, g);
+            });
+            EventRows.Swatch(c.Content, hex, x + fw + Gap, y);
+            return y - (RowH + Gap);
+        }
+
+        // ── ParticlePlayback ─────────────────────────────────────────────────
+
+        /* AddParticle's `playbackControl` is a transport, not a value: it has NO entry in
+           LevelEvent.data, so EventRows.Render must dispatch it before its TryGetValue bail.
+           Preview only — writes nothing, takes no SaveStateScope. */
+        internal static float PlaybackRow(EventRows.Ctx c, ADOFAI.LevelEvent evt,
+            float x, float w, float y)
+        {
+            EventRows.Label(c.Content, Loc.T("Particle preview"), x, y, w, 16f, Theme.TextMuted);
+            y -= 18f;
+            float bw = (w - Gap * 2f) / 3f;
+            EventRows.Cell(c.Content, Loc.T("Play"), x, y, bw, RowH, () => Transport(evt, 0), true);
+            EventRows.Cell(c.Content, Loc.T("Stop"), x + bw + Gap, y, bw, RowH, () => Transport(evt, 1), true);
+            EventRows.Cell(c.Content, Loc.T("Restart"), x + (bw + Gap) * 2f, y, bw, RowH, () => Transport(evt, 2), true);
+            return y - (RowH + Gap);
+        }
+
+        private static void Transport(ADOFAI.LevelEvent evt, int mode)
+        {
+            try
+            {
+                var p = scrDecorationManager.GetDecoration(evt) as scrParticleDecoration;
+                if (p == null) return;
+                if (mode == 2) { p.ResetParticle(evt, true); return; }
+                var ps = p.particleSystem;
+                if (ps == null) return;
+                if (mode == 0) ps.Play(true); else ps.Stop(true);
+            }
+            catch (Exception ex) { SapphireLog.Log("EventRows: particle transport failed: " + ex.Message); }
+        }
+    }
+}

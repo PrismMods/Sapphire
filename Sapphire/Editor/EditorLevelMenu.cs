@@ -94,7 +94,10 @@ namespace Sapphire
                 if (!inEditor) _sig = 0;
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
+            // ESC dismisses this as a POPUP only. Docked, it is workspace furniture, and ESC is
+            // the editor's constantly-pressed deselect key — it kept knocking the panel out of
+            // the dock, forcing a re-click on the rail chip to get it back.
+            if (K.DockSide == 0 && Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
 
             // same per-frame throttle as the event panel — Sig hashes the tab's settings data,
             // so only recompute on a tab click (_sig=0), first build, or a periodic rescan
@@ -211,6 +214,7 @@ namespace Sapphire
         {
             long h = 17;
             h = h * 31 + _tab;
+            h = h * 31 + (_approvalOpen ? 1 : 0);
             if (Tabs[_tab].Type == ADOFAI.LevelEventType.DecorationSettings)
             {
                 h = h * 31 + _decoSel;
@@ -246,7 +250,7 @@ namespace Sapphire
 
         private static void BuildShell()
         {
-            K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -40f));
+            K.Rebuild(Loc.T("Level settings"), Close, new Vector2(760f, -72f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
             ResizeHandle.AttachAll(panel, true, 300f, 320f); // allow narrow → rail collapses to icons
@@ -259,8 +263,8 @@ namespace Sapphire
             _railHost = (RectTransform)railGo.transform;
             _railHost.anchorMin = new Vector2(0f, 0f); _railHost.anchorMax = new Vector2(0f, 1f);
             _railHost.pivot = new Vector2(0f, 1f);
-            _railHost.offsetMin = new Vector2(Pad, Pad);
-            _railHost.offsetMax = new Vector2(Pad + RailW, -HeaderH - 2f);
+            _railHost.offsetMin = new Vector2(Pad, 3f);
+            _railHost.offsetMax = new Vector2(Pad + RailW, -HeaderH);
 
             // right scroll viewport
             var vpGo = new GameObject("View", typeof(RectTransform));
@@ -268,8 +272,8 @@ namespace Sapphire
             _viewport = (RectTransform)vpGo.transform;
             _viewport.anchorMin = new Vector2(0f, 0f);
             _viewport.anchorMax = new Vector2(1f, 1f);
-            _viewport.offsetMin = new Vector2(Pad + RailW + Pad, Pad);
-            _viewport.offsetMax = new Vector2(-Pad, -HeaderH - 2f);
+            _viewport.offsetMin = new Vector2(Pad + RailW + Pad, 3f);
+            _viewport.offsetMax = new Vector2(-Pad, -HeaderH);
             vpGo.AddComponent<RectMask2D>();
             var vpImg = vpGo.AddComponent<Image>();
             vpImg.color = new Color(0f, 0f, 0f, 0.01f);
@@ -291,8 +295,8 @@ namespace Sapphire
             // frame), so rows always use the correct content width.
             float railW = CurRailW();
             bool collapsed = railW < 100f;
-            if (_railHost != null) _railHost.offsetMax = new Vector2(Pad + railW, -HeaderH - 2f);
-            if (_viewport != null) _viewport.offsetMin = new Vector2(Pad + railW + Pad, Pad);
+            if (_railHost != null) _railHost.offsetMax = new Vector2(Pad + railW, -HeaderH);
+            if (_viewport != null) _viewport.offsetMin = new Vector2(Pad + railW + Pad, 3f);
             BuildRail(collapsed);
             if (_content == null) return;
             for (int i = _content.childCount - 1; i >= 0; i--)
@@ -312,6 +316,9 @@ namespace Sapphire
                 return;
             }
 
+            if (Tabs[_tab].Type == ADOFAI.LevelEventType.LevelSettings)
+                y = ArtistApprovalChip(ed, y);
+
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);
             if (evt == null || info == null)
@@ -324,17 +331,102 @@ namespace Sapphire
             ClampScroll();
         }
 
+        // ── artist approval chip (Level tab) ──────────────────────────────────
+        private static bool _approvalOpen;   // chip expanded to show the condition text
+
+        // The game evaluates artist permission OUTSIDE the settings registry (ApprovalLevel +
+        // its disclaimer strings), so the registry-driven rows can't show it. Chip at the top
+        // of the Level tab; click expands the condition text.
+        private static float ArtistApprovalChip(scnEditor ed, float y)
+        {
+            string artist = "";
+            try { artist = (ed.levelData.artist ?? "").Trim(); } catch { }
+            if (artist.Length == 0) return y;   // nothing to evaluate
+            ApprovalLevel lvl;
+            try { lvl = ed.ApprovalLevelForArtist(artist); } catch { return y; }
+
+            float w = _ctx.PanelW - Pad * 2f;
+            var bg = EventRows.Cell(_content,
+                Loc.T("Artist permission") + ": " + ApprovalText(lvl) + "   " + (_approvalOpen ? "‹" : "›"),
+                Pad, y, w, RowH,
+                () => { _approvalOpen = !_approvalOpen; _sig = 0; }, false, TextAnchor.MiddleLeft);
+            bg.color = ApprovalTint(lvl);
+            y -= RowH + Gap;
+
+            if (_approvalOpen)
+            {
+                string detail = ApprovalDetail(lvl, artist);
+                var tGo = new GameObject("D", typeof(RectTransform));
+                var tmp = UIBuilder.Tmp(tGo, detail, 11f, TextAnchor.UpperLeft, Theme.TextMuted);
+                tmp.enableWordWrapping = true;
+                tmp.raycastTarget = false;
+                // Measured, not estimated: the string is game-localized (CJK is ~2x the width per
+                // character) and the panel font is user-swappable, so a chars-per-line guess
+                // under-estimates and TMP has no clip here — the overflow lands on the rows below.
+                float textW = w - 16f;                       // the cell's 8f horizontal insets
+                float h = Mathf.Max(RowH, tmp.GetPreferredValues(detail, textW, 0f).y + 8f);
+                var lbl = EventRows.Cell(_content, "", Pad, y, w, h, () => { }, false);
+                lbl.color = new Color(1f, 1f, 1f, 0.03f);
+                tGo.transform.SetParent(lbl.transform, false);
+                var tr = (RectTransform)tGo.transform;
+                tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+                tr.offsetMin = new Vector2(8f, 4f); tr.offsetMax = new Vector2(-8f, -4f);
+                y -= h + Gap;
+            }
+            return y - Gap;
+        }
+
+        private static string ApprovalText(ApprovalLevel lvl)
+        {
+            try
+            {
+                bool ex;
+                var s = RDString.GetWithCheck("editor.artistDisclaimer." + lvl, out ex, null);
+                if (ex && !string.IsNullOrEmpty(s)) return s;
+            }
+            catch { }
+            return lvl.ToString();
+        }
+
+        private static string ApprovalDetail(ApprovalLevel lvl, string artist)
+        {
+            string key = lvl == ApprovalLevel.Declined
+                ? "editor.artistDisclaimer.conditionDeclinedDescription"
+                : lvl == ApprovalLevel.ListingRejected
+                    ? "editor.artistDisclaimer.conditionListingRejectedDescription"
+                    : "editor.artistDisclaimer.conditionDescription";
+            try
+            {
+                // The game's own ArtistUIDisclaimer always passes the artist name for these keys;
+                // with a null dict RDString leaves the [artist] token unreplaced.
+                var args = new System.Collections.Generic.Dictionary<string, object> { ["artist"] = artist };
+                bool ex;
+                var s = RDString.GetWithCheck(key, out ex, args);
+                if (ex && !string.IsNullOrEmpty(s)) return s;
+            }
+            catch { }
+            return "";
+        }
+
+        private static Color ApprovalTint(ApprovalLevel lvl)
+        {
+            switch (lvl)
+            {
+                case ApprovalLevel.Allowed:           return new Color(0.42f, 0.78f, 0.48f, 0.28f);
+                case ApprovalLevel.MostlyAllowed:
+                case ApprovalLevel.PartiallyDeclined: return new Color(0.95f, 0.72f, 0.32f, 0.28f);
+                case ApprovalLevel.Declined:
+                case ApprovalLevel.ListingRejected:   return new Color(0.89f, 0.40f, 0.43f, 0.28f);
+            }
+            return new Color(1f, 1f, 1f, 0.06f);
+        }
+
         // ── decoration browser (Sapphire-native; replaces the game's deco panel) ──
         private static int _decoSel = -1;   // index into ed.decorations, -1 = none
         private static bool _decoGrid;       // false = grouped list, true = thumbnail grid
         // Folders are COLLAPSED by default — track the ones the user has expanded.
         private static readonly System.Collections.Generic.HashSet<string> _decoExpanded =
             new System.Collections.Generic.HashSet<string>();
-        private static readonly EventRows.Ctx _decoCtx = new EventRows.Ctx
-        {
-            MarkDirty = () => _sig = 0,
-            AfterCommit = (ed, evt, pi) => { try { ed.UpdateDecorationObjects(); } catch { } },
-        };
 
         private static System.Collections.Generic.List<ADOFAI.LevelEvent> DecoList(scnEditor ed)
         {
@@ -354,8 +446,17 @@ namespace Sapphire
         }
 
         private static string DecoTag(ADOFAI.LevelEvent evt) => DecoDataStr(evt, "tag");
+        internal static string DecoTagOf(ADOFAI.LevelEvent evt) => DecoTag(evt);
 
-        private static string DecoTypeName(ADOFAI.LevelEventType type)
+        // The inspector's × clears the browser's selection too, so "which decoration is
+        // selected" never has two answers.
+        internal static void ClearDecoSelection()
+        {
+            _decoSel = -1;
+            _sig = 0;
+        }
+
+        internal static string DecoTypeName(ADOFAI.LevelEventType type)
         {
             switch (type)
             {
@@ -450,6 +551,14 @@ namespace Sapphire
                 else ed.DeselectAllDecorations();
             }
             catch { }
+            try
+            {
+                var decos2 = DecoList(ed);
+                if (_decoSel >= 0 && decos2 != null && _decoSel < decos2.Count)
+                    EditorDecoInspector.Show(decos2[_decoSel]);
+                else EditorDecoInspector.Close();
+            }
+            catch { }
             _sig = 0;
         }
 
@@ -465,9 +574,37 @@ namespace Sapphire
                 // new item (and its inspector) is invisible and the add looks like a no-op.
                 if (dec != null) _decoExpanded.Add(DecoTag(dec));
                 // Keep the game's selectedDecorations in sync so Delete/gizmos act on this one.
-                if (_decoSel >= 0) SelectDecoEvent(ed, dec);
+                // Same guard for both: an IndexOf miss must leave the browser and the inspector
+                // agreeing on "unselected", not just one of them.
+                if (_decoSel >= 0) { SelectDecoEvent(ed, dec); EditorDecoInspector.Show(dec); }
             }
             catch (Exception ex) { SapphireLog.Log("Deco add failed: " + ex.Message); }
+            _sig = 0;
+        }
+
+        // DuplicateDecorations() -> MultiCopyDecorations() + PasteDecorations(true), which ends
+        // with the GAME's selectedDecorations pointing at the copies while _decoSel/inspector
+        // still point at the original. Resync to the copy (last of the game's selection) the
+        // same way AddDeco resyncs a freshly-added row — same guard shape, leave selection alone
+        // on any miss rather than guessing.
+        private static void DuplicateDeco(scnEditor ed)
+        {
+            try
+            {
+                ed.DuplicateDecorations();
+                var sel = ed.selectedDecorations;
+                if (sel == null || sel.Count == 0) { _sig = 0; return; }
+                var copy = sel[sel.Count - 1];
+                var decos = DecoList(ed);
+                int idx = decos != null && copy != null ? decos.IndexOf(copy) : -1;
+                if (idx >= 0)
+                {
+                    _decoSel = idx;
+                    _decoExpanded.Add(DecoTag(copy));
+                    EditorDecoInspector.Show(copy);
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("Deco duplicate failed: " + ex.Message); }
             _sig = 0;
         }
 
@@ -485,6 +622,7 @@ namespace Sapphire
             }
             catch (Exception ex) { SapphireLog.Log("Deco delete failed: " + ex.Message); }
             _decoSel = -1;
+            EditorDecoInspector.Close();
             _sig = 0;
         }
 
@@ -506,7 +644,7 @@ namespace Sapphire
                 () => UI.EditorDropdown.Open((RectTransform)addBg.transform, typeLabels, 0,
                     i => AddDeco(ed, types[i])), true);
             EventRows.Cell(_content, Loc.T("Duplicate"), Pad + bw + Gap, y, bw, RowH,
-                () => { try { ed.DuplicateDecorations(); } catch { } _sig = 0; }, true);
+                () => { DuplicateDeco(ed); }, true);
             var delBg = EventRows.Cell(_content, Loc.T("Delete"), Pad + (bw + Gap) * 2f, y, bw, RowH,
                 () => DeleteDeco(ed), true);
             if (!hasSel) delBg.color = new Color(1f, 1f, 1f, 0.03f);   // nothing selected → inert
@@ -555,21 +693,9 @@ namespace Sapphire
                         () => SelectDeco(ed, i), false, TextAnchor.MiddleLeft);
                     if (sel) rbg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f);
                     y -= RowH + Gap;
-                    if (sel) y = DecoInspector(ed, decos[i], y);
                 }
             }
             return y;
-        }
-
-        // Inline property inspector for one decoration (its OWN event type), shared by list + grid.
-        private static float DecoInspector(scnEditor ed, ADOFAI.LevelEvent evt, float y)
-        {
-            var info = InfoOf(evt.eventType);   // image/text/object/particle differ
-            if (info == null) return y;
-            _decoCtx.Content = _content;
-            _decoCtx.PanelW = _ctx.PanelW;
-            y = EventRows.Render(_decoCtx, ed, info, evt, y);
-            return y - Gap;
         }
 
         // The game already loaded each decoration's sprite — reuse it (no file IO / path resolution).
@@ -608,8 +734,6 @@ namespace Sapphire
             }
             int rows = (decos.Count + cols - 1) / cols;
             y = gridTop - rows * (cellH + gap) - Gap;
-
-            if (_decoSel >= 0 && _decoSel < decos.Count) y = DecoInspector(ed, decos[_decoSel], y);
             return y;
         }
 

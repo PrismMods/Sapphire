@@ -116,7 +116,7 @@ namespace Sapphire
             }
             if (targetGone)
             {
-                var next = FirstFilterEventOnTile(ed);
+                var next = FirstFilterEventOnTile(ed) ?? CreateFilterEvent(ed);
                 if (next == null) { Close(); return; }
                 SetTarget(next);
             }
@@ -450,12 +450,40 @@ namespace Sapphire
         }
 
         // ── browser popup ────────────────────────────────────────────────────
-        internal static void Open(ADOFAI.LevelEvent evt)
+        /* No filter event on this tile yet: make one so the manager has something to write to.
+           One SaveStateScope, so it's a single undo alongside whatever the user picks next. */
+        private static ADOFAI.LevelEvent CreateFilterEvent(scnEditor ed)
+        {
+            if (ed == null || _floor < 0) return null;
+            try
+            {
+                ADOFAI.LevelEvent made;
+                using (new SaveStateScope(ed))
+                {
+                    made = new ADOFAI.LevelEvent(_floor, ADOFAI.LevelEventType.SetFilterAdvanced);
+                    ed.events.Add(made);
+                    ed.ApplyEventsToFloors();
+                }
+                return made;
+            }
+            catch (System.Exception ex)
+            {
+                SapphireLog.Log("FilterPicker: could not add a filter event: " + ex.Message);
+                return null;
+            }
+        }
+
+        internal static void Open(ADOFAI.LevelEvent evt) => Open(evt, evt != null ? evt.floor : -1);
+
+        /* `floor` is what makes the manager openable on a tile with NO filter event yet — the
+           first pick creates one there. Without it the null-target path had nothing to adopt and
+           closed the window on its first frame. */
+        internal static void Open(ADOFAI.LevelEvent evt, int floor)
         {
             Close();
             EnsureFilters();
             _target = evt;
-            _floor = evt != null ? evt.floor : -1;
+            _floor = evt != null ? evt.floor : floor;
             _legacyMode = evt != null && evt.eventType == ADOFAI.LevelEventType.SetFilter;
             SyncCatNames();
             _search = ""; _category = null; _scroll = 0f;

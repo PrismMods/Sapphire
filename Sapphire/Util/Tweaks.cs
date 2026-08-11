@@ -311,18 +311,29 @@ namespace Sapphire
             if (fl == null) return;
             float deg = (float)(fl.angleLength * Mathf.Rad2Deg);
             int count = ed.selectedFloors.Count;
-            // Only build the label string when the value actually changes: the interpolation
-            // boxes a float + allocs a string every frame otherwise, in the default select state.
-            if (_angleText != null && (!Mathf.Approximately(deg, _lastAngleDeg) || count != _lastAngleCount))
+            // Total swept angle over the selection — the number you actually want when checking
+            // that a run adds up to a full turn. Summed here, not cached per floor: the selection
+            // is small and this only runs when the readout's inputs changed.
+            float sum = deg;
+            if (count > 1)
             {
-                _lastAngleDeg = deg; _lastAngleCount = count;
+                sum = 0f;
+                foreach (var f in ed.selectedFloors)
+                    if (f != null) sum += (float)(f.angleLength * Mathf.Rad2Deg);
+            }
+            if (_angleText != null && (!Mathf.Approximately(deg, _lastAngleDeg)
+                                       || count != _lastAngleCount
+                                       || !Mathf.Approximately(sum, _lastAngleSum)))
+            {
+                _lastAngleDeg = deg; _lastAngleCount = count; _lastAngleSum = sum;
                 _angleText.text = count > 1
-                    ? $"Angle: {deg:0.##}°  ({count} tiles)"
+                    ? $"Angle: {deg:0.##}°  ·  Σ {sum:0.##}°  ({count} tiles)"
                     : $"Angle: {deg:0.##}°";
             }
         }
 
         private static float _lastAngleDeg = float.NaN;
+        private static float _lastAngleSum = float.NaN;
         private static int _lastAngleCount = -1;
 
         private static void BuildAngleDisplay()

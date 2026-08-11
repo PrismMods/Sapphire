@@ -110,6 +110,7 @@ namespace Sapphire
             sig = sig * 31 + (_lyAsDeco ? 1 : 0);
             sig = sig * 31 + (_lyDis ? 1 : 0);
             sig = sig * 31 + (_fbWindowOn ? 1 : 0);
+            if (K.SyncWidth()) _layoutSig = NoSig;   // resized/docked → rows relayout
             if (!K.Built || sig != _layoutSig)
             {
                 _layoutSig = sig;
@@ -287,6 +288,7 @@ namespace Sapphire
 
         // ── UI ───────────────────────────────────────────────────────────────
 
+        private const float MinW = 240f;
         private const float PanelW = 332f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
@@ -294,10 +296,11 @@ namespace Sapphire
         {
             K.LblW = 104f;
             K.Rebuild(Loc.T("Deco Tools"), Toggle, new Vector2(690f, -120f));
+            ResizeHandle.AttachWidth((RectTransform)K.PanelGo.transform, MinW);
 
             float y = -34f;
             var tabNames = new[] { Loc.T("Flipbook"), Loc.T("Extract"), Loc.T("3D stack"), Loc.T("Lyrics") };
-            float tabW = (PanelW - Pad * 2f - Gap * 3f) / 4f;
+            float tabW = (K.W - Pad * 2f - Gap * 3f) / 4f;
             for (int i = 0; i < 4; i++)
             {
                 int idx = i;
@@ -334,21 +337,21 @@ namespace Sapphire
             y = K.FloatRow(y, Loc.T("Start angle"), _fbInitAngle, v => _fbInitAngle = v);
             y = K.FloatRow(y, Loc.T("Angle per frame"), _fbStep, v => _fbStep = v);
             y -= 4f;
-            K.Cell(Loc.T("Create flipbook"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoFlipbook, true, true);
+            K.Cell(Loc.T("Create flipbook"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoFlipbook, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
         private static float BuildExtract(float y)
         {
-            K.Label(Loc.T("Video file (in the level folder)"), Pad, y, PanelW - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
-            K.InputField(Pad, y, PanelW - Pad * 2f, _exVideo, v => _exVideo = v.Trim());
+            K.Label(Loc.T("Video file (in the level folder)"), Pad, y, K.W - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
+            K.InputField(Pad, y, K.W - Pad * 2f, _exVideo, v => _exVideo = v.Trim());
             y -= RowH + Gap;
             y = K.SegRow(y, Loc.T("Format"), new[] { "PNG", "JPG" }, () => _exFormat, v => _exFormat = v);
             y -= 4f;
-            K.Cell(Loc.T("Extract frames"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoExtract, true, true);
+            K.Cell(Loc.T("Extract frames"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoExtract, true, true);
             y -= (RowH + 2f) + Gap;
             K.Label(Loc.T("Frames land in a folder named after the video — use it in Flipbook."),
-                Pad, y, PanelW - Pad * 2f, 28f, Theme.TextMuted, 10.5f);
+                Pad, y, K.W - Pad * 2f, 28f, Theme.TextMuted, 10.5f);
             return y - 30f - 6f;
         }
 
@@ -371,15 +374,15 @@ namespace Sapphire
             y = K.FloatPairRow(y, Loc.T("Parallax Y f/t"), () => _d3ParA.y, () => _d3ParB.y, (a, b) => { _d3ParA.y = a; _d3ParB.y = b; });
             y = HexPairRow(y, Loc.T("Color from/to"), () => _d3ColA, () => _d3ColB, (a, b) => { _d3ColA = a; _d3ColB = b; });
             y -= 4f;
-            K.Cell(Loc.T("Create stack"), Pad, y, PanelW - Pad * 2f, RowH + 2f, Do3D, true, true);
+            K.Cell(Loc.T("Create stack"), Pad, y, K.W - Pad * 2f, RowH + 2f, Do3D, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
         private static float BuildLyrics(float y)
         {
             y = K.RangeRow(y, () => _lyFrom, () => _lyTo, (a, b) => { _lyFrom = a; _lyTo = b; }, Refresh, SetStatus);
-            K.Label(Loc.T("Lyric text"), Pad, y, PanelW - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
-            K.InputField(Pad, y, PanelW - Pad * 2f, _lyText, v => _lyText = v);
+            K.Label(Loc.T("Lyric text"), Pad, y, K.W - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
+            K.InputField(Pad, y, K.W - Pad * 2f, _lyText, v => _lyText = v);
             y -= RowH + Gap;
             y = K.SegRow(y, Loc.T("Split"), new[] { Loc.T("Words"), Loc.T("Chars") }, () => _lySplitChar ? 1 : 0, v => _lySplitChar = v == 1);
             y = K.SegRow(y, Loc.T("Generate"), new[] { Loc.T("All parts"), Loc.T("First only") }, () => _lyAllAtOnce ? 0 : 1, v => _lyAllAtOnce = v == 0);
@@ -405,7 +408,7 @@ namespace Sapphire
             if (_lyAsDeco)
             {
                 y -= 4f;
-                K.Label(Loc.T("PNG rendering"), Pad, y, PanelW - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
+                K.Label(Loc.T("PNG rendering"), Pad, y, K.W - Pad * 2f, 16f, Theme.TextMuted); y -= 18f;
                 y = K.FieldRow(y, Loc.T("Font file"), _lyFont, v => _lyFont = v.Trim());
                 y = K.ToggleFieldRow(y, Loc.T("Stroke size"), () => _lyStroke, v => _lyStroke = v, () => _lyStrokeSize, v => _lyStrokeSize = v);
                 y = K.FieldRow(y, Loc.T("Stroke color"), _lyStrokeCol, v => _lyStrokeCol = v.Trim().TrimStart('#'));
@@ -430,7 +433,7 @@ namespace Sapphire
             }
 
             y -= 4f;
-            K.Cell(Loc.T("Generate lyrics"), Pad, y, PanelW - Pad * 2f, RowH + 2f, DoLyrics, true, true);
+            K.Cell(Loc.T("Generate lyrics"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoLyrics, true, true);
             return y - (RowH + 2f) - 10f;
         }
 
@@ -439,7 +442,7 @@ namespace Sapphire
         {
             K.Label(label, Pad, y, K.LblW, RowH, Theme.TextMuted);
             float x = Pad + K.LblW + 4f;
-            float fw = (PanelW - Pad * 2f - K.LblW - 4f - Gap) * 0.5f;
+            float fw = (K.W - Pad * 2f - K.LblW - 4f - Gap) * 0.5f;
             K.InputField(x, y, fw, getA(), v => set(v.Trim().TrimStart('#'), getB()));
             K.InputField(x + fw + Gap, y, fw, getB(), v => set(getA(), v.Trim().TrimStart('#')));
             return y - (RowH + Gap);

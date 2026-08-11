@@ -266,11 +266,14 @@ namespace Sapphire
             float y = _tlUserHidden ? 6f : BottomStripTop + 4f;
             if (!Mathf.Approximately(_foldRect.anchoredPosition.y, y))
                 _foldRect.anchoredPosition = new Vector2(0f, y);
-            bool up = _tlUserHidden; // folded → arrow points up (expand)
+            // Folded → up-chevron (click to expand). Open → grip bars, because there it is also
+            // the lane-height drag handle.
+            bool up = _tlUserHidden;
             if (up != _foldGlyphUp && _foldGlyph != null)
             {
                 _foldGlyphUp = up;
-                _foldGlyph.rectTransform.localRotation = Quaternion.Euler(0f, 0f, up ? 90f : -90f);
+                _foldGlyph.text = up ? "\u203a" : "=";
+                _foldGlyph.rectTransform.localRotation = Quaternion.Euler(0f, 0f, up ? 90f : 0f);
             }
         }
 
@@ -314,16 +317,38 @@ namespace Sapphire
             _foldGlyph.color = new Color(0.8f, 0.8f, 0.84f, 1f);
             _foldGlyph.alignment = TMPro.TextAlignmentOptions.Center;
             _foldGlyph.raycastTarget = false;
-            _foldGlyph.text = "\u203a"; // "›" rotated ±90° = up/down chevron (proven glyph)
-            _foldGlyph.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f);
+            _foldGlyph.text = "="; // grip bars while open; chevron when folded
             _foldGlyphUp = false;
 
-            UI.ClickHandler.Attach(go, () => { _tlUserHidden = !_tlUserHidden; });
+            // Doubles as the lane-height grip: click folds, vertical drag resizes. One component
+            // owns both, so a drag can never also fire the fold toggle on release.
+            go.AddComponent<StripHeightGrip>().OnTap = () => { _tlUserHidden = !_tlUserHidden; };
         }
 
         internal static float BottomStripTop =>
             _stripRect != null && _stripRect.gameObject.activeInHierarchy
                 ? _stripRect.anchoredPosition.y + _stripRect.sizeDelta.y : 0f;
+
+        // Top edge of the mode-chip row (0 when hidden). Same bottom-right corner as the key
+        // hints, which stack above it instead of printing over the chips.
+        internal static float ModeClusterTop =>
+            _modeCluster != null && _modeCluster.gameObject.activeInHierarchy
+                ? _modeCluster.anchoredPosition.y + _modeCluster.sizeDelta.y : 0f;
+
+        /* Clearance any docked or clamped panel needs at the bottom: the strip AND the chip rows
+           riding on top of it (STRICT/NO FAIL/AUTO, zoom/CAM/GRAPH). Measured, because the old
+           `strip + 100` guess was shorter than the chips and docked panels covered them. 0 when
+           the whole bottom chrome is hidden. */
+        internal static float BottomChromeTop
+        {
+            get
+            {
+                float strip = BottomStripTop, chips = ModeClusterTop;
+                float t = strip > 0f ? strip + 8f : 0f;
+                if (chips > 0f) t = Mathf.Max(t, chips + 14f);
+                return t;
+            }
+        }
 
         // Read by the scnEditor.ZoomCamera prefix: the editor zooms on any wheel input, so
         // it must stand down over ANY timeline surface — the strip, the mode cluster and
@@ -341,6 +366,27 @@ namespace Sapphire
                         || HoverRect(_tooltipRect, mouse);
                 }
                 catch { return false; }
+            }
+        }
+
+        /* While play-testing with the game's hide-cursor-while-playing option on, hovering a
+           Sapphire timeline surface (strip, fold handle, mode chips) re-shows the cursor so it
+           stays usable; leaving re-hides it — but only if we were the ones who showed it. */
+        private static void TickCursor(bool playing, Vector3 mouse)
+        {
+            // An open dropdown (difficulty / timeline mode) counts wherever the pointer is — its
+            // blocker owns the screen until a pick, and picking needs a cursor.
+            if (playing && (_diffMenuGo != null || _modeMenuGo != null
+                            || HoverRect(_stripRect, mouse) || HoverRect(_foldRect, mouse)
+                            || HoverRect(_modeCluster, mouse)))
+            {
+                if (!Cursor.visible) { Cursor.visible = true; _cursorForced = true; }
+            }
+            else if (_cursorForced)
+            {
+                _cursorForced = false;
+                try { if (playing && Persistence.GetHideCursorWhilePlaying()) Cursor.visible = false; }
+                catch { }
             }
         }
 
@@ -393,6 +439,9 @@ namespace Sapphire
             // Outside the master gate: the arrow has its OWN canvas, so it must be told to
             // hide when the suite is switched off — it used to linger.
             TickFoldButton(wantFold);
+            // Runs before the early-out below so the fold handle keeps the cursor alive even
+            // when the strip itself is folded away.
+            TickCursor(ed != null && ed.playMode, Input.mousePosition);
             // graph view opens/closes independently of the mode — mirror its state per frame
             if (_graphBtnBg != null)
             {
@@ -402,7 +451,9 @@ namespace Sapphire
                 if (_graphBtnBg.color != wantCol) _graphBtnBg.color = wantCol;
             }
 
-            if (!wantChips && !wantTl)
+            // The mode chips are state toggles, not timeline furniture — they follow the fold
+            // arrow's gate, so folding the strip away leaves them (and it) on screen.
+            if (!wantChips && !wantTl && !wantFold)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 _chipFloor = -2; // force chip rebuild on return
@@ -414,6 +465,7 @@ namespace Sapphire
             }
             if (_canvasGo == null) BuildCanvas();
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
+            TickModeCluster(wantFold);
 
             string tip = null;
             Vector2 tipAt = default;
@@ -616,9 +668,7 @@ namespace Sapphire
             if (!want)
             {
                 if (_stripRect != null && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
-                if (_modeCluster != null && _modeCluster.gameObject.activeSelf) _modeCluster.gameObject.SetActive(false);
-                _cursorForced = false; // the game manages the cursor once we're out
-                return;
+                return; // cursor + mode chips are ticked from Tick — they outlive the strip
             }
             var events = LevelEventList();
             var floors = ADOBase.lm != null ? ADOBase.lm.listFloors : null;
@@ -628,8 +678,6 @@ namespace Sapphire
                 return;
             }
             if (!_stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(true);
-            if (_modeCluster != null && !_modeCluster.gameObject.activeSelf) _modeCluster.gameObject.SetActive(true);
-            UpdateModeCluster();
 
             bool wantTransport = false, dockOn = false;
             try
@@ -727,21 +775,8 @@ namespace Sapphire
             if (_transportOn) UpdateTransport(ed, playing, selSeq);
             TickCamInspector(ed);
 
-            // While play-testing with the game's hide-cursor-while-playing option on,
-            // hovering the strip re-shows the cursor so it stays usable; leaving the
-            // strip re-hides it (only if we were the ones who showed it).
             Vector2 mouse = Input.mousePosition;
             bool hoverStrip = RectTransformUtility.RectangleContainsScreenPoint(_stripRect, mouse, null);
-            if (playing && hoverStrip)
-            {
-                if (!Cursor.visible) { Cursor.visible = true; _cursorForced = true; }
-            }
-            else if (_cursorForced)
-            {
-                _cursorForced = false;
-                try { if (playing && Persistence.GetHideCursorWhilePlaying()) Cursor.visible = false; }
-                catch { }
-            }
 
             // Drag the playhead to scrub — selects the tile nearest the mouse, riding the
             // editor's own camera jump. Grab zone is ±8px around the line, edit mode only.
@@ -2403,6 +2438,9 @@ namespace Sapphire
 
         private static void ShowTooltip(string text, Vector2 screenAt)
         {
+            // A window under the cursor owns that spot — the tooltip would print over what the
+            // user is reading, and it draws on a higher canvas so it always wins.
+            if (UI.PanelKit.AnyPanelHovered()) text = null;
             if (string.IsNullOrEmpty(text))
             {
                 if (_tooltipGo != null && _tooltipGo.activeSelf) _tooltipGo.SetActive(false);
@@ -2852,12 +2890,25 @@ namespace Sapphire
             return bg;
         }
 
+        private static void TickModeCluster(bool want)
+        {
+            if (_modeCluster == null) return;
+            if (_modeCluster.gameObject.activeSelf != want)
+            {
+                _modeCluster.gameObject.SetActive(want);
+                if (!want) CloseDiffMenu();
+            }
+            if (want) UpdateModeCluster();
+        }
+
         private static void UpdateModeCluster()
         {
             if (_modeCluster == null) return;
             if (_diffMenuGo != null && !_modeCluster.gameObject.activeInHierarchy) CloseDiffMenu();
-            // Track the strip's top-right corner (lane count changes its height).
-            float y = _stripRect.anchoredPosition.y + _stripRect.sizeDelta.y + 8f;
+            // Track the strip's top-right corner (lane count changes its height); with the strip
+            // folded away, sit on the screen edge like the fold arrow does.
+            float top = BottomStripTop;
+            float y = top > 0f ? top + 8f : 8f;
             if (!Mathf.Approximately(_modeCluster.anchoredPosition.y, y))
                 _modeCluster.anchoredPosition = new Vector2(-8f, y);
 
@@ -3219,13 +3270,18 @@ namespace Sapphire
             UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler,
             UnityEngine.EventSystems.IPointerUpHandler
         {
-            private float _acc;
+            // Set on the fold button, which is a grip AND a button — fires only if the press
+            // never turned into a real drag.
+            public System.Action OnTap;
+            private float _acc, _travel;
             private int _lastRebuildFrame;
             public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
-            { _acc = 0f; _lastRebuildFrame = 0; }
+            { _acc = 0f; _travel = 0f; _lastRebuildFrame = 0; }
 
             public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
             {
+                _travel += Mathf.Abs(e.delta.y);
+                if (_tlUserHidden) return; // no lanes to resize while folded
                 var canvas = GetComponentInParent<Canvas>();
                 float scale = canvas != null ? canvas.scaleFactor : 1f;
                 int laneCount = Mathf.Max(1, _lanes.Count);
@@ -3250,7 +3306,10 @@ namespace Sapphire
             }
 
             public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e)
-            { _tlSig = 0; _scanCooldown = 0; _viewDirty = true; }
+            {
+                _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
+                if (OnTap != null && _travel < 6f) OnTap();
+            }
         }
 
         private static void MakeZoomButton(Transform parent, string label, float x, UnityEngine.Events.UnityAction onClick)

@@ -38,19 +38,6 @@ namespace Sapphire.UI
         private static float _slotY;              // smoothed screen-px offset from ToastStack
         private static bool _hovered;
         private static bool _checkedOnce;
-        // Preview lets the toast be inspected (and its stacking against another mod's toast
-        // checked) without waiting for a real release to exist. Purely cosmetic — it never
-        // touches UpdateService, so clicking it can't install anything.
-        private static float _previewUntil;
-
-        internal static void ShowPreview()
-        {
-            _previewUntil = Time.unscaledTime + 15f;
-            _dismissedKey = null;
-        }
-
-        private static bool Previewing { get { return Time.unscaledTime < _previewUntil; } }
-
         internal static void Tick()
         {
             var s = MainClass.Settings;
@@ -83,7 +70,6 @@ namespace Sapphire.UI
         // "installed" state for the same version.
         private static string DesiredKey()
         {
-            if (Previewing) return "preview";
             switch (UpdateService.Status)
             {
                 case UpdateStatus.Available:
@@ -178,12 +164,6 @@ namespace Sapphire.UI
         private static void RefreshText()
         {
             if (_title == null) return;
-            if (Previewing)
-            {
-                _title.text = Loc.T("Update available") + ": v0.0.0";
-                _hint.text = Loc.T("Preview — nothing will be installed");
-                return;
-            }
             switch (UpdateService.Status)
             {
                 case UpdateStatus.Available:
@@ -210,7 +190,6 @@ namespace Sapphire.UI
 
         private static void OnCardClick()
         {
-            if (Previewing) { _previewUntil = 0f; Hide(); return; }
             switch (UpdateService.Status)
             {
                 case UpdateStatus.Available:

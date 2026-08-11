@@ -14,8 +14,9 @@ namespace Sapphire
        (GCS.levelEventsInfo): localized labels, showIf gating, per-property disable
        toggles, and control types matched to the value. Floating + resizable.
 
-       Scope guard: shown only for a SINGLE selected floor. Selecting a decoration
-       un-hides the game panel — decoration editing still lives there for now. */
+       Scope guard: shown only for a SINGLE selected floor. Decorations are NOT this
+       panel's job — EditorDecoInspector owns them — but the game panel stays hidden for
+       them too, so a selected decoration can't resurrect the vanilla inspector on top. */
     internal static class EditorEventPanel
     {
         private static readonly PanelKit K = new PanelKit("SapphireEventPanel", 902, PanelW, focusable: true);
@@ -35,6 +36,17 @@ namespace Sapphire
         private static bool _dirty;            // a scan/rebuild is pending
         private static int _scanCd;            // frames until the next external-change rescan
         private static CanvasGroup _gameCg;    // the hidden game panel
+        /* Free selection across the tree: ctrl-click toggles a row, shift-click takes the range
+           since the last anchor, in the flattened display order (_flat). Plain clicks stay
+           expand/collapse — the tree is still primarily a browser. Selection drives the batch
+           bar (copy / delete) and survives content rebuilds because it holds the LevelEvent
+           references themselves, not row indices. */
+        private static readonly HashSet<ADOFAI.LevelEvent> _sel = new HashSet<ADOFAI.LevelEvent>();
+        private static readonly List<ADOFAI.LevelEvent> _flat = new List<ADOFAI.LevelEvent>();
+        private static ADOFAI.LevelEvent _anchor;
+        // Last row the user touched — mirrored onto the hidden game panel so ITS hotkeys act on
+        // the same event (see SyncGameSelection).
+        private static ADOFAI.LevelEvent _gameSel;
         private static bool _userHidden;       // × collapsed the panel to the chip (tile stays selected)
         private static GameObject _chipGo;     // reopen chip while collapsed
         private static TextMeshProUGUI _chipLabel;
@@ -48,25 +60,24 @@ namespace Sapphire
                        && ed != null && !ed.playMode;
 
             int floor = -1;
-            bool decorationSelected = false;
             if (active)
             {
                 try
                 {
                     if (ed.selectedFloors != null && ed.selectedFloors.Count == 1 && ed.selectedFloors[0] != null)
                         floor = ed.selectedFloors[0].seqID;
-                    decorationSelected = ed.selectedDecorations != null && ed.selectedDecorations.Count > 0;
                 }
                 catch { }
             }
 
-            // hide the game panel only while WE are the inspector; decorations still need it
-            bool hideGame = active && !decorationSelected;
-            SyncGamePanelHidden(ed, hideGame);
+            // Sapphire owns the decoration inspector now (EditorDecoInspector) — a selected
+            // decoration must not resurrect the game's panel behind it (SelectDecoration sets
+            // decorationSelected, which un-hides it at alpha 1 with raycasts on).
+            SyncGamePanelHidden(ed, active);
 
             // Collapsible like the event selector: × collapses to a reopen chip (keeping the tile
             // SELECTED — better chart visibility, esp. in quick-chart), the chip reopens it.
-            bool baseWant = active && floor >= 0 && !decorationSelected;
+            bool baseWant = active && floor >= 0;
             ShowChip(baseWant && _userHidden, floor);
             if (!baseWant || _userHidden)
             {
@@ -86,7 +97,11 @@ namespace Sapphire
                to catch external edits (undo). On a static selection the tick is nearly free;
                scanning every frame is what dropped a big level from 120 to ~80fps. */
             bool floorChanged = floor != _floor;
-            if (floorChanged) { _floor = floor; SeedExpansion(); _scroll = 0f; _dirty = true; }
+            if (floorChanged)
+            {
+                _floor = floor; SeedExpansion(); _scroll = 0f; _dirty = true;
+                _sel.Clear(); _anchor = null; _gameSel = null;   // selection is per-tile
+            }
             if (_sig == 0) _dirty = true;                       // an edit / tab click asked to redraw
             if (--_scanCd <= 0) { _scanCd = 12; _dirty = true; } // ~1/12-frame external-change catch
 
@@ -115,10 +130,34 @@ namespace Sapphire
             // (K may still be built from a previously selected tile).
             else if (!K.Built || _empty) { K.Show(false); return; }
 
+            SyncGameSelection(ed);
             K.Show(true);
             ClampIntoView();
             TickScroll();
             TickResize();
+        }
+
+        /* The game's event hotkeys — Ctrl+C (copy this event), Ctrl+Shift+C (every event of its
+           type), Ctrl+X — don't look at any UI: scnEditor.CopyOfFloor / CutFloor read
+           InspectorPanel.selectedEvent + selectedEventType straight off the panel we keep hidden,
+           which only ever moves when the GAME shows a panel. So a row picked in this window has
+           to be written onto those two fields or the hotkey copies whatever tab the game last
+           opened.
+
+           Re-asserted every frame rather than once per click: the game rewrites both fields
+           whenever it shows a panel itself (tile reselect, undo, our own AfterCommit refresh),
+           and a stale pair silently copies the wrong event. */
+        private static void SyncGameSelection(scnEditor ed)
+        {
+            if (_gameSel == null) return;
+            try
+            {
+                var p = ed.levelEventsPanel;
+                if (p == null) return;
+                if (!ReferenceEquals(p.selectedEvent, _gameSel)) p.selectedEvent = _gameSel;
+                if (p.selectedEventType != _gameSel.eventType) p.selectedEventType = _gameSel.eventType;
+            }
+            catch { }
         }
 
         private static bool _dockInited;
@@ -127,11 +166,10 @@ namespace Sapphire
 
         private static float BottomInset()
         {
-            float strip = 0f;
-            try { strip = EditorEvents.BottomStripTop; } catch { }
-            // the button rows above the strip (STRICT/NO FAIL/AUTO, zoom/CAM/GRAPH) need
-            // clearance too; they hide with the strip
-            return strip > 0f ? strip + 100f : 12f;
+            // Measured top of the whole bottom chrome — strip plus the chip rows above it.
+            float below = 0f;
+            try { below = EditorEvents.BottomChromeTop; } catch { }
+            return below > 0f ? below : 12f;
         }
 
         internal static void Dispose()
@@ -274,7 +312,12 @@ namespace Sapphire
             h = h * 31 + floor;
             foreach (var t in _expandedTypes) h += (t + 1) * 733;   // commutative — set order varies
             foreach (var k in _expandedInst) h += (k + 1) * 977;
-            foreach (var e in events) h = h * 31 + (int)e.eventType;
+            foreach (var e in events)
+            {
+                h = h * 31 + (int)e.eventType;
+                h = h * 31 + TargetTag(e).GetHashCode();
+                if (_sel.Contains(e)) h += 4099;   // commutative — selection tints the rows
+            }
             return h;
         }
 
@@ -318,7 +361,7 @@ namespace Sapphire
             K.Rebuild(Loc.T("Events") + " · #" + _floor, () =>
             {
                 _userHidden = true; // collapse to the reopen chip; keep the tile SELECTED
-            }, new Vector2(1495f, -70f));
+            }, new Vector2(1495f, -72f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
             ResizeHandle.AttachAll(panel, true, 280f, 240f);
@@ -331,8 +374,9 @@ namespace Sapphire
             _viewport = (RectTransform)vpGo.transform;
             _viewport.anchorMin = new Vector2(0f, 0f);
             _viewport.anchorMax = new Vector2(1f, 1f);
-            _viewport.offsetMin = new Vector2(0f, 8f);
-            _viewport.offsetMax = new Vector2(0f, -HeaderH - 2f);
+            _viewport.offsetMin = new Vector2(0f, 3f);
+            // Flush to the header: the first row's own top gap is Gap, like every other row's.
+            _viewport.offsetMax = new Vector2(0f, -HeaderH);
             vpGo.AddComponent<RectMask2D>();
             var vpImg = vpGo.AddComponent<Image>();
             vpImg.color = new Color(0f, 0f, 0f, 0.01f);
@@ -365,33 +409,56 @@ namespace Sapphire
                 if (!groups.TryGetValue(t, out l)) { l = new List<ADOFAI.LevelEvent>(); groups[t] = l; order.Add(t); }
                 l.Add(e);
             }
-            float y = -2f;
+            // Flattened display order backs shift-range selection; group order, then instances.
+            _flat.Clear();
+            foreach (var t in order) _flat.AddRange(groups[t]);
+            _sel.RemoveWhere(e => !_flat.Contains(e));   // deleted/undone events drop out
+            if (_gameSel != null && !_flat.Contains(_gameSel)) _gameSel = null;
+
+            float y = -Gap;   // uniform: every row owns Gap above it, including the first
+            y = TopBar(ed, events, y);
             foreach (var t in order)
                 y = TypeSection(ed, t, groups[t], y);
             _content.sizeDelta = new Vector2(0f, -y + 6f);
             ClampScroll();
         }
 
+        /* One action per row, to the RIGHT of every header: [×]. Copy used to sit here too, on
+           every row, which cost ~48px of title width on all of them to duplicate what the
+           selection bar already does — ctrl-click rows, then Copy there. */
+        private const float DelW = 22f, ActGap = 4f;
+
         private static float TypeSection(scnEditor ed, int type, List<ADOFAI.LevelEvent> list, float y)
         {
             bool tExp = _expandedTypes.Contains(type);
             bool single = list.Count == 1;
-            string title = (tExp ? "− " : "+ ") + EventTitle(list[0])
-                + (single ? "" : "  ×" + list.Count);
-            string preview = single ? Preview(list[0]) : "";
+            /* Groups read as FOLDERS, singles as rows: chevron disclosure + a count, against
+               the +/− the leaf rows use. Same visual language as the deco browser's tag
+               folders, so "this contains things" looks the same everywhere. */
+            string title = single
+                ? (tExp ? "− " : "+ ") + EventTitle(list[0]) + TagSuffix(list[0])
+                : (tExp ? "‹ " : "› ") + EventTitle(list[0]) + "  ×" + list.Count;
+            string preview = single ? Preview(list[0]) : TagList(list);
 
             float pw = _size.x; // live panel width — headers/× must track it like the value rows do
-            float headW = pw - Pad * 2f - (single ? 26f : 0f);
+            float headW = pw - Pad * 2f - DelW - ActGap;
             var head = HeaderCell(title, preview, Pad, y, headW, () =>
             {
+                _gameSel = list[0];   // hand the game's hotkeys this type's first event
+                if (SelectClick(list)) return;
                 if (!_expandedTypes.Add(type)) _expandedTypes.Remove(type);
                 _sig = 0;
             });
-            head.color = tExp
-                ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.4f)
-                : new Color(1f, 1f, 1f, 0.06f);
-            if (single)
-                EventRows.Cell(_content, "×", pw - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, list[0]), true);
+            // Collapsed folders sit brighter than leaf rows so the two tiers separate at a glance.
+            head.color = RowTint(list, tExp, 0.4f, single ? 0.06f : 0.11f);
+            var group = list;
+            EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () =>
+            {
+                if (single) { DeleteEvent(ed, group[0]); return; }
+                // Deleting a whole group is the one destructive action here that isn't one row.
+                ConfirmBox.Ask(Loc.T("Delete this event group?") + "\n" + EventTitle(group[0]) + " · " + group.Count,
+                    Loc.T("Delete"), () => DeleteEvents(ed, group));
+            }, true);
             y -= RowH + Gap;
             if (!tExp) return y;
 
@@ -400,25 +467,127 @@ namespace Sapphire
 
             for (int i = 0; i < list.Count; i++)
             {
-                int idx = i;
                 var evt = list[i];
                 long key = type * 1000L + i;
                 bool iExp = _expandedInst.Contains(key);
                 string prev = Preview(evt);
-                string label = (iExp ? "− " : "+ ") + (i + 1) + ".";
-                var sub = HeaderCell(label, prev, Pad + 12f, y, pw - Pad * 2f - 12f - 26f, () =>
+                string label = (iExp ? "− " : "+ ") + (i + 1) + "." + TagSuffix(evt);
+                var sub = HeaderCell(label, prev, Pad + 12f, y,
+                    pw - Pad * 2f - 12f - DelW - ActGap, () =>
                 {
+                    _gameSel = evt;
+                    if (SelectClickOne(evt)) return;
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
                     _sig = 0;
                 });
-                sub.color = iExp
-                    ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
-                    : new Color(1f, 1f, 1f, 0.04f);
-                EventRows.Cell(_content, "×", pw - Pad - 22f, y, 22f, RowH, () => DeleteEvent(ed, evt), true);
+                sub.color = _sel.Contains(evt) ? SelTint
+                    : iExp ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
+                           : new Color(1f, 1f, 1f, 0.04f);
+                EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () => DeleteEvent(ed, evt), true);
                 y -= RowH + Gap;
                 if (iExp) y = InstanceBody(ed, evt, y);
             }
             return y;
+        }
+
+        private static readonly Color SelTint = new Color(0.35f, 0.76f, 1f, 0.45f);
+
+        private static Color RowTint(List<ADOFAI.LevelEvent> list, bool expanded, float onA, float offA)
+        {
+            foreach (var e in list) if (_sel.Contains(e)) return SelTint;
+            return expanded
+                ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, onA)
+                : new Color(1f, 1f, 1f, offA);
+        }
+
+        // ── free selection (ctrl toggle · shift range) ───────────────────────
+
+        private static bool SelectClickOne(ADOFAI.LevelEvent evt)
+            => SelectClick(new List<ADOFAI.LevelEvent> { evt });
+
+        // Returns true when the click was a SELECTION gesture, so the caller skips its normal
+        // expand/collapse. A group row selects (or clears) all of its instances at once.
+        private static bool SelectClick(List<ADOFAI.LevelEvent> rowEvents)
+        {
+            bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                     || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (!ctrl && !shift) return false;
+            if (rowEvents == null || rowEvents.Count == 0) return false;
+            var last = rowEvents[rowEvents.Count - 1];
+            _gameSel = last;
+
+            if (ctrl)
+            {
+                bool allOn = true;
+                foreach (var e in rowEvents) if (!_sel.Contains(e)) { allOn = false; break; }
+                foreach (var e in rowEvents) { if (allOn) _sel.Remove(e); else _sel.Add(e); }
+                _anchor = allOn ? null : last;
+            }
+            else
+            {
+                int b = _flat.IndexOf(last);
+                if (b < 0) return true;
+                int a = _anchor != null ? _flat.IndexOf(_anchor) : -1;
+                if (a < 0) a = b;
+                for (int i = Mathf.Min(a, b); i <= Mathf.Max(a, b); i++) _sel.Add(_flat[i]);
+                _anchor = last;
+            }
+            _sig = 0;
+            return true;
+        }
+
+        /* Tile-wide actions + the batch bar for the current selection. Delete-all is always
+           offered (it is the reason this panel exists for a 40-event tile); copy/delete of a
+           selection only appear once something is selected. */
+        private static float TopBar(scnEditor ed, List<ADOFAI.LevelEvent> events, float y)
+        {
+            float w = _size.x - Pad * 2f;
+            if (_sel.Count > 0)
+            {
+                float third = (w - Gap * 2f) / 3f;
+                var selected = new List<ADOFAI.LevelEvent>(_sel);
+                EventRows.Cell(_content, _sel.Count + " " + Loc.T("selected"), Pad, y, third, RowH,
+                    () => { _sel.Clear(); _anchor = null; _sig = 0; }, false).color = SelTint;
+                EventRows.Cell(_content, Loc.T("Copy"), Pad + third + Gap, y, third, RowH,
+                    () => CopyEvents(selected), true);
+                EventRows.Cell(_content, Loc.T("Delete"), Pad + (third + Gap) * 2f, y, third, RowH,
+                    () => ConfirmBox.Ask(Loc.T("Delete selected events?") + "\n" + selected.Count,
+                        Loc.T("Delete"), () => DeleteEvents(ed, selected)), true);
+                y -= RowH + Gap;
+            }
+            var all = new List<ADOFAI.LevelEvent>(events);
+            /* Filter manager is reachable from EVERY tile, not just one that already has a
+               filter event — it's how you add the first one. Opens on this tile's filter event
+               when there is one, else unbound (Open handles null). */
+            ADOFAI.LevelEvent filt = null;
+            foreach (var e in events)
+                if (e.eventType == ADOFAI.LevelEventType.SetFilterAdvanced
+                    || e.eventType == ADOFAI.LevelEventType.SetFilter) { filt = e; break; }
+            float half = (w - Gap) * 0.5f;
+            EventRows.Cell(_content, Loc.T("Filter manager"), Pad, y, half, RowH,
+                () => EditorFilterPicker.Open(filt, _floor), true);
+            EventRows.Cell(_content, Loc.T("Delete all events") + " (" + all.Count + ")",
+                Pad + half + Gap, y, half, RowH,
+                () => ConfirmBox.Ask(Loc.T("Delete all events on this tile?") + "\n#" + _floor + " · " + all.Count,
+                    Loc.T("Delete"), () => DeleteEvents(ed, all)), true)
+                .color = new Color(0.80f, 0.22f, 0.26f, 0.4f);
+            return y - (RowH + Gap);
+        }
+
+        /* Copy = load Sapphire's event clipboard (the inspector tool's capture buffer) and arm
+           that tool, so the very next right-click on a tile pastes — filtered by the copy panel
+           exactly like a tile capture. Copies are detached (LevelEvent.Copy) so later edits to
+           the source don't rewrite the clipboard. */
+        private static void CopyEvents(List<ADOFAI.LevelEvent> list)
+        {
+            if (list == null || list.Count == 0) return;
+            _gameSel = list[0];   // keep the game's own Ctrl+C on the same event we just copied
+            var buf = new List<ADOFAI.LevelEvent>(list.Count);
+            foreach (var e in list) { try { if (e != null) buf.Add(e.Copy()); } catch { } }
+            EditorToolbar.LoadInspectorBuffer(buf);
+            EditorToolbar.ArmInspector();
+            SapphireLog.Log("EventPanel: copied " + buf.Count + " event(s) to the paste buffer");
         }
 
         // tag / filter-name shown beside the node — the tree stays scannable while collapsed
@@ -441,6 +610,44 @@ namespace Sapphire
             }
             catch { }
             return "";
+        }
+
+        /* Decoration-targeting events (MoveDecorations, SetText, SetObject, SetParticle,
+           EmitParticle) carry their target in `tag`. Seven MoveDecorations on one tile were
+           seven identical "+ 1." rows without it. Kept separate from Preview() — Preview owns
+           the RIGHT-hand slot (eventTag / filter), this owns the left label. */
+        private static string TargetTag(ADOFAI.LevelEvent evt)
+        {
+            try
+            {
+                var d = EditorEvents.EventData(evt);
+                object v;
+                if (d != null && d.TryGetValue("tag", out v) && v is string s) return s;
+            }
+            catch { }
+            return "";
+        }
+
+        private static string TagSuffix(ADOFAI.LevelEvent evt)
+        {
+            string t = TargetTag(evt);
+            return t.Length > 0 ? "  " + t : "";
+        }
+
+        // Distinct target tags across a collapsed group, first-seen order. No manual
+        // truncation: the preview TMP is NoWrap + Ellipsis, so it clips to the panel width.
+        private static string TagList(List<ADOFAI.LevelEvent> list)
+        {
+            var seen = new HashSet<string>();
+            var sb = new System.Text.StringBuilder();
+            foreach (var e in list)
+            {
+                string t = TargetTag(e);
+                if (t.Length == 0 || !seen.Add(t)) continue;
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(t);
+            }
+            return sb.ToString();
         }
 
         private static float InstanceBody(scnEditor ed, ADOFAI.LevelEvent evt, float y)
@@ -538,6 +745,28 @@ namespace Sapphire
             }
             catch (Exception ex) { SapphireLog.Log("EventPanel: delete failed: " + ex.Message); }
             _expandedInst.Clear(); // instance indices shifted; keep the type nodes open
+            _sel.Remove(evt);
+            _sig = 0;
+        }
+
+        // Batch delete (selection or whole tile): one SaveStateScope, one path remake — deleting
+        // 40 events one call at a time meant 40 undo states and 40 full path rebuilds.
+        private static void DeleteEvents(scnEditor ed, List<ADOFAI.LevelEvent> list)
+        {
+            if (list == null || list.Count == 0) return;
+            try
+            {
+                using (new SaveStateScope(ed))
+                {
+                    foreach (var e in list) { try { ed.events.Remove(e); } catch { } }
+                    ed.ApplyEventsToFloors();
+                    ed.RemakePath(true, true);
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("EventPanel: batch delete failed: " + ex.Message); }
+            foreach (var e in list) _sel.Remove(e);
+            _anchor = null;
+            _expandedInst.Clear();
             _sig = 0;
         }
 

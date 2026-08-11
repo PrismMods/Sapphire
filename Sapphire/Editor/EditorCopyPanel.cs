@@ -318,8 +318,12 @@ namespace Sapphire
                     foreach (int type in catTypes)
                     {
                         int t = type;
-                        var cell = Cell(Name(t), Pad + Indent * 2f, y, PanelW - Pad * 2f - Indent * 2f, RowH,
+                        float rowW = PanelW - Pad * 2f - Indent * 2f;
+                        var cell = Cell(Name(t), Pad + Indent * 2f, y, rowW, RowH,
                             () => Toggle(t), false, TextAnchor.MiddleLeft);
+                        // Bulk edit is a multi-selection action; in paste-filter mode this tree
+                        // describes the clipboard, not the chart, so there is nothing to edit.
+                        if (!_inspMode) BulkButton(cell.gameObject, rowW, t);
                         _typeRows.Add(new KeyValuePair<int, RoundedRectGraphic>(t, cell));
                         y -= RowH + Gap;
                     }
@@ -405,6 +409,44 @@ namespace Sapphire
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
             _canvasGo.AddComponent<GraphicRaycaster>();
+        }
+
+        /* "Bulk edit" affordance on a type row, revealed on hover so the tree stays a clean list
+           of checkboxes. Sits INSIDE the row, so moving the pointer onto it never counts as
+           leaving the row. */
+        private static void BulkButton(GameObject row, float rowW, int type)
+        {
+            const float w = 64f;
+            var go = new GameObject("Bulk", typeof(RectTransform));
+            go.transform.SetParent(row.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.anchoredPosition = new Vector2(rowW - w - 3f, 0f);
+            r.sizeDelta = new Vector2(w, RowH - 6f);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 4f;
+            bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.5f);
+            bg.raycastTarget = true;
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = lr.offsetMax = Vector2.zero;
+            UIBuilder.Tmp(lGo, Loc.T("Bulk edit"), 10.5f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
+            UI.ClickHandler.Attach(go, () => EditorBulkEdit.Open(type));
+            go.SetActive(false);
+            row.AddComponent<HoverReveal>().Target = go;
+        }
+
+        private class HoverReveal : MonoBehaviour,
+            UnityEngine.EventSystems.IPointerEnterHandler, UnityEngine.EventSystems.IPointerExitHandler
+        {
+            public GameObject Target;
+            public void OnPointerEnter(UnityEngine.EventSystems.PointerEventData e)
+            { if (Target != null) Target.SetActive(true); }
+            public void OnPointerExit(UnityEngine.EventSystems.PointerEventData e)
+            { if (Target != null) Target.SetActive(false); }
         }
 
         private static void Label(string text, float x, float y, float w, float h, Color color, TextAnchor anchor)

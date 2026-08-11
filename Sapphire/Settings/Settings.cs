@@ -192,6 +192,7 @@ namespace Sapphire
         public bool FeatToolsMods = true;     // MSM & MH tools (magic shape, track, deco)
         public bool FeatFileBar = true;       // Sapphire file chip / menu bar
         public bool FeatQuickChart = false;   // quick-chart mode (toolbar Q): keybinds + angle pad, hides timeline
+        public bool EditorKeyHints = true;    // bottom-right on-screen keybind card
 
         // ── granular facades over the categories (do not assign; read only) ──
         // Passive tile-angle readout: NOT a tool — stays up whenever the suite is on (its
@@ -490,9 +491,6 @@ namespace Sapphire
         public float GameErrorMeterY = 0.03f;
         public float GameErrorMeterScale = 1f; // multiplier on the in-game size setting
         public List<GameUiOverride> GameUiOverrides = new List<GameUiOverride>();
-        // Same override shape for the game EDITOR's own UI chrome (file bar, panel tabs…);
-        // applied by EditorUiLayout, edited via the Editor tab's drag editor.
-        public List<GameUiOverride> EditorUiOverrides = new List<GameUiOverride>();
         // Per-element game-text weight overrides (Game UI tab → Element weights).
         public List<GameUiTextWeight> GameUiTextWeights = new List<GameUiTextWeight>();
 
@@ -785,13 +783,6 @@ namespace Sapphire
             new GameUiOverride { Key = "strictclear",  OffY = 300f,  Scale = 0.4f },
             new GameUiOverride { Key = "autoplay",     OffX = 650f, OffY = -750f, Scale = 1f, Align = (int)TextAlign.Center },
         };
-
-        // Sapphire default for one game-EDITOR chrome element. null = vanilla is default
-        // (the timeline lives at the bottom now, so nothing needs to dodge it up top).
-        internal static GameUiOverride DefaultEditorUiOverride(string key)
-        {
-            return null;
-        }
 
         // Curated per-element game-text weights, baked alongside the layout.
         internal static List<GameUiTextWeight> MakeGameUiWeightDefaults() => new List<GameUiTextWeight>

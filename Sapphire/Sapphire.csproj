@@ -92,6 +92,8 @@
         <Compile Include="Settings\Settings.cs" />
         <Compile Include="Settings\ColorGradient.cs" />
         <Compile Include="UI\UIBuilder.cs" />
+        <Compile Include="UI\ConfirmBox.cs" />
+        <Compile Include="Editor\EditorBulkEdit.cs" />
         <Compile Include="UI\UICore.cs" />
         <Compile Include="UI\TabRail.cs" />
         <Compile Include="UI\PageStack.cs" />
@@ -99,7 +101,6 @@
         <Compile Include="UI\DragHandle.cs" />
         <Compile Include="UI\ResizeHandle.cs" />
         <Compile Include="Editor\EditorHandles.cs" />
-        <Compile Include="Editor\EditorUiEditor.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
@@ -130,6 +131,7 @@
         <Compile Include="Editor\EditorVfxPreview.cs" />
         <Compile Include="Editor\EditorHelp.cs" />
         <Compile Include="Editor\EditorHelpKo.cs" />
+        <Compile Include="Editor\EditorKeyHints.cs" />
         <Compile Include="Editor\ShapeLibrary.cs" />
         <Compile Include="Editor\ShapeStore.cs" />
         <Compile Include="Editor\EditorPresets.cs" />
@@ -144,6 +146,7 @@
         <Compile Include="Editor\DecoToolsEngine.cs" />
         <Compile Include="Editor\EditorDecoTools.cs" />
         <Compile Include="Editor\EventRows.cs" />
+        <Compile Include="Editor\EventRowsParticle.cs" />
         <Compile Include="Editor\EditorQuickChart.cs" />
         <Compile Include="Editor\EditorEventPanel.cs" />
         <Compile Include="Editor\EditorEventSelector.cs" />
@@ -151,7 +154,7 @@
         <Compile Include="Editor\EditorShapeLibrary.cs" />
         <Compile Include="Editor\PseudoBuild.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
-        <Compile Include="Editor\EditorUiLayout.cs" />
+        <Compile Include="Editor\EditorDecoInspector.cs" />
         <Compile Include="Patches\Patches.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

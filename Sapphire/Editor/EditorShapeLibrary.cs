@@ -57,7 +57,8 @@ namespace Sapphire
             if (!_open || !inEditor) { K.Show(false); return; }
             if (!K.Built) { BuildShell(); BuildBody(); }
             if (!_selfChecked) { _selfChecked = true; ShapePathGraphic.SelfCheck(); PseudoBuild.SelfCheck(); }
-            if (Input.GetKeyDown(KeyCode.Escape) && !IsTyping(ed)) { Close(); return; }
+            // Popup-only dismissal — a docked panel must survive the editor's deselect ESC.
+            if (K.DockSide == 0 && Input.GetKeyDown(KeyCode.Escape) && !IsTyping(ed)) { Close(); return; }
             K.Show(true);
             TickResize();
             TickScroll();
@@ -79,7 +80,7 @@ namespace Sapphire
 
         private static void BuildShell()
         {
-            K.Rebuild(Loc.T("Shape library"), Close, new Vector2(700f, -40f));
+            K.Rebuild(Loc.T("Shape library"), Close, new Vector2(700f, -72f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
             K.OnDragEnd = () => K.SnapDockOnDragEnd();

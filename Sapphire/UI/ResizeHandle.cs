@@ -6,8 +6,16 @@ namespace Sapphire.UI
 {
     internal enum ResizeEdge { Top, Left, Right, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
 
-    internal class ResizeHandle : MonoBehaviour, IPointerDownHandler, IDragHandler
+    internal class ResizeHandle : MonoBehaviour, IPointerDownHandler, IDragHandler,
+        IBeginDragHandler, IEndDragHandler
     {
+        /* A live resize drag freezes imperative rebuilds. The tool palettes rebuild by
+           destroying and recreating their panel GameObject, which takes the handle being
+           dragged down with it — the drag died on its first frame and the width snapped back,
+           so width resize looked like it did nothing at all. */
+        private static ResizeHandle _active;
+        internal static bool Dragging => _active != null;
+
         public ResizeEdge Edge;
         public RectTransform Panel;
 
@@ -41,8 +49,14 @@ namespace Sapphire.UI
             _startPos = Panel.anchoredPosition;
         }
 
+        public void OnBeginDrag(PointerEventData e) { _active = this; }
+        public void OnEndDrag(PointerEventData e) { if (_active == this) _active = null; }
+        // Panel torn down (module disposed, tab switched) with the button still held.
+        private void OnDisable() { if (_active == this) _active = null; }
+
         public void OnDrag(PointerEventData e)
         {
+            if (Panel == null) return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 Panel.parent as RectTransform, e.position, null, out Vector2 cur);
             Vector2 d = cur - _startMouse;
@@ -90,6 +104,21 @@ namespace Sapphire.UI
             if (grip) BuildGrip(panel);
         }
 
+        /* WIDTH ONLY, for the tool palettes: their height is content-driven (PanelKit.SetHeight
+           rewrites it on every rebuild), so a vertical handle would hand the user a size that
+           vanishes on the next click. Left/right edges plus a grip cue on the right edge. */
+        public static void AttachWidth(RectTransform panel, float minW)
+        {
+            Make(panel, ResizeEdge.Left, minW, 0f);
+            var right = Make(panel, ResizeEdge.Right, minW, 0f);
+            /* Right normally stops short of the BR corner to leave room for the BottomRight
+               handle — which a width-only panel never gets, so that inset would make the corner
+               grip a dead zone. Let the right edge own the corner instead, and use the SAME
+               staircase cue as every other panel rather than a 3-dot sliver nobody finds. */
+            right.offsetMin = new Vector2(right.offsetMin.x, 0f);
+            BuildGrip(panel);
+        }
+
         // The visible bottom-right resize cue (the Ctrl+E panel's dot staircase): 3-2-1 dots
         // pointing into the corner, raycast-transparent so the BR handle under it gets drags.
         public static void BuildGrip(RectTransform panel)
@@ -126,7 +155,7 @@ namespace Sapphire.UI
             }
         }
 
-        private static void Make(RectTransform panel, ResizeEdge edge,
+        private static RectTransform Make(RectTransform panel, ResizeEdge edge,
             float minW = MinWidth, float minH = MinHeight)
         {
             var go = new GameObject("Resize_" + edge, typeof(RectTransform));
@@ -190,6 +219,7 @@ namespace Sapphire.UI
             h.Panel = panel;
             h.MinW = minW;
             h.MinH = minH;
+            return rect;
         }
     }
 }
