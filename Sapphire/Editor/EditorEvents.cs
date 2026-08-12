@@ -350,6 +350,10 @@ namespace Sapphire
             }
         }
 
+        // The difficulty dropdown opens over the same corner as the key hints, and it lives on
+        // the strip canvas (899) so it can't out-sort them — the hints stand down instead.
+        internal static bool DiffMenuOpen => _diffMenuGo != null;
+
         // Read by the scnEditor.ZoomCamera prefix: the editor zooms on any wheel input, so
         // it must stand down over ANY timeline surface — the strip, the mode cluster and
         // tooltip above it, or an open difficulty dropdown (wheel over those leaked into
@@ -370,7 +374,7 @@ namespace Sapphire
         }
 
         /* While play-testing with the game's hide-cursor-while-playing option on, hovering a
-           Sapphire timeline surface (strip, fold handle, mode chips) re-shows the cursor so it
+           Sapphire timeline surface (strip, fold handle, mode chips, pitch bar) re-shows it so it
            stays usable; leaving re-hides it — but only if we were the ones who showed it. */
         private static void TickCursor(bool playing, Vector3 mouse)
         {
@@ -378,7 +382,7 @@ namespace Sapphire
             // blocker owns the screen until a pick, and picking needs a cursor.
             if (playing && (_diffMenuGo != null || _modeMenuGo != null
                             || HoverRect(_stripRect, mouse) || HoverRect(_foldRect, mouse)
-                            || HoverRect(_modeCluster, mouse)))
+                            || HoverRect(_modeCluster, mouse) || HoverRect(EditorPitch.BarRect, mouse)))
             {
                 if (!Cursor.visible) { Cursor.visible = true; _cursorForced = true; }
             }
@@ -3275,21 +3279,54 @@ namespace Sapphire
             public System.Action OnTap;
             private float _acc, _travel;
             private int _lastRebuildFrame;
+            /* Over-pull past the lane-height limit folds the strip away, and past the same
+               distance upward brings it back. Below the threshold nothing happens, so a drag
+               that changes its mind just snaps back — the gesture is only committed at the end
+               of the pull, never mid-way. */
+            private const float FoldPull = 42f;
+            private float _pull;
+
             public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
-            { _acc = 0f; _travel = 0f; _lastRebuildFrame = 0; }
+            { _acc = 0f; _travel = 0f; _pull = 0f; _lastRebuildFrame = 0; }
+
+            // Committed: reset so one drag can't fold and unfold repeatedly.
+            private void Fold(bool hidden)
+            {
+                _tlUserHidden = hidden;
+                _pull = 0f; _acc = 0f;
+                _viewDirty = true; _tlSig = 0; _scanCooldown = 0;
+            }
 
             public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
             {
                 _travel += Mathf.Abs(e.delta.y);
-                if (_tlUserHidden) return; // no lanes to resize while folded
                 var canvas = GetComponentInParent<Canvas>();
                 float scale = canvas != null ? canvas.scaleFactor : 1f;
+                float dy = e.delta.y / Mathf.Max(0.01f, scale);
+                if (_tlUserHidden)
+                {
+                    // Folded: pull the grip UP to bring the strip back.
+                    _pull = dy > 0f ? _pull + dy : 0f;
+                    if (_pull >= FoldPull) Fold(false);
+                    return;
+                }
+                float min = KeyframeMode ? -18f : -6f; // never below readable
+                /* Already at the floor and still pulling down: the lanes can't shrink further,
+                   so spend the rest of the gesture on folding the strip away instead of
+                   discarding it. Measured in RAW pointer pixels, not in height steps — a step is
+                   laneCount pixels of drag, so on anything but an empty timeline the threshold
+                   was unreachable. */
+                if (dy < 0f && _laneHExtra <= min)
+                {
+                    _pull -= dy;
+                    if (_pull >= FoldPull) { Fold(true); return; }
+                }
+                else if (dy > 0f) _pull = 0f;            // changed direction → no fold
                 int laneCount = Mathf.Max(1, _lanes.Count);
-                _acc += (e.delta.y / Mathf.Max(0.01f, scale)) / laneCount;
+                _acc += dy / laneCount;
                 if (Mathf.Abs(_acc) < 1f) return;
                 float step = Mathf.Round(_acc);
                 _acc -= step;
-                float min = KeyframeMode ? -18f : -6f; // never below readable
                 _laneHExtra = Mathf.Clamp(_laneHExtra + step, min, 70f);
                 _viewDirty = true;
                 /* Clearing _tlSig forces the full RebuildStructure — floor entry times, tempo

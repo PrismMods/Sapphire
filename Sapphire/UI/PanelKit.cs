@@ -111,18 +111,13 @@ namespace Sapphire.UI
             }
         }
 
-        /* Width the LEFT sidebar is currently occupying, 0 when nothing visible is docked there.
-           Screen-anchored bottom-left chrome (the pitch bar) offsets by this so a docked panel
-           doesn't sit on top of it. */
-        internal static float LeftDockWidth
-        {
-            get
-            {
-                for (int i = 0; i < _dockL.Count; i++)
-                    if (_dockL[i] != null && _dockL[i].Visible) return _sideWL;
-                return 0f;
-            }
-        }
+        /* Screen-bottom clearance the LEFT sidebar must leave, in the same units as TickDocks'
+           bottomInset. Bottom-left screen chrome (the pitch bar) publishes its own top here each
+           frame so the dock ends above it instead of covering it; 0 when that chrome is hidden. */
+        internal static float LeftBottomFloor;
+
+        private static float BottomFor(int side, float bottomInset) =>
+            side == 1 ? Mathf.Max(bottomInset, LeftBottomFloor) : bottomInset;
 
         /* Is any floating Sapphire window under the pointer right now? Overlays that draw at the
            cursor (the timeline's event tooltip) ask this so they don't print on top of a window
@@ -306,7 +301,7 @@ namespace Sapphire.UI
             if (n == 0) return;
 
             sideW = Mathf.Clamp(sideW, SideMin, cw * 0.6f);
-            float H = Mathf.Max(DockPanelMinH, ch - topMargin - bottomInset);
+            float H = Mathf.Max(DockPanelMinH, ch - topMargin - BottomFor(side, bottomInset));
             float avail = H - (n - 1) * DockGap;
             float totW = 0f;
             for (int i = 0; i < n; i++) totW += _dockTmp[i]._dockWeight;
@@ -403,7 +398,7 @@ namespace Sapphire.UI
                 return;
             }
             float sideW = side == 1 ? _sideWL : _sideWR;
-            float H = Mathf.Max(DockPanelMinH, ch - topMargin - bottomInset);
+            float H = Mathf.Max(DockPanelMinH, ch - topMargin - BottomFor(side, bottomInset));
             float x = side == 1 ? DockMargin : cw - sideW - DockMargin;
             var dr = (RectTransform)_dropInd.transform;
             dr.sizeDelta = new Vector2(sideW, H);
@@ -540,30 +535,46 @@ namespace Sapphire.UI
             CanvasGo = null; PanelGo = null;
         }
 
+        /* Rebuild REUSES PanelGo, clearing its children instead of destroying it. Destroying it
+           took the resize handles (its children) down with it, so a rebuild triggered mid-drag —
+           which is exactly what a live relayout-while-resizing needs — killed the drag on its
+           first frame. Handles are named "Resize*" and are the one thing kept. */
         internal void Rebuild(string title, Action onClose, Vector2 defaultPos)
         {
             EnsureCanvas();
             Vector2 keepPos = defaultPos;
-            if (PanelGo != null)
+            bool fresh = PanelGo == null;
+            if (fresh)
+            {
+                PanelGo = new GameObject("Panel", typeof(RectTransform));
+                PanelGo.transform.SetParent(CanvasGo.transform, false);
+            }
+            else
             {
                 keepPos = ((RectTransform)PanelGo.transform).anchoredPosition;
-                UnityEngine.Object.Destroy(PanelGo);
+                var t = PanelGo.transform;
+                for (int i = t.childCount - 1; i >= 0; i--)
+                {
+                    var ch = t.GetChild(i);
+                    if (ch.name.StartsWith("Resize")) continue;
+                    ch.SetParent(null, false);   // out of the hierarchy NOW; Destroy is deferred
+                    UnityEngine.Object.Destroy(ch.gameObject);
+                }
             }
-
-            PanelGo = new GameObject("Panel", typeof(RectTransform));
-            PanelGo.transform.SetParent(CanvasGo.transform, false);
             var r = (RectTransform)PanelGo.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);
             r.anchoredPosition = keepPos;
-            var bg = PanelGo.AddComponent<RoundedRectGraphic>();
+            if (fresh && DefaultH > 0f) r.sizeDelta = new Vector2(W, DefaultH);
+            var bg = PanelGo.GetComponent<RoundedRectGraphic>() ?? PanelGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 10f;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.94f);
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
             bg.raycastTarget = true;
             _panelBg = bg;
-            _dockAppliedGo = null; // new PanelGo → re-apply dock visuals (square corners / grips)
+            _dockAppliedGo = null; // re-apply dock visuals (square corners / grips)
+            _view = null; _content = null;
 
             var headGo = new GameObject("Head", typeof(RectTransform));
             headGo.transform.SetParent(PanelGo.transform, false);
@@ -613,34 +624,93 @@ namespace Sapphire.UI
             var xtmp = UIBuilder.Tmp(xlGo, "×", 12f, TextAnchor.MiddleCenter, Theme.Text);
             xtmp.raycastTarget = false;
             ClickHandler.Attach(xGo, onClose);
+
+            if (Scrollable) BuildViewport();
         }
+
+        /* Scrolling body, for palettes the user sizes vertically: rows go in a clipped viewport
+           and the panel keeps the height it was dragged to, instead of SetHeight resizing the
+           window to fit the content on every rebuild. */
+        internal bool Scrollable;
+        internal float DefaultH;         // height for the FIRST build only; the drag owns it after
+        private RectTransform _view, _content;
+        private float _scroll;
+
+        // Rows parent here, so the same row helpers serve scrolling and content-sized panels.
+        private Transform RowParent => _content != null ? (Transform)_content : PanelGo.transform;
+
+        private void BuildViewport()
+        {
+            var vpGo = new GameObject("View", typeof(RectTransform));
+            vpGo.transform.SetParent(PanelGo.transform, false);
+            _view = (RectTransform)vpGo.transform;
+            _view.anchorMin = new Vector2(0f, 0f);
+            _view.anchorMax = new Vector2(1f, 1f);
+            _view.offsetMin = new Vector2(0f, 2f);
+            _view.offsetMax = new Vector2(0f, -28f);   // clear the header
+            vpGo.AddComponent<RectMask2D>();
+            var img = vpGo.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.01f);
+            img.raycastTarget = true;                  // wheel target
+
+            var cGo = new GameObject("Content", typeof(RectTransform));
+            cGo.transform.SetParent(vpGo.transform, false);
+            _content = (RectTransform)cGo.transform;
+            _content.anchorMin = new Vector2(0f, 1f);
+            _content.anchorMax = new Vector2(1f, 1f);
+            _content.pivot = new Vector2(0.5f, 1f);
+            /* Rows are laid out from the panel's top edge (y = -34 clears the header), but the
+               viewport already starts below it — shift the content up by that much so the first
+               row isn't pushed a header's worth further down. */
+            _content.anchoredPosition = new Vector2(0f, 28f + _scroll);
+        }
+
+        internal void TickScroll()
+        {
+            if (_view == null || _content == null) return;
+            float wheel = MainClass.WheelY;
+            if (Mathf.Abs(wheel) < 0.01f) return;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(_view, Input.mousePosition, null)) return;
+            _scroll = Mathf.Clamp(_scroll + wheel * 60f, 0f, MaxScroll());
+            _content.anchoredPosition = new Vector2(0f, 28f + _scroll);
+        }
+
+        private float MaxScroll() =>
+            Mathf.Max(0f, _content.sizeDelta.y - 28f - _view.rect.height);
 
         /* Adopt the panel's real width as the layout width. True when it changed, which is the
            caller's cue to rebuild its rows (these palettes are built imperatively, so a resize
-           only shows up on the next build). */
+           only shows up on the next build). Reports DURING a drag too — Rebuild reuses PanelGo,
+           so the handle survives its own relayout. */
         internal bool SyncWidth()
         {
             if (PanelGo == null) return false;
             float w = ((RectTransform)PanelGo.transform).sizeDelta.x;
             if (w >= 1f && Mathf.Abs(w - W) >= 0.5f) { W = w; _wDirty = true; }
-            /* Hold the rebuild until the drag releases. The caller's rebuild destroys PanelGo,
-               and the handle under the cursor with it, so reporting mid-drag ended the drag on
-               its first frame. Rows lag the edge during the drag and catch up on release. */
-            if (!_wDirty || ResizeHandle.Dragging) return false;
+            if (!_wDirty) return false;
             _wDirty = false;
             return true;
         }
 
         internal void SetHeight(float yEnd)
         {
-            if (PanelGo != null) ((RectTransform)PanelGo.transform).sizeDelta = new Vector2(W, -yEnd + Pad);
+            if (PanelGo == null) return;
+            float need = -yEnd + Pad;
+            if (_content != null)
+            {
+                _content.sizeDelta = new Vector2(0f, need);
+                _scroll = Mathf.Clamp(_scroll, 0f, MaxScroll());
+                _content.anchoredPosition = new Vector2(0f, 28f + _scroll);
+                return;
+            }
+            ((RectTransform)PanelGo.transform).sizeDelta = new Vector2(W, need);
         }
 
         internal RoundedRectGraphic Cell(string text, float x, float y, float w, float h,
             Action onClick, bool button, bool accent = false, TextAnchor anchor = TextAnchor.MiddleCenter)
         {
             var go = new GameObject("Cell", typeof(RectTransform));
-            go.transform.SetParent(PanelGo.transform, false);
+            go.transform.SetParent(RowParent, false);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
@@ -669,7 +739,7 @@ namespace Sapphire.UI
         internal TextMeshProUGUI Label(string text, float x, float y, float w, float h, Color color, float size = 12.5f)
         {
             var go = new GameObject("Lbl", typeof(RectTransform));
-            go.transform.SetParent(PanelGo.transform, false);
+            go.transform.SetParent(RowParent, false);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
@@ -684,7 +754,7 @@ namespace Sapphire.UI
         internal void InputField(float x, float y, float w, string value, Action<string> commit)
         {
             var go = new GameObject("F", typeof(RectTransform));
-            go.transform.SetParent(PanelGo.transform, false);
+            go.transform.SetParent(RowParent, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);
@@ -711,7 +781,7 @@ namespace Sapphire.UI
         internal TextMeshProUGUI Status(string text, float y)
         {
             var go = new GameObject("Status", typeof(RectTransform));
-            go.transform.SetParent(PanelGo.transform, false);
+            go.transform.SetParent(RowParent, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);

@@ -49,6 +49,8 @@ namespace Sapphire.UI.Pages
                 v => { s.FeatFileBar = v; notify?.Invoke(); });
             UIBuilder.ToggleCard(grid, Loc.T("Key hints"), s.EditorKeyHints,
                 v => { s.EditorKeyHints = v; notify?.Invoke(); });
+            UIBuilder.ToggleCard(grid, Loc.T("Pin event presets"), s.EventPresetsFloating,
+                v => { s.EventPresetsFloating = v; notify?.Invoke(); });
 
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeader(content, Loc.T("Modes"));

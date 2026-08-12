@@ -234,6 +234,7 @@ namespace Sapphire
                 EditorPitch.Tick(); Acc(10);
                 EditorLevelMenu.Tick(); Acc(11);
                 EditorDecoInspector.Tick();
+                EditorArtistPicker.Tick();
                 EditorGameSettings.Tick(); Acc(12);
                 EditorVfxPreview.Tick(); Acc(13);
                 EditorHelp.Tick(); Acc(14);
@@ -368,6 +369,7 @@ namespace Sapphire
             EditorPitch.Dispose();
             EditorLevelMenu.Dispose();
             EditorDecoInspector.Dispose();
+            EditorArtistPicker.Dispose();
             EditorBulkEdit.Dispose();
             UI.ConfirmBox.Close();
             EditorGameSettings.Dispose();

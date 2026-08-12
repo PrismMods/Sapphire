@@ -124,6 +124,7 @@ namespace Sapphire
                 Build();
             }
             K.Show(true);
+            K.TickScroll();
             SyncPreviewTransition(ed);
         }
 
@@ -266,15 +267,19 @@ namespace Sapphire
 
         // ── UI ───────────────────────────────────────────────────────────────
 
-        private const float MinW = 240f;
+        private const float MinW = 240f, MinH = 160f, DefaultH = 380f;
         private const float PanelW = 332f;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
         private const float LblW = 104f;
 
         private static void Build()
         {
+            // Vertical resize: the body scrolls, so a dragged height sticks instead of
+            // SetHeight snapping the window back to the content on the next rebuild.
+            K.Scrollable = true;
+            K.DefaultH = DefaultH;
             K.Rebuild(Loc.T("Track Tools"), Toggle, new Vector2(340f, -120f));
-            ResizeHandle.AttachWidth((RectTransform)K.PanelGo.transform, MinW);
+            ResizeHandle.AttachAll((RectTransform)K.PanelGo.transform, true, MinW, MinH);
 
             float y = -34f;
             var tabNames = new[] { Loc.T("Fade in"), Loc.T("Fade out"), Loc.T("Explode"), Loc.T("Size"), Loc.T("Multi"), Loc.T("Generate") };

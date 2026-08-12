@@ -19,6 +19,9 @@ namespace Sapphire
         private static bool _override;        // practice override active?
         private static int _practicePitch = 100;
 
+        // EditorEvents.TickCursor keeps the cursor alive over this while play-testing.
+        internal static RectTransform BarRect => _rootRect;
+
         internal static void Tick()
         {
             var s = MainClass.Settings;
@@ -28,6 +31,7 @@ namespace Sapphire
             catch { }
             if (!want)
             {
+                UI.PanelKit.LeftBottomFloor = 0f;
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 return;
             }
@@ -40,10 +44,11 @@ namespace Sapphire
                 float y = 12f;
                 float top = EditorEvents.BottomStripTop;
                 if (top > 0f) y = top + 8f;
-                // Clear the left dock — the bar is screen-anchored, so a docked panel sat on top
-                // of it. 0 when nothing is docked left.
-                var pos = new Vector2(12f + UI.PanelKit.LeftDockWidth, y);
+                var pos = new Vector2(8f, y);
                 if (_rootRect.anchoredPosition != pos) _rootRect.anchoredPosition = pos;
+                // The bar keeps the screen edge; the LEFT dock ends above it instead (it used to
+                // cover the bar, and shoving the bar right pushed it under the timeline chips).
+                UI.PanelKit.LeftBottomFloor = y + _rootRect.sizeDelta.y + 8f;
             }
             catch { }
 
@@ -77,6 +82,7 @@ namespace Sapphire
                 try { var ed = scnEditor.instance; if (ed != null) ed.playbackSpeed = 1f; } catch { }
             }
             _override = false;
+            UI.PanelKit.LeftBottomFloor = 0f;
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _rootRect = null; _field = null; _shown = int.MinValue;
         }

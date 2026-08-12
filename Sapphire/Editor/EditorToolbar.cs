@@ -621,6 +621,37 @@ namespace Sapphire
 
         private static readonly Color IconCol = new Color(0.82f, 0.82f, 0.86f, 1f);
 
+        /* Shared stroke weight for the whole icon set. The bars used to run 2.2-3.2 and the
+           outlines 1.8, which at a 22px cell fused into blobs — the shapes were unreadable
+           long before they were wrong. */
+        private const float Stroke = 1.5f;
+
+        /* Arcs from chord bars (there is no curve primitive). Angles in DEGREES, standard math
+           convention (0 = +x, counter-clockwise); the chord is over-drawn by one stroke width so
+           consecutive segments overlap instead of leaving gaps at the joints. */
+        private static void MakeArc(GameObject parent, Vector2 c, float r, float from, float to,
+            int seg, float thick)
+        {
+            for (int i = 0; i < seg; i++)
+            {
+                float a0 = Mathf.Lerp(from, to, i / (float)seg) * Mathf.Deg2Rad;
+                float a1 = Mathf.Lerp(from, to, (i + 1) / (float)seg) * Mathf.Deg2Rad;
+                var p0 = c + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * r;
+                var p1 = c + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * r;
+                var d = p1 - p0;
+                MakeBar(parent, (p0 + p1) * 0.5f, new Vector2(d.magnitude + thick, thick),
+                    Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            }
+        }
+
+        // Straight stroke between two points, so polylines read as paths instead of loose bars.
+        private static void MakeLine(GameObject parent, Vector2 a, Vector2 b, float thick)
+        {
+            var d = b - a;
+            MakeBar(parent, (a + b) * 0.5f, new Vector2(d.magnitude + thick * 0.5f, thick),
+                Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+        }
+
         private static void MakeDot(GameObject parent, Vector2 pos, float size)
         {
             var g = new GameObject("Dot", typeof(RectTransform));
@@ -636,33 +667,36 @@ namespace Sapphire
             dot.raycastTarget = false;
         }
 
-        // Circular path: a faint ring with tile-dots sitting ON it — a circle of tiles.
+        // Circular path: just the circle.
         private static void DrawCircleIcon(GameObject cell)
         {
+            MakeRing(cell, Vector2.zero, 16.5f, Stroke, IconCol);
+        }
+
+        private static void MakeRing(GameObject parent, Vector2 pos, float dia, float thick, Color col)
+        {
             var g = new GameObject("Ring", typeof(RectTransform));
-            g.transform.SetParent(cell.transform, false);
+            g.transform.SetParent(parent.transform, false);
             var rr = (RectTransform)g.transform;
             rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 0.5f);
             rr.pivot = new Vector2(0.5f, 0.5f);
-            rr.sizeDelta = new Vector2(16f, 16f);
+            rr.anchoredPosition = pos;
+            rr.sizeDelta = new Vector2(dia, dia);
             var ring = g.AddComponent<RoundedRectGraphic>();
-            ring.Radius = 8f;
+            ring.Radius = dia * 0.5f;
             ring.color = new Color(0f, 0f, 0f, 0f);
-            ring.BorderWidth = 1.4f;
-            ring.BorderColor = new Color(IconCol.r, IconCol.g, IconCol.b, 0.5f);
+            ring.BorderWidth = thick;
+            ring.BorderColor = col;
             ring.raycastTarget = false;
-            for (int i = 0; i < 6; i++)
-            {
-                float a = i * 60f * Mathf.Deg2Rad;
-                MakeDot(cell, new Vector2(Mathf.Sin(a) * 8f, Mathf.Cos(a) * 8f), 4f);
-            }
         }
 
-        // Free angle: a plain "∠".
+        // Free angle: "∠" with the measure arc between its legs, the way an angle is annotated.
         private static void DrawAngleIcon(GameObject cell)
         {
-            MakeBar(cell, new Vector2(0f, -6f), new Vector2(18f, 2.4f), 0f);
-            MakeBar(cell, new Vector2(-2.5f, 0.5f), new Vector2(16f, 2.4f), 38f);
+            var vertex = new Vector2(-8f, -6.5f);
+            MakeLine(cell, vertex, new Vector2(9f, -6.5f), Stroke);   // base leg
+            MakeLine(cell, vertex, new Vector2(6f, 7f), Stroke);      // rising leg
+            MakeArc(cell, vertex, 8.5f, 0f, 38.5f, 5, Stroke * 0.85f);
         }
 
         // Camera icon: body outline + lens dot + top bump.
@@ -678,10 +712,10 @@ namespace Sapphire
             var body = bodyGo.AddComponent<RoundedRectGraphic>();
             body.Radius = 3f;
             body.color = new Color(0f, 0f, 0f, 0f);
-            body.BorderWidth = 1.8f;
+            body.BorderWidth = Stroke;
             body.BorderColor = new Color(0.82f, 0.82f, 0.86f, 1f);
             body.raycastTarget = false;
-            MakeBar(cell, new Vector2(-3f, 6.5f), new Vector2(7f, 3f), 0f);      // top bump
+            MakeBar(cell, new Vector2(-3f, 6.5f), new Vector2(7f, 2.2f), 0f);    // top bump
             var lensGo = new GameObject("Lens", typeof(RectTransform));
             lensGo.transform.SetParent(cell.transform, false);
             var lr = (RectTransform)lensGo.transform;
@@ -692,37 +726,25 @@ namespace Sapphire
             var lens = lensGo.AddComponent<RoundedRectGraphic>();
             lens.Radius = 3.25f;
             lens.color = new Color(0f, 0f, 0f, 0f);
-            lens.BorderWidth = 1.8f;
+            lens.BorderWidth = Stroke;
             lens.BorderColor = IconCol;
             lens.raycastTarget = false;
         }
 
-        // Crossed-out eye: capsule outline + pupil + a slash across.
+        /* Crossed-out eye. A capsule (rounded rect) is not an eye — it reads as a pill. This is
+           the real almond: two circular arcs meeting at points, from the circle through
+           (±hw, 0) and (0, ±hh), so the lids actually come to a corner. */
         private static void DrawEyeOffIcon(GameObject cellGo)
         {
-            var eyeGo = new GameObject("Eye", typeof(RectTransform));
-            eyeGo.transform.SetParent(cellGo.transform, false);
-            var er = (RectTransform)eyeGo.transform;
-            er.anchorMin = er.anchorMax = new Vector2(0.5f, 0.5f);
-            er.pivot = new Vector2(0.5f, 0.5f);
-            er.sizeDelta = new Vector2(17f, 10f);
-            var eye = eyeGo.AddComponent<RoundedRectGraphic>();
-            eye.Radius = 5f;
-            eye.color = new Color(0f, 0f, 0f, 0f);
-            eye.BorderWidth = 1.8f;
-            eye.BorderColor = new Color(0.82f, 0.82f, 0.86f, 1f);
-            eye.raycastTarget = false;
-            var pupilGo = new GameObject("Pupil", typeof(RectTransform));
-            pupilGo.transform.SetParent(cellGo.transform, false);
-            var pr = (RectTransform)pupilGo.transform;
-            pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 0.5f);
-            pr.pivot = new Vector2(0.5f, 0.5f);
-            pr.sizeDelta = new Vector2(4f, 4f);
-            var pupil = pupilGo.AddComponent<RoundedRectGraphic>();
-            pupil.Radius = 2f;
-            pupil.color = new Color(0.82f, 0.82f, 0.86f, 1f);
-            pupil.raycastTarget = false;
-            MakeBar(cellGo, Vector2.zero, new Vector2(21f, 2.8f), 45f); // the cross-out
+            const float hw = 9f, hh = 4.6f;
+            float R = (hw * hw + hh * hh) / (2f * hh);   // radius of the lid arc
+            float off = R - hh;                          // its centre, above/below the eye line
+            float span = Mathf.Atan2(off, hw) * Mathf.Rad2Deg;
+            MakeArc(cellGo, new Vector2(0f, -off), R, span, 180f - span, 7, Stroke);
+            MakeArc(cellGo, new Vector2(0f, off), R, 180f + span, 360f - span, 7, Stroke);
+            MakeRing(cellGo, Vector2.zero, 6.4f, Stroke, IconCol);   // iris
+            MakeDot(cellGo, Vector2.zero, 2.2f);
+            MakeBar(cellGo, Vector2.zero, new Vector2(21f, Stroke * 1.3f), 45f); // the cross-out
         }
 
         private static void ToggleCameraPath()
@@ -819,14 +841,43 @@ namespace Sapphire
         private static RoundedRectGraphic _quickChartCellBg;
         private static bool _qcShown;
 
+        /* Quick chart: a solid lightning bolt. Filled, not stroked — an outlined bolt reads as
+           the zip tool's open zigzag at this size. The waist is set by how far the two inner
+           The ⚡ silhouette: point at the top, jag out left, point at the bottom, jag out right.
+           The two inner corners are the notches, and they are OFFSET PAST each other rather
+           than mirrored through the centre — the left notch sits below the midline, the right
+           one above it, so the halves overlap along the whole middle instead of meeting at a
+           waist. Mirroring them (any pair of ±y) is what kept producing a pinch.
+
+           Fill only, no outline pass: stroking the silhouette grew it by half a stroke on every
+           side and rounded the tips, which made the one solid glyph in a stroked icon set even
+           heavier than it already is. The ear-clipped fill closes on its own. */
         private static void DrawQIcon(GameObject cell)
         {
-            var g = new GameObject("Q", typeof(RectTransform));
-            g.transform.SetParent(cell.transform, false);
+            var p = new[]
+            {
+                new Vector2( 2.0f,  9.3f),   // top point
+                new Vector2(-6.2f,  0.7f),   // upper-left jag
+                new Vector2(-1.0f, -2.6f),   // left notch, BELOW the midline
+                new Vector2(-2.0f, -9.3f),   // bottom point
+                new Vector2( 6.2f, -0.7f),   // lower-right jag
+                new Vector2( 1.0f,  2.6f),   // right notch, ABOVE the midline
+            };
+            MakePoly(cell, p);
+        }
+
+        private static void MakePoly(GameObject parent, Vector2[] verts)
+        {
+            var g = new GameObject("Poly", typeof(RectTransform));
+            g.transform.SetParent(parent.transform, false);
             var r = (RectTransform)g.transform;
-            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one;
-            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
-            UIBuilder.Tmp(g, "Q", 17f, TextAnchor.MiddleCenter, IconCol).raycastTarget = false;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.sizeDelta = Vector2.zero;   // verts are absolute offsets from the cell centre
+            var poly = g.AddComponent<UI.PolyGraphic>();
+            poly.color = IconCol;
+            poly.raycastTarget = false;
+            poly.SetPolygon(verts);
         }
 
         private static void ToggleQuickChart()
@@ -873,20 +924,17 @@ namespace Sapphire
             if (hover != null) hover.Base = rest;
         }
 
-        // Shape library: hexagon outline, 6 thin bars around the cell centre (matches
-        // DrawTrackIcon/DrawAngleIcon's bar-primitive style — there's no separate line helper).
+        // Shape library: a regular pentagon, point up (the hexagon read as the magic-shape tool).
         private static void DrawShapeIcon(GameObject cell)
         {
-            const float R = 8f, thick = 2f;
-            for (int i = 0; i < 6; i++)
+            const float R = 9.2f;
+            var p = new Vector2[5];
+            for (int i = 0; i < 5; i++)
             {
-                float a0 = i * 60f * Mathf.Deg2Rad, a1 = (i + 1) * 60f * Mathf.Deg2Rad;
-                var p0 = new Vector2(Mathf.Sin(a0), Mathf.Cos(a0)) * R;
-                var p1 = new Vector2(Mathf.Sin(a1), Mathf.Cos(a1)) * R;
-                var d = p1 - p0;
-                float ang = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
-                MakeBar(cell, (p0 + p1) * 0.5f, new Vector2(d.magnitude, thick), ang);
+                float a = (90f + i * 72f) * Mathf.Deg2Rad;
+                p[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * R;
             }
+            for (int i = 0; i < 5; i++) MakeLine(cell, p[i], p[(i + 1) % 5], Stroke);
         }
 
         private static void MakeBar(GameObject parent, Vector2 pos, Vector2 size, float rot)
@@ -979,7 +1027,7 @@ namespace Sapphire
             else
             {
                 t.color = new Color(0f, 0f, 0f, 0f);
-                t.BorderWidth = 1.8f;
+                t.BorderWidth = Stroke;
                 t.BorderColor = IconCol;
             }
             t.raycastTarget = false;
@@ -1176,15 +1224,22 @@ namespace Sapphire
             if (hover != null) hover.Base = rest;
         }
 
-        // pentagon of dots + center — a "magic circle"
+        // Magic shape: an actual magic circle — inscribed pentagram inside a ring, node dots on
+        // the points. The old five loose dots read as a dice face.
         private static void DrawMagicIcon(GameObject cell)
         {
+            const float R = 8.6f;
+            MakeRing(cell, Vector2.zero, R * 2f + Stroke, Stroke * 0.8f,
+                new Color(IconCol.r, IconCol.g, IconCol.b, 0.75f));
+            var p = new Vector2[5];
             for (int i = 0; i < 5; i++)
             {
-                float a = i * Mathf.PI * 2f / 5f;
-                MakeDot(cell, new Vector2(Mathf.Sin(a) * 8f, Mathf.Cos(a) * 8f), 3.4f);
+                float a = (90f + i * 72f) * Mathf.Deg2Rad;
+                p[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (R - 1.2f);
             }
-            MakeDot(cell, Vector2.zero, 4.5f);
+            // step by 2 → the pentagram's crossing chords
+            for (int i = 0; i < 5; i++) MakeLine(cell, p[i], p[(i + 2) % 5], Stroke * 0.9f);
+            for (int i = 0; i < 5; i++) MakeDot(cell, p[i], 2.6f);
         }
 
         private static RoundedRectGraphic _trackCellBg;
@@ -1200,12 +1255,19 @@ namespace Sapphire
             if (hover != null) hover.Base = rest;
         }
 
-        // staircase of track segments
+        // Track: a length of track the way it looks in-game — a run, a bend, a run — with the
+        // tile seams ticked across it, rather than three disconnected bars.
         private static void DrawTrackIcon(GameObject cell)
         {
-            MakeBar(cell, new Vector2(-5.5f, -6f), new Vector2(9f, 3.2f), 0f);
-            MakeBar(cell, new Vector2(0f, 0f), new Vector2(9f, 3.2f), 45f);
-            MakeBar(cell, new Vector2(5.5f, 6f), new Vector2(9f, 3.2f), 0f);
+            var a = new Vector2(-9.5f, -6f);
+            var b = new Vector2(-1.5f, -6f);
+            var c = new Vector2(3.5f, 4.5f);
+            var d = new Vector2(9.5f, 4.5f);
+            MakeLine(cell, a, b, Stroke);
+            MakeLine(cell, b, c, Stroke);
+            MakeLine(cell, c, d, Stroke);
+            MakeBar(cell, new Vector2(-5.5f, -6f), new Vector2(5f, Stroke * 0.8f), 90f);  // seams
+            MakeBar(cell, new Vector2(6.5f, 4.5f), new Vector2(5f, Stroke * 0.8f), 90f);
         }
 
         private static RoundedRectGraphic _decoCellBg;
@@ -1224,12 +1286,12 @@ namespace Sapphire
         // picture frame with a "sun" dot and a hill bar
         private static void DrawDecoIcon(GameObject cell)
         {
-            MakeBar(cell, new Vector2(0f, 8f), new Vector2(18f, 2.2f), 0f);
-            MakeBar(cell, new Vector2(0f, -8f), new Vector2(18f, 2.2f), 0f);
-            MakeBar(cell, new Vector2(-8f, 0f), new Vector2(13.8f, 2.2f), 90f);
-            MakeBar(cell, new Vector2(8f, 0f), new Vector2(13.8f, 2.2f), 90f);
-            MakeDot(cell, new Vector2(-3f, 2.5f), 3.4f);
-            MakeBar(cell, new Vector2(2f, -3.5f), new Vector2(9f, 2.4f), 35f);
+            MakeBar(cell, new Vector2(0f, 8f), new Vector2(18f, Stroke), 0f);
+            MakeBar(cell, new Vector2(0f, -8f), new Vector2(18f, Stroke), 0f);
+            MakeBar(cell, new Vector2(-8f, 0f), new Vector2(16f, Stroke), 90f);
+            MakeBar(cell, new Vector2(8f, 0f), new Vector2(16f, Stroke), 90f);
+            MakeDot(cell, new Vector2(-3f, 2.5f), 3f);
+            MakeBar(cell, new Vector2(2f, -3.5f), new Vector2(9f, Stroke), 35f);
         }
 
         private static void TickZipTool(scnEditor ed)
@@ -1281,12 +1343,25 @@ namespace Sapphire
         }
 
         // Zip icon: two free-angle "∠"s stacked — the zip's compressed zigzag.
+        /* Zip (드르륵): the dense accordion of alternating tiles it actually builds — a tight
+           sawtooth run on a descending diagonal. The old four-bar "Z" was indistinguishable
+           from the track tool's staircase. */
         private static void DrawZipIcon(GameObject cell)
         {
-            MakeBar(cell, new Vector2(0f, -7f), new Vector2(14f, 2.2f), 0f);
-            MakeBar(cell, new Vector2(-2f, -2.5f), new Vector2(12f, 2.2f), 38f);
-            MakeBar(cell, new Vector2(0f, 1f), new Vector2(14f, 2.2f), 0f);
-            MakeBar(cell, new Vector2(-2f, 5.5f), new Vector2(12f, 2.2f), 38f);
+            /* Shallow teeth on a steep axis: with a deep swing the segments end up steeper than
+               the run itself and the glyph reads as a vertical coil instead of a zip descending
+               across the track. Keep amp well under the along-axis spacing. */
+            const int teeth = 3;
+            const float amp = 2.4f, half = 10.5f, tilt = -34f * Mathf.Deg2Rad;
+            float cs = Mathf.Cos(tilt), sn = Mathf.Sin(tilt);
+            var p = new Vector2[teeth * 2 + 1];
+            for (int i = 0; i < p.Length; i++)
+            {
+                float t = Mathf.Lerp(-half, half, i / (float)(p.Length - 1));
+                float v = (i & 1) == 0 ? -amp : amp;
+                p[i] = new Vector2(t * cs - v * sn, t * sn + v * cs);
+            }
+            for (int i = 0; i < p.Length - 1; i++) MakeLine(cell, p[i], p[i + 1], Stroke);
         }
 
         // ── inspector tool: copy one tile's events, paste onto others ───────
@@ -1436,9 +1511,9 @@ namespace Sapphire
         // Eyedropper: small bulb, short barrel, long thin needle.
         private static void DrawDropperIcon(GameObject cellGo)
         {
-            MakeDot(cellGo, new Vector2(6.5f, 6.5f), 5f);                        // bulb
-            MakeBar(cellGo, new Vector2(3.5f, 3.5f), new Vector2(6.5f, 3.6f), 45f);  // barrel
-            MakeBar(cellGo, new Vector2(-2.5f, -2.5f), new Vector2(10f, 1.7f), 45f); // needle
+            MakeDot(cellGo, new Vector2(6.5f, 6.5f), 4.4f);                      // bulb
+            MakeBar(cellGo, new Vector2(3.5f, 3.5f), new Vector2(6.5f, 2.8f), 45f);  // barrel
+            MakeBar(cellGo, new Vector2(-2.5f, -2.5f), new Vector2(10f, Stroke), 45f); // needle
         }
 
         // ── event palette tool ──────────────────────────────────────────────

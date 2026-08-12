@@ -102,6 +102,7 @@
         <Compile Include="UI\ResizeHandle.cs" />
         <Compile Include="Editor\EditorHandles.cs" />
         <Compile Include="UI\RoundedRectGraphic.cs" />
+        <Compile Include="UI\PolyGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
         <Compile Include="UI\ShapePathGraphic.cs" />
@@ -155,6 +156,7 @@
         <Compile Include="Editor\PseudoBuild.cs" />
         <Compile Include="Editor\EditorLevelMenu.cs" />
         <Compile Include="Editor\EditorDecoInspector.cs" />
+        <Compile Include="Editor\EditorArtistPicker.cs" />
         <Compile Include="Patches\Patches.cs" />
         <Compile Include="Properties\AssemblyInfo.cs" />
     </ItemGroup>

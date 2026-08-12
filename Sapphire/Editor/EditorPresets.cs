@@ -11,14 +11,19 @@ namespace Sapphire
        back into the capture buffer with a click (then stamp tiles as usual), rename (right-click
        a row → inline edit, Enter commits), delete (×). Persisted in Settings as type-tagged
        key/value pairs; decoding builds a fresh default event of the type and overwrites only the
-       keys it knows, so presets survive game updates that add/remove fields. The menu sits below
-       the toolbar while the Inspector tool is active. */
+       keys it knows, so presets survive game updates that add/remove fields. A floating window:
+       follows the Inspector tool by default, or stays up on its own (EventPresetsFloating). */
     internal static class EditorPresets
     {
         private const char Sep = '\u001F';
 
-        private static GameObject _canvasGo;
-        private static GameObject _panelGo;
+        private static readonly PanelKit K = new PanelKit("SapphirePresets", 906, PanelW, focusable: true);
+        private const float PanelW = 250f, HeaderH = 28f;
+        private static Vector2 _size = new Vector2(PanelW, 300f);
+        private static RectTransform _viewport, _content;
+        private static float _scroll;
+        // Closed with × while pinned open; re-arming the Inspector tool brings it back.
+        private static bool _closed, _lastInspector;
         private static int _shownCount = -1;
         private static int _renameIdx = -1;
         private static TMPro.TMP_InputField _renameField;
@@ -33,28 +38,29 @@ namespace Sapphire
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
             var s = MainClass.Settings;
+            bool tool = false;
+            try { tool = EditorToolbar.InspectorActive; } catch { }
+            if (tool && !_lastInspector) _closed = false;
+            _lastInspector = tool;
             bool want = ed != null && !ed.playMode && s != null && MainClass.EditorSuiteOn
-                        && EditorToolbar.InspectorActive;
-            if (!want)
-            {
-                if (_panelGo != null && _panelGo.activeSelf) { _panelGo.SetActive(false); _renameIdx = -1; }
-                // idle the canvas too so its raycaster/batch stop costing while hidden
-                if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
-                return;
-            }
-            if (_canvasGo == null) EnsureCanvas();
-            else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
-            int count = s.EventPresets.Count;
-            if (_panelGo == null || count != _shownCount) Rebuild(s);
-            if (!_panelGo.activeSelf) _panelGo.SetActive(true);
+                        && (tool || s.EventPresetsFloating) && !_closed;
+            if (!want) { K.Show(false); _renameIdx = -1; return; }
+
+            if (!K.Built) { BuildShell(); _shownCount = -1; }
+            if (_shownCount != s.EventPresets.Count || _content == null || _content.childCount == 0)
+                Rebuild(s);
+            K.Show(true);
+            TickScroll();
+            TickResize();
             if (EditorToolbar.InspectorVersion != _loadedVersion && _loadedIdx >= 0)
             { _loadedIdx = -1; SyncTints(); }
         }
 
         internal static void Dispose()
         {
-            if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
-            _canvasGo = null; _panelGo = null; _shownCount = -1; _renameIdx = -1; _renameField = null;
+            K.Dispose();
+            _viewport = null; _content = null;
+            _shownCount = -1; _renameIdx = -1; _renameField = null;
         }
 
         // ── serialization ───────────────────────────────────────────────────
@@ -165,70 +171,101 @@ namespace Sapphire
         }
 
         // ── UI ──────────────────────────────────────────────────────────────
-        private static void EnsureCanvas()
+        /* A real window (PanelKit): draggable, edge-dockable, resizable, and — with the
+           EventPresetsFloating setting — able to outlive the Inspector tool it used to hang
+           off. The rows live in a scroll viewport so a long preset list fits any height. */
+        private static void BuildShell()
         {
-            _canvasGo = new GameObject("SapphirePresets", typeof(RectTransform));
-            UnityEngine.Object.DontDestroyOnLoad(_canvasGo);
-            var canvas = _canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 906;
-            var scaler = _canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            _canvasGo.AddComponent<GraphicRaycaster>();
+            K.Rebuild(Loc.T("Presets"), () => _closed = true, new Vector2(24f, -150f));
+            var panel = (RectTransform)K.PanelGo.transform;
+            panel.sizeDelta = _size;
+            ResizeHandle.AttachAll(panel, true, 200f, 140f);
+
+            var vpGo = new GameObject("View", typeof(RectTransform));
+            vpGo.transform.SetParent(K.PanelGo.transform, false);
+            _viewport = (RectTransform)vpGo.transform;
+            _viewport.anchorMin = new Vector2(0f, 0f);
+            _viewport.anchorMax = new Vector2(1f, 1f);
+            _viewport.offsetMin = new Vector2(0f, 3f);
+            _viewport.offsetMax = new Vector2(0f, -HeaderH);
+            vpGo.AddComponent<RectMask2D>();
+            var vpImg = vpGo.AddComponent<Image>();
+            vpImg.color = new Color(0f, 0f, 0f, 0.01f);
+            vpImg.raycastTarget = true;   // wheel target
+
+            var cGo = new GameObject("Content", typeof(RectTransform));
+            cGo.transform.SetParent(vpGo.transform, false);
+            _content = (RectTransform)cGo.transform;
+            _content.anchorMin = new Vector2(0f, 1f);
+            _content.anchorMax = new Vector2(1f, 1f);
+            _content.pivot = new Vector2(0.5f, 1f);
+            _content.anchoredPosition = new Vector2(0f, _scroll);
         }
 
         private static void Rebuild(Settings s)
         {
-            if (_panelGo != null) UnityEngine.Object.Destroy(_panelGo);
+            if (!K.Built) BuildShell();
+            for (int i = _content.childCount - 1; i >= 0; i--)
+                UnityEngine.Object.Destroy(_content.GetChild(i).gameObject);
             _renameField = null; // _renameIdx survives: the rebuild is what RENDERS rename mode
             _rowBgs.Clear();
             _shownCount = s.EventPresets.Count;
 
-            const float w = 240f, rowH = 28f, pad = 8f, gap = 4f;
-            int rows = Mathf.Max(1, s.EventPresets.Count) + 1; // list (or empty hint) + save row
-            float h = pad * 2f + rows * (rowH + gap) - gap + 20f;
-
-            _panelGo = new GameObject("Panel", typeof(RectTransform));
-            _panelGo.transform.SetParent(_canvasGo.transform, false);
-            var r = (RectTransform)_panelGo.transform;
-            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
-            r.pivot = new Vector2(0.5f, 1f);
-            r.anchoredPosition = new Vector2(0f, -64f); // submenu slot below the toolbar
-            r.sizeDelta = new Vector2(w, h);
-            var bg = _panelGo.AddComponent<RoundedRectGraphic>();
-            bg.Radius = 10f;
-            bg.color = new Color(0.07f, 0.07f, 0.09f, 0.94f);
-            bg.BorderWidth = 1f;
-            bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
-            bg.raycastTarget = true;
-
+            const float rowH = 28f, pad = 8f, gap = 4f;
+            float w = _size.x - pad * 2f;
             float y = -pad;
-            MakeLabel(Loc.T("Presets"), pad, y, w - pad * 2f, 16f); y -= 20f;
 
             if (s.EventPresets.Count == 0)
             {
-                MakeLabel(Loc.T("(none — capture a tile, then Save)"), pad, y, w - pad * 2f, rowH);
+                MakeLabel(Loc.T("(none — capture a tile, then Save)"), pad, y, w, rowH);
                 y -= rowH + gap;
             }
             for (int i = 0; i < s.EventPresets.Count; i++)
             {
                 int idx = i;
                 var preset = s.EventPresets[i];
-                MakePresetRow(preset, idx, pad, y, w - pad * 2f, rowH);
+                MakePresetRow(preset, idx, pad, y, w, rowH);
                 y -= rowH + gap;
             }
 
-            MakeButton(Loc.T("+ Save capture"), pad, y, w - pad * 2f, rowH, SaveCurrent);
+            MakeButton(Loc.T("+ Save capture"), pad, y, w, rowH, SaveCurrent);
+            y -= rowH + gap;
+            _content.sizeDelta = new Vector2(0f, -y + pad);
             SyncTints();
+            ClampScroll();
+        }
+
+        private static void TickScroll()
+        {
+            if (_viewport == null || _content == null) return;
+            float wheel = MainClass.WheelY;
+            if (Mathf.Abs(wheel) < 0.01f) return;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(_viewport, Input.mousePosition, null)) return;
+            _scroll = Mathf.Clamp(_scroll + wheel * 60f, 0f,
+                Mathf.Max(0f, _content.sizeDelta.y - _viewport.rect.height));
+            _content.anchoredPosition = new Vector2(0f, _scroll);
+        }
+
+        private static void ClampScroll()
+        {
+            if (_viewport == null || _content == null) return;
+            _scroll = Mathf.Clamp(_scroll, 0f, Mathf.Max(0f, _content.sizeDelta.y - _viewport.rect.height));
+            _content.anchoredPosition = new Vector2(0f, _scroll);
+        }
+
+        private static void TickResize()
+        {
+            if (!K.Built) return;
+            var r = (RectTransform)K.PanelGo.transform;
+            if ((r.sizeDelta - _size).sqrMagnitude <= 1f) return;
+            _size = r.sizeDelta;
+            _shownCount = -1;   // width changed → rows re-lay at the new content width
         }
 
         private static void MakePresetRow(EventPreset preset, int idx, float x, float y, float w, float h)
         {
             var rowGo = new GameObject("Row" + idx, typeof(RectTransform));
-            rowGo.transform.SetParent(_panelGo.transform, false);
+            rowGo.transform.SetParent(_content, false);
             var rr = (RectTransform)rowGo.transform;
             rr.anchorMin = rr.anchorMax = new Vector2(0f, 1f);
             rr.pivot = new Vector2(0f, 1f);
@@ -309,7 +346,7 @@ namespace Sapphire
         private static void MakeLabel(string text, float x, float y, float w, float h)
         {
             var go = new GameObject("Lbl", typeof(RectTransform));
-            go.transform.SetParent(_panelGo.transform, false);
+            go.transform.SetParent(_content, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);
@@ -322,7 +359,7 @@ namespace Sapphire
         private static void MakeButton(string text, float x, float y, float w, float h, Action onClick)
         {
             var go = new GameObject("Btn", typeof(RectTransform));
-            go.transform.SetParent(_panelGo.transform, false);
+            go.transform.SetParent(_content, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);

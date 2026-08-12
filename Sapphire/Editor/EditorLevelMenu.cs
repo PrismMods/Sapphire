@@ -339,6 +339,9 @@ namespace Sapphire
         // of the Level tab; click expands the condition text.
         private static float ArtistApprovalChip(scnEditor ed, float y)
         {
+            // The verified-artist list is fetched by the GAME's inspector, which Sapphire never
+            // opens — without this the array stays null and every lookup below fails silently.
+            EditorArtistPicker.EnsureLoaded(() => _sig = 0);
             string artist = "";
             try { artist = (ed.levelData.artist ?? "").Trim(); } catch { }
             if (artist.Length == 0) return y;   // nothing to evaluate

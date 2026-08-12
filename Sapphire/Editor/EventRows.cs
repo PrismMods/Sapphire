@@ -237,8 +237,11 @@ namespace Sapphire
             bool isColor = false;
             try { isColor = pi.controlType.ToString().IndexOf("Color", StringComparison.OrdinalIgnoreCase) >= 0; }
             catch { }
+            // pi.type, not controlType: AddParticle's decorationImage is "control": "Hidden"
+            // (the game edits it in its own particle panel), so the controlType test skipped the
+            // browse button on exactly the field that most needs one.
             bool isFile = false;
-            try { isFile = pi.controlType.ToString() == "File"; } catch { }
+            try { isFile = pi.type == ADOFAI.PropertyType.File; } catch { }
             Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
             /* data[key] holds the BOXED, TYPED value. Anything the branches above didn't claim
                would be rendered by FormatVal as a type name and written back by CommitText as
@@ -252,7 +255,10 @@ namespace Sapphire
             }
             float rightW = isFile ? 30f : (isColor ? RowH : 0f);
             float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
-            InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
+            var field = InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
+            // The artist field gets the game's verified-artist autocomplete (name + approval badge).
+            if (k == "artist" && e2.eventType == ADOFAI.LevelEventType.LevelSettings)
+                EditorArtistPicker.Bind(field, sv => CommitText(c, ed, e2, p2, k, sv, val));
             if (isFile)
             {
                 // "…" opens the game's native file picker for this field's type (audio/image/video);
@@ -491,7 +497,7 @@ namespace Sapphire
             return bg;
         }
 
-        internal static void InputRow(RectTransform content, float x, float y, float w, string value, Action<string> commit)
+        internal static TMP_InputField InputRow(RectTransform content, float x, float y, float w, string value, Action<string> commit)
         {
             var go = new GameObject("F", typeof(RectTransform));
             go.transform.SetParent(content, false);
@@ -516,6 +522,7 @@ namespace Sapphire
             field.lineType = TMP_InputField.LineType.SingleLine;
             field.text = value;
             field.onEndEdit.AddListener(v => commit(v));
+            return field;
         }
 
         // ── small shared helpers ──────────────────────────────────────────────

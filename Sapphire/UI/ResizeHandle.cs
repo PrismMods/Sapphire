@@ -99,6 +99,9 @@ namespace Sapphire.UI
         public static void AttachAll(RectTransform panel, bool grip = false,
             float minW = MinWidth, float minH = MinHeight)
         {
+            // Handles now outlive a PanelKit rebuild (it reuses the panel GO), so re-attaching
+            // on every build would stack duplicate hit zones.
+            if (panel.Find("Resize_Right") != null) return;
             foreach (ResizeEdge edge in System.Enum.GetValues(typeof(ResizeEdge)))
                 Make(panel, edge, minW, minH);
             if (grip) BuildGrip(panel);
@@ -109,6 +112,7 @@ namespace Sapphire.UI
            vanishes on the next click. Left/right edges plus a grip cue on the right edge. */
         public static void AttachWidth(RectTransform panel, float minW)
         {
+            if (panel.Find("Resize_Right") != null) return;
             Make(panel, ResizeEdge.Left, minW, 0f);
             var right = Make(panel, ResizeEdge.Right, minW, 0f);
             /* Right normally stops short of the BR corner to leave room for the BottomRight

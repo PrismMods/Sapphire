@@ -69,6 +69,8 @@ namespace Sapphire
             try { ed = scnEditor.instance; } catch { }
             bool want = ed != null && !ed.playMode && MainClass.EditorSuiteOn
                         && s != null && s.EditorKeyHints;
+            // The one surface that outranks the hints: the difficulty dropdown shares this corner.
+            if (want) { try { want = !EditorEvents.DiffMenuOpen; } catch { } }
             if (!want)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);

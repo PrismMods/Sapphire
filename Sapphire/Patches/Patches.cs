@@ -60,6 +60,56 @@ namespace Sapphire
             }
         }
 
+        /* The game's OTHER notification channel. scnEditor.ShowNotification is the editor's own
+           splash (patched above); the `Notification` singleton is a separate bar that slides a
+           big pill across the top for audio-device / calibration / cloud / entitlement toasts —
+           straight over Sapphire's toolbar and file bar, in the game's own styling. While the
+           suite is on, park that bar and re-emit its text through the editor splash so both
+           channels look the same. Untouched outside the editor. */
+        [HarmonyPatch]
+        private static class NotificationBarRoutePatch
+        {
+            // The singleton has no single entry point that sets the text — each Show* assigns it
+            // AFTER calling SetupNotification — so postfix them all.
+            private static readonly string[] Shows =
+            {
+                "ShowCalibration", "ShowAudioBufferChange", "ShowNoSpace", "ShowIncompatibleCloud",
+                "ShowGameServicesTimeOut", "ShowGameServicesComplete", "ShowEntitlementMessage",
+            };
+
+            public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+            {
+                foreach (var n in Shows)
+                {
+                    var m = AccessTools.Method(typeof(Notification), n);
+                    if (m != null) yield return m;
+                }
+            }
+
+            public static void Postfix(Notification __instance)
+            {
+                try
+                {
+                    var ed = scnEditor.instance;
+                    if (ed == null || ed.playMode || !MainClass.EditorSuiteOn) return;
+                    string msg = __instance.text != null ? __instance.text.text : null;
+                    if (string.IsNullOrEmpty(msg)) return;
+
+                    /* Park, don't disable: the singleton is reused for the rest of the session,
+                       so a SetActive(false) here would swallow every later toast outside the
+                       editor too. x = -width is the bar's own resting position off-screen. */
+                    var bar = __instance.bar;
+                    if (bar != null)
+                    {
+                        bar.DOKill();
+                        bar.anchoredPosition = new Vector2(-bar.sizeDelta.x, bar.anchoredPosition.y);
+                    }
+                    ed.ShowNotification(msg, null, 3f);
+                }
+                catch { }
+            }
+        }
+
         /* The editor hardcodes Space as the autoplay-pause key inside scnEditor.Update's
            `RDC.auto && GetKeyDown(Space) && playMode` block. Swap the pushed constant 32
            for a call into Tweaks.AutoPauseKeyCode so the key is rebindable / disableable.

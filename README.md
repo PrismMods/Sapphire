@@ -1,12 +1,19 @@
-# Sapphire
+<div align="center">
 
-ADOFAI editor suite by PrismMods
+  English | [한국어](README_kr.md)
+  
+  # Sapphire
+  
+  *ADOFAI editor suite.*
+  
+  [![Latest Release](https://img.shields.io/github/v/release/PrismMods/Sapphire?include_prereleases&sort=date&label=release&logo=github&style=flat-square)](https://github.com/PrismMods/Sapphire/releases/latest)
+  [![Downloads](https://img.shields.io/github/downloads/PrismMods/Sapphire/total?style=flat-square&logo=github&label=downloads)](https://github.com/PrismMods/Sapphire/releases)
+  
+  See the [features page](docs/FEATURES.md).
+</div>
+<br>
 
-## Features
-
-See the [features page](docs/FEATURES.md).
-
-## Credits
+### Credits
 
 Integrated with permission, UI rebuilt on Sapphire's framework:
 

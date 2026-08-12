@@ -43,6 +43,8 @@ namespace Sapphire
             ["MSM & MH tools"] = "MSM · MH 도구",
             ["File menu bar"] = "파일 메뉴 바",
             ["Key hints"] = "단축키 도움말",
+            ["Pin event presets"] = "이벤트 프리셋 표시 고정",
+            ["Fetching artist list"] = "작곡가 목록 불러오는 중",
             ["Modes"] = "모드",
             ["General"] = "일반",
             ["Quick chart"] = "빠른 차팅",
