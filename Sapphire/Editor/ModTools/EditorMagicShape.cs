@@ -41,6 +41,8 @@ namespace Sapphire
         private static int _tab;            // 0 multiply, 1 create, 2 rotate
 
         internal static bool IsOpen => _open;
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { if (v != _open) Toggle(); }
 
         // fake-floor preview is live only while the CREATE tab is visible with Preview on
         internal static bool PreviewActive => _open && _tab == 1 && _cPreview && K.Visible;

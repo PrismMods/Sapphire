@@ -23,11 +23,23 @@ namespace Sapphire
         // (plain Sel overclaimed for 2+ selected tiles or Sapphire-tools-off).
         private const int FreeAngle = 16;
 
+        /* A row's key column is either a literal (game keys we don't own) or one/two Bind ids,
+           rendered live so a rebind shows up here instead of leaving the card lying. */
         private struct Hint
         {
             public readonly int Ctx, Not; public readonly string Keys, What;
+            public readonly Bind? Key, Key2;
             public Hint(int ctx, string keys, string what, int not = 0)
-            { Ctx = ctx; Not = not; Keys = keys; What = what; }
+            { Ctx = ctx; Not = not; Keys = keys; What = what; Key = null; Key2 = null; }
+            public Hint(int ctx, Bind key, string what, int not = 0, Bind? key2 = null)
+            { Ctx = ctx; Not = not; Keys = null; What = what; Key = key; Key2 = key2; }
+        }
+
+        private static string KeyColumn(Hint h)
+        {
+            if (!h.Key.HasValue) return h.Keys;
+            string a = Keybinds.Label(h.Key.Value);
+            return h.Key2.HasValue ? a + " / " + Keybinds.Label(h.Key2.Value) : a;
         }
 
         private static readonly Hint[] Table =
@@ -35,24 +47,26 @@ namespace Sapphire
             new Hint(Always, "Ctrl+E",  "Sapphire settings"),
             new Hint(Always, "ESC",     "Close panel / disarm tool"),
             // TickToolHotkeys is the only one of these three gated on selection; TickToolSwap
-            // (,/./Shift+.) has no selection check at all — tagging it NoSel hid live hotkeys
-            // the instant a tile was selected, the most common editing state.
+            // (the tool-swap + quick-chart binds) has no selection check at all — tagging it
+            // NoSel hid live hotkeys the instant a tile was selected, the commonest edit state.
             new Hint(NoSel,  "1-0",     "Select tool", not: ToolNum),
             // Tweaks.PanEligible bails once anything is selected, so this is NoSel too.
             new Hint(NoSel,  "WASD",     "Pan camera"),
-            new Hint(Always, ",",       "Previous tool"),
-            new Hint(Always, ".",       "Saved tool slot"),
-            new Hint(Always, "Shift+.", "Save current tool to slot"),
+            new Hint(Always, Bind.QuickChart,   "Quick chart mode"),
+            new Hint(Always, Bind.ToolPrev,     "Previous tool"),
+            new Hint(Always, Bind.ToolSlot,     "Saved tool slot"),
+            new Hint(Always, Bind.ToolSlotSave, "Save current tool to slot"),
+            new Hint(Always, Bind.HzTool,       "Hz tool"),
             new Hint(FreeAngle, "Alt",  "Hold: free-angle aim"),
             new Hint(Sel,    "Ctrl+click",  "Add/remove event row"),
             new Hint(Sel,    "Shift+click", "Select event range"),
             new Hint(ToolNum,"Digits",  "Set key count"),
-            new Hint(Quick,  "I",       "Swirl on/off"),
-            new Hint(Quick,  "O",       "Set speed"),
-            new Hint(Quick,  "[ / ]",   "Halve / double speed"),
-            new Hint(Quick,  "Shift+P", "Pause event"),
-            new Hint(Quick,  "Shift+L", "Tile location event"),
-            new Hint(Quick,  "Shift+G", "Angle pad"),
+            new Hint(Quick,  Bind.QcSwirl,     "Swirl on/off"),
+            new Hint(Quick,  Bind.QcSetSpeed,  "Set speed"),
+            new Hint(Quick,  Bind.QcSpeedDown, "Halve / double speed", key2: Bind.QcSpeedUp),
+            new Hint(Quick,  Bind.QcPause,     "Pause event"),
+            new Hint(Quick,  Bind.QcLocate,    "Tile location event"),
+            new Hint(Quick,  Bind.QcAnglePad,  "Angle pad"),
         };
 
         private const float BoxW = 260f, Margin = 12f, KeyCol = 74f, FontSize = 11f;
@@ -81,8 +95,11 @@ namespace Sapphire
             if (_canvasGo == null) return;
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
+            // Fold the keybind revision into the signature: a rebind changes the key column
+            // without changing the context, and the card would otherwise keep the stale text.
             int ctx = Context(ed, s);
-            if (ctx != _sig) { _sig = ctx; Compose(ctx); }
+            int sig = ctx | (Keybinds.Revision << 8);
+            if (sig != _sig) { _sig = sig; Compose(ctx); }
             Place();
         }
 
@@ -151,7 +168,7 @@ namespace Sapphire
                 // an active tool must not claim it still does its normal job.
                 if (!(h.Ctx == Always || (ctx & h.Ctx) != 0) || (h.Not != 0 && (ctx & h.Not) != 0)) continue;
                 if (_sb.Length > 0) _sb.Append('\n');
-                _sb.Append("<color=#").Append(keyHex).Append('>').Append(h.Keys).Append("</color>")
+                _sb.Append("<color=#").Append(keyHex).Append('>').Append(KeyColumn(h)).Append("</color>")
                    .Append("<pos=").Append(KeyCol.ToString("0")).Append('>')
                    .Append("<color=#").Append(descHex).Append('>').Append(Loc.T(h.What)).Append("</color>");
             }

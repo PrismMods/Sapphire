@@ -52,6 +52,8 @@ namespace Sapphire
         internal static bool ManagesPanel { get; private set; }
 
         internal static void Toggle() { _open = !_open; if (!_open) _sig = 0; }
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { if (v) Open(); else Close(); }
         internal static void Open() { _open = true; }
         internal static void Close() { _open = false; _sig = 0; }
 

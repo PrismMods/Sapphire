@@ -44,6 +44,8 @@ namespace Sapphire
         private static bool _open, _selfChecked;
 
         internal static bool IsOpen => _open;
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { if (v) Open(); else Close(); }
         internal static void Toggle() { _open = !_open; EditorToolbar.SyncShapeLibHighlight(); }
         internal static void Open()   { if (!_open) { _open = true; EditorToolbar.SyncShapeLibHighlight(); } }
         internal static void Close()  { if (_open) { _open = false; HideConfirm(); EditorToolbar.SyncShapeLibHighlight(); } }
@@ -137,6 +139,15 @@ namespace Sapphire
         }
 
         private static void BuildBody() { BuildRail(); BuildPreview(); }
+
+        // Re-read the store into an already-open panel (a shape added from elsewhere — the angle
+        // pad's "Store" button — otherwise wouldn't appear until the panel was rebuilt).
+        internal static void Refresh(string selectId = null)
+        {
+            if (!K.Built) return;
+            if (selectId != null) { _selId = selectId; _formOpen = false; _scroll = 0f; }
+            BuildRail(); BuildPreview();
+        }
 
         private static void ClearChildren(RectTransform t)
         {

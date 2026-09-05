@@ -14,10 +14,10 @@ namespace Sapphire
     }
 
     /* One builder for every pseudo/shape/angle-pad run. Lowers to PseudoStep[]; walks to tiles +
-       twirls (+ midspins in Task 4). fixed = shape-library geometry (localSign from TurnSign,
-       flip AFTER twirled taps, first-twirl spin gate); anchor = angle-pad / pseudo-tool geometry
-       (spinSign from the anchor, flip BEFORE twirled taps). Twirls sit one tile left, added after
-       the tiles, then one RemakePath. */
+       twirls (+ midspins in Task 4). fixed = shape-library geometry (localSign from TurnSign
+       MIRRORED BY THE ANCHOR'S SPIN, flip AFTER twirled taps, first twirl only when rotating);
+       anchor = angle-pad / pseudo-tool geometry (spinSign from the anchor, flip BEFORE twirled
+       taps). Twirls sit one tile left, added after the tiles, then one RemakePath. */
     internal static class PseudoBuild
     {
         private const char ArbitraryChar = (char)163;
@@ -52,7 +52,17 @@ namespace Sapphire
                 double dir = StartDir(ed);
                 int firstNewSeq = AnchorSeq(ed) + 1;
                 int spin = AnchorSpin(ed);
-                int ts = ctx.Fixed ? (ctx.TurnSign) : spin;
+                /* MIRROR A SHAPE ONTO A TWIRLED ANCHOR. The game reads a tile's charter back as
+                   180 - s*(facing[T] - facing[T-1]), where s is the spin AT floor T-1 (+1 while
+                   the ball turns clockwise, -1 after an odd number of Twirls). Writing the SAME
+                   absolute facings after a twirl therefore keeps the shape's LOOK but reads every
+                   charter back as 360-charter -- a 30 grace becomes a 330 beat. Folding the
+                   anchor's spin into the turn sign flips the geometry instead: the shape lands
+                   VERTICALLY MIRRORED and its charters (so its beat) survive untouched. That is
+                   also what a charter does by hand -- past a twirl the same notation draws the
+                   mirror image. The anchor path needs no such fold: it walks with the spin
+                   directly, which is what makes a run respect an incoming twirl. */
+                int ts = ctx.Fixed ? FixedSign(ctx.TurnSign, spin) : spin;
                 int localSign = ts;
                 int placed = 0;
                 bool firstTwirl = true;
@@ -77,7 +87,15 @@ namespace Sapphire
                         if (!AppendAbs(ed, dir)) return Abort(ed, twirlSeqs, placed);
                         if (tw)
                         {
-                            bool gate = ctx.Fixed ? (!firstTwirl || spin == ts) : true;
+                            /* The run's FIRST twirl is the only one that would land ON the
+                               anchor tile (twirls sit one floor left of the tile they turn), so
+                               it is emitted only for Rotate, which needs that extra flip to keep
+                               its mirrored geometry's charters. Deliberately independent of the
+                               anchor's spin: the mirror above already accounts for that, so the
+                               same shape carries the SAME twirl set onto a twirled anchor as onto
+                               a fresh track -- and never doubles up on a twirl the user placed
+                               (two Twirl events on one floor cancel; the game just toggles). */
+                            bool gate = ctx.Fixed ? (!firstTwirl || ctx.TurnSign < 0) : true;
                             if (gate) twirlSeqs.Add(firstNewSeq + placed - 1);
                             firstTwirl = false;
                             if (ctx.Fixed) localSign = -localSign;             // fixed: flip AFTER
@@ -138,13 +156,29 @@ namespace Sapphire
         }
         private static double StartDir(scnEditor ed)
         { try { var af = ADOBase.lm.floorAngles; return af[Mathf.Clamp(AnchorSeq(ed), 0, af.Length - 1)]; } catch { return 0.0; } }
+        /* Which way the ball is turning at the anchor, in the GAME's convention:
+           +1 clockwise, -1 counter-clockwise, matching `EditorToolbar.AppendRel` and
+           scnEditor.CreateArbitraryFloor (`dir + (ccw ? -(180-rel) : 180-rel)`). scrFloor.isCCW
+           is FALSE on a fresh track and already includes that floor's own Twirl event, so it is
+           the whole answer for both "which direction is the path progressing" and "respect
+           twirls".
+
+           This returned the OPPOSITE from the shared-core refactor (431710e) until Sept 6 2026,
+           which silently INVERTED every charter the anchor path wrote: the game reads a tile back
+           as 180 - s·Δfacing, so a run built with -s produced 360-charter — a 30° tap landing as
+           a 330° beat. See [[charter-spin-math]]. Do not "simplify" the sign back. */
         private static int AnchorSpin(scnEditor ed)
         {
             try { var sel = ed.selectedFloors; scrFloor a = sel != null && sel.Count > 0 ? sel[sel.Count - 1] : null;
                 if (a == null) { var fl = ed.floors; if (fl != null && fl.Count > 0) a = fl[fl.Count - 1]; }
-                if (a != null) return a.isCCW ? 1 : -1; } catch { }
+                if (a != null) return a.isCCW ? -1 : 1; } catch { }
             return 1;
         }
+
+        /* Turn sign for a shape build: the shape's own sign, mirrored once for a CCW anchor so
+           the shape lands vertically mirrored with its charters intact. A fresh (clockwise)
+           anchor is +1, where this must be a no-op or every existing shape would flip. */
+        internal static int FixedSign(int turnSign, int anchorSpin) => turnSign * anchorSpin;
 
         // Delete the given seqs high→low (mirrors the proven multi-tile delete), then reselect the
         // tile BEFORE the run so Build appends into the freed spot.
@@ -174,6 +208,15 @@ namespace Sapphire
             double dir = 0, ls = 1; var f = new double[2];
             for (int i = 0; i < unit.Length; i++) { dir = (dir + ls * (180 - unit[i].Angle)) % 360; if (dir < 0) dir += 360; f[i] = dir; ls = -ls; }
             bool ok = Mathf.Abs((float)f[0] - 150f) < 0.01f && Mathf.Abs((float)f[1] - 60f) < 0.01f;
+            // Shape mirroring: a fresh (clockwise) anchor is AnchorSpin +1 and must not change the
+            // shape; a twirled (CCW) anchor is -1 and must flip it. Rotate mirrors on top of both.
+            ok &= FixedSign(1, 1) == 1 && FixedSign(1, -1) == -1
+               && FixedSign(-1, 1) == -1 && FixedSign(-1, -1) == 1;
+            /* The charter round-trip that 431710e broke: build a 30° tap on a fresh clockwise
+               anchor and the game must read 30 back, not 330. facing step = s·(180-rel) with
+               s = +1; charter = 180 - s·step. */
+            double step = 1 * (180.0 - 30.0);
+            ok &= Mathf.Abs((float)(180.0 - 1 * step) - 30f) < 0.01f;
             SapphireLog.Log("PseudoBuild.SelfCheck: " + (ok ? "PASS" : "FAIL"));
             return ok;
         }

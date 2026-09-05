@@ -9,8 +9,10 @@ using Sapphire.UI;
 
 namespace Sapphire
 {
-    /* Quick-chart mode: fast in-place charting without arming a tool.
-         • Shift+T  toggle a swirl (Twirl) on the selected tile(s)
+    /* Quick-chart mode: fast in-place charting without arming a tool. Defaults (all rebindable
+       from the settings panel — Editor ▸ Keybinds):
+         • I        toggle a swirl (Twirl) on the selected tile(s)
+         • O        prompt for a speed on the selected tile; [ / ] halve / double it
          • Shift+P  prompt for beats → place a Pause event on the selected tile
          • Shift+L  prompt for X/Y  → place a PositionTrack event on the selected tile
          • Shift+G  open an "angle pad": a floating field that appends a whole run of tiles from
@@ -18,18 +20,13 @@ namespace Sapphire
                     twirls that tile (30t 30t 180); a parenthesised group repeats with '*'
                     ((30 30 180)*3). Duplicable, each holding its own value as a temp preset.
 
-       Keybinds are SHIFT combos on purpose: the editor's 34 keyboard tile-placement binds are
-       all registered with KeyModifier.None and matched by EXACT modifier equality, so a Shift+
-       letter never collides with bare-key placement and needs no suppression (verified in the
-       EditorKeybindManager IL). Everything lives on one own canvas, torn down with the suite. */
+       The defaults dodge the editor's tile-placement keys (which are registered under BOTH
+       KeyModifier.None and Shift, matched by exact modifier equality) — see Keybinds for the
+       verified key list. Everything lives on one own canvas, torn down with the suite. */
     internal static class EditorQuickChart
     {
-        // Bare keys (non-tile keys): I swirl, O set-speed, [ ] halve/double speed. Shift combos: P L G.
-        private const KeyCode KSwirl = KeyCode.I;    // bare — 'I' is not a game tile-placement key
-        private const KeyCode KSetSpeed = KeyCode.O; // bare — 'O' is only Ctrl-bound in the editor
-        private const KeyCode KPause = KeyCode.P;    // Shift+P — 'P' isn't a tile key either
-        private const KeyCode KLocate = KeyCode.L;   // Shift+L
-        private const KeyCode KAnglePad = KeyCode.G; // Shift+G
+        // Every hotkey below is rebindable — see Keybinds (which also carries the tile-key
+        // collision rule these defaults were picked against).
 
         private static GameObject _canvasGo;
         private static RectTransform _root;
@@ -59,7 +56,16 @@ namespace Sapphire
             }
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
 
+            /* Build the canvas BEFORE the auto-spawn so its first layout pass has happened by
+               the time a pad asks where the screen edges are; on the frame a canvas is created
+               its rect is still 0, and the pad would be placed against nothing. Costs one frame
+               of delay the first time the mode is switched on. */
+            EnsureCanvas();
             ClampPads();
+            /* The pad is the mode's main surface, so the mode is never on with nothing to type
+               into. Spawned WITHOUT focus — an auto-appearing field that steals the keyboard
+               would eat the editor's own tile keys the moment quick chart turns on. */
+            if (_pads.Count == 0 && CanvasReady) SpawnPad(null, "", focus: false);
 
             if (!Input.anyKeyDown) return; // hotkeys below are all GetKeyDown
             // Prompt-local keys (handled BEFORE the typing gate, since a prompt field is focused).
@@ -89,23 +95,18 @@ namespace Sapphire
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
                 || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)
                 || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) return;
-            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-
-            if (!shift)
-            {
-                if (Input.GetKeyDown(KSwirl)) QuickSwirl(ed);
-                else if (Input.GetKeyDown(KSetSpeed)) OpenSpeedPrompt(ed);
-                // [ / ] halve/double the selected tile's SetSpeed (only when it has one — else the
-                // game's event-page nav still works; a Harmony guard suppresses nav when we act).
-                else if (Input.GetKeyDown(KeyCode.LeftBracket)) AdjustSelectedSpeed(ed, 0.5);
-                else if (Input.GetKeyDown(KeyCode.RightBracket)) AdjustSelectedSpeed(ed, 2.0);
-                return;
-            }
-            // Shift combos (the game binds every tile key under None AND Shift, so these keys are
-            // deliberately NON-tile keys — P/L/G — leaving their Shift variants free).
-            if (Input.GetKeyDown(KPause)) OpenPausePrompt(ed);
-            else if (Input.GetKeyDown(KLocate)) OpenLocatePrompt(ed);
-            else if (Input.GetKeyDown(KAnglePad)) SpawnPad(null, "");
+            // Keybinds.Down matches the Shift state as part of the bind, so bare keys and Shift
+            // combos live in ONE chain — a user who moves the angle pad off Shift+G onto a bare
+            // key needs no branch of its own.
+            if (Keybinds.Down(Bind.QcSwirl)) QuickSwirl(ed);
+            else if (Keybinds.Down(Bind.QcSetSpeed)) OpenSpeedPrompt(ed);
+            // [ / ] halve/double the selected tile's SetSpeed (only when it has one — else the
+            // game's event-page nav still works; a Harmony guard suppresses nav when we act).
+            else if (Keybinds.Down(Bind.QcSpeedDown)) AdjustSelectedSpeed(ed, 0.5);
+            else if (Keybinds.Down(Bind.QcSpeedUp)) AdjustSelectedSpeed(ed, 2.0);
+            else if (Keybinds.Down(Bind.QcPause)) OpenPausePrompt(ed);
+            else if (Keybinds.Down(Bind.QcLocate)) OpenLocatePrompt(ed);
+            else if (Keybinds.Down(Bind.QcAnglePad)) SpawnPad(null, "");
         }
 
         // A game OR Sapphire input field is focused (the pad/prompt fields don't set the game's
@@ -351,6 +352,9 @@ namespace Sapphire
             {
                 var s = MainClass.Settings;
                 if (s == null || !MainClass.EditorSuiteOn || !s.FeatQuickChart) return false;
+                // Rebinding the speed keys hands the brackets back to the game — suppressing its
+                // page nav for a key we no longer listen to would just break event navigation.
+                if (!OwnsBrackets()) return false;
                 var ed = scnEditor.instance;
                 if (ed == null || ed.playMode || Typing(ed)) return false;
                 int seq = SelectedSeq(ed);
@@ -359,7 +363,27 @@ namespace Sapphire
             catch { return false; }
         }
 
+        private static bool OwnsBrackets() =>
+               (Keybinds.Key(Bind.QcSpeedDown) == KeyCode.LeftBracket && !Keybinds.Shift(Bind.QcSpeedDown))
+            || (Keybinds.Key(Bind.QcSpeedUp) == KeyCode.RightBracket && !Keybinds.Shift(Bind.QcSpeedUp));
+
         // ── event-data helpers (coerce to the default's runtime type) ──────────
+        /* Shared with the Hz tool: a Pause of `beats` on one floor. Lives here because the
+           type-coercion + Enable pair below is the landmine (a fresh event's optional properties
+           come DISABLED, so setting the value alone does nothing) and it should have exactly one
+           implementation. */
+        internal static void AddPause(scnEditor ed, int floorSeq, double beats)
+        {
+            try
+            {
+                var ev = new ADOFAI.LevelEvent(floorSeq, ADOFAI.LevelEventType.Pause);
+                if (!SetNum(ev, "duration", beats)) LogKeys("Pause", ev);
+                Enable(ev, "duration");
+                ed.events.Add(ev);
+            }
+            catch (Exception ex) { SapphireLog.Log("QuickChart: add Pause failed: " + ex.Message); }
+        }
+
         private static bool SetNum(ADOFAI.LevelEvent ev, string key, double val)
         {
             try
@@ -575,24 +599,33 @@ namespace Sapphire
         // Keep every open window on screen through a resize (windows are center-anchored).
         private static void ClampPads()
         {
-            if (_root == null || _root.rect.width < 100f) return; // wait for a real layout size
-            float hw = _root.rect.width * 0.5f, hh = _root.rect.height * 0.5f;
+            if (!CanvasReady) return;                            // wait for a real layout size
             for (int i = _pads.Count - 1; i >= 0; i--)
             {
                 if (_pads[i].Root == null) { _pads.RemoveAt(i); continue; }
-                Clamp((RectTransform)_pads[i].Root.transform, hw, hh);
+                Clamp((RectTransform)_pads[i].Root.transform);
             }
-            if (_promptGo != null) Clamp((RectTransform)_promptGo.transform, hw, hh);
+            if (_promptGo != null) Clamp((RectTransform)_promptGo.transform);
         }
 
-        private static void Clamp(RectTransform rt, float hw, float hh)
+        // The canvas has been through a layout pass, so its rect is the real screen size. A
+        // freshly created canvas reports 0 until Unity lays it out, and anything positioned
+        // against that lands nowhere near where it was asked to go.
+        private static bool CanvasReady => _root != null && _root.rect.width >= 100f;
+
+        private static void Clamp(RectTransform rt) => rt.anchoredPosition =
+            ClampToCanvas(rt.anchoredPosition, rt.rect.width, rt.rect.height);
+
+        /* Keep a WHOLE window inside the canvas. The old rule clamped only the window's CENTRE
+           to within 20px of the edge, which let a 300-wide pad sit with 130px of itself off the
+           right of the screen and called that fine — the "spawns outside the screen" bug. A
+           window wider than the canvas gets pinned centred rather than fighting the clamp. */
+        private static Vector2 ClampToCanvas(Vector2 p, float w, float h)
         {
-            // center-anchored: keep the window's center within the canvas (± a small inset) so a
-            // resize can never strand it fully off-screen.
-            var p = rt.anchoredPosition;
-            p.x = Mathf.Clamp(p.x, -hw + 20f, hw - 20f);
-            p.y = Mathf.Clamp(p.y, -hh + 20f, hh - 20f);
-            rt.anchoredPosition = p;
+            if (_root == null) return p;
+            float mx = Mathf.Max(0f, (_root.rect.width - w) * 0.5f - PadMargin);
+            float my = Mathf.Max(0f, (_root.rect.height - h) * 0.5f - PadMargin);
+            return new Vector2(Mathf.Clamp(p.x, -mx, mx), Mathf.Clamp(p.y, -my, my));
         }
 
         // ── angle pad window ───────────────────────────────────────────────────
@@ -610,11 +643,30 @@ namespace Sapphire
            whole point of a keyboard flow. */
         private static bool _picking;
 
-        private static void SpawnPad(Vector2? at, string initial)
+        private const string HintText = "append t for twirl · math supported · (…)*n";
+
+        /* TOP-RIGHT corner. The toolbar is centred on the top edge and its submenus drop
+           straight down from it, so the shelf position this used to sit in was covered by the
+           bar's own menus; the right corner is clear of both, and of the key hints + mode chips
+           at the bottom. Dropped below PadTopInset so it clears the master switch and its
+           "Sapphire" label, which own the very top-right. Pads are centre-anchored, so this is
+           an offset from the canvas centre, and it goes through the same containment clamp as a
+           dragged window — a default position must never be one the clamp would reject. */
+        private const float PadMargin = 16f;
+        private const float PadTopInset = 76f;
+
+        private static Vector2 DefaultPadPos(float w, float h)
+        {
+            if (!CanvasReady) return new Vector2(0f, 60f);
+            return ClampToCanvas(new Vector2(_root.rect.width * 0.5f - w * 0.5f - PadMargin,
+                                             _root.rect.height * 0.5f - h * 0.5f - PadTopInset), w, h);
+        }
+
+        private static void SpawnPad(Vector2? at, string initial, bool focus = true)
         {
             EnsureCanvas();
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
-            const float w = 244f, h = 122f, pad = 10f;
+            const float w = 300f, h = 122f, pad = 10f;
 
             var pw = new Pad();
             var root = new GameObject("AnglePad", typeof(RectTransform));
@@ -623,8 +675,10 @@ namespace Sapphire
             rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 0.5f);
             rr.pivot = new Vector2(0.5f, 0.5f);
             rr.sizeDelta = new Vector2(w, h);
-            Vector2 pos = at ?? new Vector2(0f, 60f);
-            if (at == null) { int k = _spawnSeq++ % 6; pos += new Vector2(k * 26f, -k * 26f); }
+            Vector2 pos = at ?? DefaultPadPos(w, h);
+            // Duplicates cascade DOWN-LEFT, back into the screen: the default spot is the
+            // top-right corner, so any other direction walks them off it.
+            if (at == null) { int k = _spawnSeq++ % 6; pos += new Vector2(-k * 26f, -k * 26f); }
             rr.anchoredPosition = pos;
             var bg = root.AddComponent<RoundedRectGraphic>();
             bg.Radius = 9f;
@@ -690,8 +744,8 @@ namespace Sapphire
             var hir = (RectTransform)hintGo.transform;
             hir.anchorMin = new Vector2(0f, 1f); hir.anchorMax = new Vector2(1f, 1f);
             hir.pivot = new Vector2(0.5f, 1f);
-            hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad - 60f, -68f);
-            pw.Hint = UIBuilder.Tmp(hintGo, Loc.T("180=straight · 30t=twirl · (…)*n"), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
+            hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad, -68f);
+            pw.Hint = UIBuilder.Tmp(hintGo, Loc.T(HintText), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
             pw.Hint.raycastTarget = false;
 
             // place button
@@ -717,15 +771,36 @@ namespace Sapphire
             placeGo.AddComponent<Hover>().Init(pbg, pbg.color, new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.5f));
             ClickHandler.Attach(placeGo, () => { Deselect(); DoPlace(pw); });
 
+            // Store-as-shape: same row as Place but GREY, because it's the secondary action —
+            // Place is what the pad is for, this just files the run away for later.
+            MakeFlatBtn(root, Loc.T("Add to Shape Library"), -pad - 16f - 78f - 8f, pad, 152f, 28f,
+                        () => { Deselect(); StoreAsShape(pw); });
+
             // Enter in the field places too (keeps hands on the keyboard).
             field.onSubmit.AddListener(_ => DoPlace(pw));
 
             // Resizable like the MSM/MH popups — grip at the bottom-right; content is anchored
             // (header/field/hint stretch, buttons ride the edges) so it re-fits width automatically.
-            ResizeHandle.AttachAll(rr, true, 200f, 108f);
+            ResizeHandle.AttachAll(rr, true, 262f, 108f);   // floor = both bottom buttons + pads
 
             _pads.Add(pw);
-            try { field.ActivateInputField(); } catch { }
+            if (focus) try { field.ActivateInputField(); } catch { }
+        }
+
+        /* Open (or reuse) a pad carrying `expr` — the Hz tool's "To angle pad" entry point. An
+           EMPTY pad is reused rather than stacking another window on top of the one the mode
+           always keeps open; anything the user has typed is left alone. */
+        internal static void OpenPadWith(string expr)
+        {
+            EnsureCanvas();
+            foreach (var p in _pads)
+                if (p != null && p.Field != null && p.Field.text.Trim().Length == 0)
+                {
+                    p.Field.text = expr;
+                    try { p.Field.ActivateInputField(); } catch { }
+                    return;
+                }
+            SpawnPad(null, expr);
         }
 
         private static void DoPlace(Pad pw)
@@ -793,9 +868,61 @@ namespace Sapphire
         {
             if (pw == null) return;
             if (_picking) EndPick();   // indices shift; a stale badge would point at the wrong pad
+            // The mode always keeps one pad, so × on the last one CLEARS it instead of leaving a
+            // bare screen for Tick to refill (which would teleport it back to the default corner).
+            if (_pads.Count == 1 && _pads[0] == pw)
+            {
+                if (pw.Field != null) pw.Field.text = "";
+                if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
+                return;
+            }
             _pads.Remove(pw);
             if (pw.Root != null) UnityEngine.Object.Destroy(pw.Root);
             pw.Root = null;
+        }
+
+        /* Store the pad's run as a shape. The pad's text is the WHOLE run — ParseAngles already
+           flattened every (…)*n group — so it is saved with repeat 1 into its own category; a
+           shape-library repeat on top of that would multiply a run the user already spelled out.
+           Named by the expression, which is the most useful label a one-click save can produce. */
+        private const int MaxStoredShapeTiles = 64;   // the panel renders one angle field per tile
+
+        private static void StoreAsShape(Pad pw)
+        {
+            if (pw == null || pw.Field == null) return;
+            var angles = ParseAngles(pw.Field.text);
+            if (angles == null || angles.Count == 0)
+            {
+                if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
+                return;
+            }
+            if (angles.Count > MaxStoredShapeTiles)
+            {
+                if (pw.Hint != null) { pw.Hint.text = Loc.T("run too long to store"); pw.Hint.color = Theme.DangerHover; }
+                return;
+            }
+            var v = new ShapeVariant
+            {
+                K = angles.Count,
+                Angles = new double[angles.Count],
+                Twirls = new bool[angles.Count],
+                N = 1,
+            };
+            double sum = 0;
+            for (int i = 0; i < angles.Count; i++)
+            { v.Angles[i] = angles[i].Angle; v.Twirls[i] = angles[i].Twirl; sum += angles[i].Angle; }
+
+            string name = pw.Field.text.Trim();
+            if (name.Length > 28) name = name.Substring(0, 27) + "…";
+            var e = ShapeStore.AddShape(name, ShapeStore.NonRepeatCat, sum, v);
+            if (pw.Hint != null)
+            {
+                pw.Hint.color = Theme.TextMuted;
+                pw.Hint.text = e != null ? Loc.T("stored in") + " " + Loc.T(ShapeStore.NonRepeatCat)
+                                         : Loc.T("check the expression");
+            }
+            if (e != null) try { EditorShapeLibrary.Refresh(e.Id); } catch { }
+            Deselect();
         }
 
         // ── prompt card (pause beats / tile X-Y) ───────────────────────────────
@@ -925,6 +1052,35 @@ namespace Sapphire
         }
 
         // ── small UI factories ─────────────────────────────────────────────────
+        /* A muted, bottom-anchored text button (the pad's secondary action). Same geometry as
+           the accent Place button next to it, minus the accent — grey reads as "not the thing
+           you came here to press". */
+        private static void MakeFlatBtn(GameObject parent, string label, float x, float y,
+                                        float w, float h, Action onClick)
+        {
+            var go = new GameObject("FlatBtn", typeof(RectTransform));
+            go.transform.SetParent(parent.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(1f, 0f);
+            r.pivot = new Vector2(1f, 0f);
+            r.anchoredPosition = new Vector2(x, y);
+            r.sizeDelta = new Vector2(w, h);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 6f;
+            bg.color = new Color(1f, 1f, 1f, 0.08f);
+            bg.BorderWidth = 1f;
+            bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            bg.raycastTarget = true;
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = lr.offsetMax = Vector2.zero;
+            UIBuilder.Tmp(lGo, label, 11.5f, TextAnchor.MiddleCenter, Theme.TextMuted).raycastTarget = false;
+            go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.16f));
+            ClickHandler.Attach(go, onClick);
+        }
+
         private static void MakeGlyphBtn(GameObject parent, string glyph, float x, float size, string tip, Action onClick)
         {
             var go = new GameObject("B", typeof(RectTransform));

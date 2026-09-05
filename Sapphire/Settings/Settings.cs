@@ -362,6 +362,15 @@ namespace Sapphire
         public bool AutoplayPauseEnabled = false;
         public UnityEngine.KeyCode AutoplayPauseKey = UnityEngine.KeyCode.Space;
 
+        // Rebindable editor hotkeys (Keybinds.All). Stored by id, defaults filled in on load —
+        // an empty list means "everything default", so an old settings file needs no migration.
+        public List<KeyBindDto> Keybinds = new List<KeyBindDto>();
+
+        // OFF = a relaunch starts with every panel closed at its default spot (panel positions
+        // already survive within a session on their own). ON = PanelLayout snapshots them.
+        public bool PersistPanelLayout = false;
+        public List<PanelStateDto> PanelStates = new List<PanelStateDto>();
+
         // User chose "Keep both" in the duplicate-install prompt (Mods/ + UMMMods/).
         // Don't nag again.
         public bool IgnoreDuplicateInstall = false;

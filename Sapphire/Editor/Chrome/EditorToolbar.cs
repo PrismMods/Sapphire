@@ -172,7 +172,7 @@ namespace Sapphire
             if (s.FeatQuickChart != _qcShown) { _qcShown = s.FeatQuickChart; SyncQuickChartHighlight(); }
         }
 
-        // ── quick tool switching: X = previous tool, C = saved tool (Shift+C saves) ──
+        // ── quick tool switching + the quick-chart mode key (all rebindable — see Keybinds) ──
 
         private static int _lastToolSeen, _prevTool, _savedTool;
 
@@ -207,22 +207,28 @@ namespace Sapphire
             if (typing) return;
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
                 || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)) return;
-            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-            // comma/period: bare keys are unbound in the game (only Ctrl+,/. rotate floors,
-            // and ctrl already returned above) — no keybind suppression needed
-            if (Input.GetKeyDown(KeyCode.Comma) && !shift)
+            // Quick chart is a MODE, not a tool — its key rides here (rather than in
+            // EditorQuickChart.Tick, which returns early while the mode is off) so it can turn
+            // the mode back on. Same typing/chord guards as the tool swaps above.
+            if (Keybinds.Down(Bind.QuickChart)) { ToggleQuickChart(); return; }
+            if (Keybinds.Down(Bind.HzTool)) { EditorHzTool.Toggle(); return; }
+
+            // Default , / . are bare keys unbound in the game (only Ctrl+,/. rotate floors, and
+            // ctrl already returned above) — no keybind suppression needed. Down() matches Shift
+            // as part of the bind, so save-to-slot and use-slot can share a key.
+            if (Keybinds.Down(Bind.ToolPrev))
             {
                 if (_prevTool != 0) ActivateTool(_prevTool);
             }
-            else if (Input.GetKeyDown(KeyCode.Period))
+            else if (Keybinds.Down(Bind.ToolSlotSave))
             {
-                if (shift)
-                {
-                    _savedTool = cur;
-                    SapphireLog.Log(cur != 0 ? "Tool slot saved" : "Tool slot cleared");
-                }
-                else if (_savedTool != 0) ActivateTool(_savedTool);
+                _savedTool = cur;
+                SapphireLog.Log(cur != 0 ? "Tool slot saved" : "Tool slot cleared");
+            }
+            else if (Keybinds.Down(Bind.ToolSlot))
+            {
+                if (_savedTool != 0) ActivateTool(_savedTool);
             }
         }
 
@@ -360,7 +366,7 @@ namespace Sapphire
         {
             CloseDialog();
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
-            _canvasGo = null; _canvasRect = null; _barGo = null; _dialogGo = null;
+            _canvasGo = null; _canvasRect = null; _barGo = null; _dialogGo = null; _hzCellBg = null;
             _fPerRound = _fInterval = _fPseudoAngle = null; _freeAngleCellBg = null;
             _pseudoCellBg = null; _cameraCellBg = null; _quickChartCellBg = null; _cameraMenuGo = null; _cameraGapsBg = null; _pseudoMenuGo = null; _pseudoMidspinBg = null;
             _pseudoCounterLbl = null; _fPseudoTap = null; _fPseudoCustom = null;
@@ -441,6 +447,7 @@ namespace Sapphire
                 _inspCellBg = Place(2, "ToolInspector", Loc.T("Inspector (copy tile events)"), DrawDropperIcon, ToggleInspector);
                 _cameraCellBg = Place(3, "ToolCamera", Loc.T("Camera path"), DrawCameraIcon, ToggleCameraPath);
                 Place(3, "ToolVfx", Loc.T("VFX preview (ESC exits)"), DrawEyeOffIcon, EditorVfxPreview.Toggle);
+                _hzCellBg = Place(4, "ToolHz", Loc.T("Hz tool"), DrawHzIcon, EditorHzTool.Toggle);
                 _quickChartCellBg = Place(4, "ToolQuickChart",
                     Loc.T("Quickchart Mode"), DrawQIcon, ToggleQuickChart);
             }
@@ -455,6 +462,7 @@ namespace Sapphire
             SyncCameraHighlight();
             SyncQuickChartHighlight();
             SyncShapeLibHighlight();
+            SyncHzHighlight();
             BuildToolLabel();
             BuildToolTip();
             if (sap && _pseudoTool) ShowPseudoMenu();
@@ -911,6 +919,69 @@ namespace Sapphire
             _cameraCellBg.color = rest;
             var hover = _cameraCellBg.GetComponent<CellHover>();
             if (hover != null) hover.Base = rest;
+        }
+
+        private static RoundedRectGraphic _hzCellBg;
+
+        internal static void SyncHzHighlight()
+        {
+            if (_hzCellBg == null) return;
+            var rest = EditorHzTool.IsOpen
+                ? new Color(UI.Theme.Accent.r, UI.Theme.Accent.g, UI.Theme.Accent.b, 0.45f)
+                : new Color(1f, 1f, 1f, 0.05f);
+            _hzCellBg.color = rest;
+            var hover = _hzCellBg.GetComponent<CellHover>();
+            if (hover != null) hover.Base = rest;
+        }
+
+        /* Hz tool: a SOLID eighth note, in the engraved style of the real glyph rather than a
+           stroked outline — the same filled treatment as the quick-chart bolt beside it.
+           Three filled parts: a slanted oval notehead, a straight stem off its right shoulder,
+           and a flag that is a TAPERED polygon, thick where it leaves the stem and drawn to a
+           point at its tail. A constant-width arc reads as a hook, not a flag; the taper is the
+           whole character of the glyph. */
+        private static void DrawHzIcon(GameObject cell)
+        {
+            // +Z is counter-clockwise in uGUI, and a notehead tilts UP to the right — a negative
+            // angle here leans it the wrong way, which is the one thing that reads as "not a
+            // note" at this size.
+            MakeOval(cell, new Vector2(-3.6f, -6.6f), new Vector2(9.2f, 6.2f), 24f);
+            MakeBar(cell, new Vector2(1.35f, 1.6f), new Vector2(2.5f, 16.4f), 0f);
+            /* Flag outline, clockwise from where it leaves the stem top. The outer edge bows
+               out to the right and down; the inner edge returns higher and closes into the
+               stem, so the shape is fat at the top and tapers to the tail — the silhouette in
+               the reference. Ear-clipped fill, so the outline just has to close. */
+            MakePoly(cell, new[]
+            {
+                new Vector2( 2.4f,  9.8f),   // leaves the stem at the top
+                new Vector2( 6.0f,  7.1f),   // outer edge: out…
+                new Vector2( 8.3f,  3.4f),
+                new Vector2( 8.6f, -0.6f),
+                new Vector2( 7.4f, -4.2f),   // …down to the tail point
+                new Vector2( 7.0f, -1.6f),   // inner edge returns, higher and tighter
+                new Vector2( 6.4f,  1.4f),
+                new Vector2( 4.6f,  4.2f),
+                new Vector2( 2.4f,  5.9f),   // closes back into the stem
+            });
+        }
+
+        /* Filled "stadium": a rotated rounded rect whose corner radius is half its short side.
+           MakeDot is a circle and MakeBar's radius is a fixed 1.25 (a brick at this size), so
+           neither can be a notehead — this is the missing fill primitive. */
+        private static void MakeOval(GameObject parent, Vector2 pos, Vector2 size, float rot)
+        {
+            var g = new GameObject("Oval", typeof(RectTransform));
+            g.transform.SetParent(parent.transform, false);
+            var r = (RectTransform)g.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = pos;
+            r.sizeDelta = size;
+            r.localRotation = Quaternion.Euler(0f, 0f, rot);
+            var oval = g.AddComponent<RoundedRectGraphic>();
+            oval.Radius = Mathf.Min(size.x, size.y) * 0.5f;
+            oval.color = IconCol;
+            oval.raycastTarget = false;
         }
 
         internal static void SyncShapeLibHighlight()
@@ -3327,7 +3398,9 @@ namespace Sapphire
         // get_Item + `unbox.any SpeedType`, so it MUST be the boxed SpeedType enum (a string
         // throws / falls back to Bpm mode, which just recolours the tiles by a broken speed —
         // the "changes the track colour instead of a SetSpeed" symptom).
-        private static void AddSetSpeed(scnEditor ed, int floorSeq, double multiplier)
+        // Shared with the Hz tool: a SetSpeed on one floor, written as a Multiplier (a BOXED
+        // SpeedType enum — never a string, the game reads the field's runtime type).
+        internal static void AddSetSpeed(scnEditor ed, int floorSeq, double multiplier)
         {
             try
             {

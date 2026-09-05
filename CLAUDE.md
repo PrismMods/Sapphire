@@ -17,17 +17,29 @@ Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens
 
 ## Architecture
 
-- `MainClass` — UMM entry; `SapphireTicker` (DDOL MonoBehaviour) drives all per-frame
-  `Tick()`s (EditorEvents, EditorSkin, EditorChrome, Tweaks).
-- `Util/EditorEvents.cs` — event timeline strip (bottom-docked), transport, mode cluster.
-- `Util/EditorChrome.cs` — file chip/menu, panel rail, event dock (proxies the game's own
-  buttons; never reimplements game logic).
-- `Util/EditorSkin.cs` — dark reskin of the game's editor UI (reversible, guard-based).
+- `MainClass` — UMM entry; `SapphireTicker` (DDOL MonoBehaviour) drives every per-frame
+  `Tick()`. **The call order in `SapphireTicker.Update` is the blast radius**: there is no
+  per-module try/catch, so one throwing module kills every module ticked after it.
+- `Editor/` is grouped by surface — one folder per area, namespace stays flat `Sapphire`:
+  - `Chrome/` — the editor shell: toolbar, file chip / panel rail / event dock (`EditorChrome`
+    proxies the game's own buttons; never reimplements game logic), master switch, tile menu,
+    key hints, popups, handles, VFX preview, in-editor manual (`EditorHelp`/`EditorHelpKo`).
+  - `Timeline/` — event timeline strip + transport + mode cluster (`EditorEvents`), pitch
+    overlay, and the camera-keyframe stack (camera path, graph editor, bezier, ease picker).
+  - `Events/` — event inspector/selector panels, copy + presets, bulk edit, timeline event
+    rows, filter browser.
+  - `Charting/` — tile geometry: `PseudoBuild` (the one builder for every pseudo/shape/angle
+    run), shape library + store, quick chart, Hz tool.
+  - `ModTools/` — the ported MSM / MappingHelper tools and their engines.
+  - `Level/` — level settings menu, game settings, artist picker, decoration inspector.
+- `UI/` — panel framework carried from Bismuth (UICore/UIBuilder/TabRail/PageStack/Theme +
+  `PanelKit`, the floating-window shell every palette is built on).
+  Settings tab: `UI/Pages/PageEditor.cs`. Rebindable hotkeys: `Util/Keybinds.cs`.
 - `Util/Tweaks.cs` — autoplay-pause key (transpiler target), Editor Mode, tile angle.
-- `UI/` — panel framework carried from Bismuth (UICore/UIBuilder/TabRail/PageStack/Theme).
-  Settings tab: `UI/Pages/PageEditor.cs`.
 - Game types are researched from an IL dump: `monodis Assembly-CSharp.dll > /tmp/acs.il`,
   then grep. Verify field/method accessibility there before writing code.
+- The game prints `Mods detected! Disabling exception capturing`, so a thrown exception is
+  SILENT — not in Player.log, not in SapphireLog. Instrument; you cannot read the failure.
 
 ## Charting domain (ADOFAI)
 

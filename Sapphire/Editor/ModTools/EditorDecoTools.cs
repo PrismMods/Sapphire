@@ -82,6 +82,9 @@ namespace Sapphire
         private static bool _lyDisOpOn = true; private static float _lyDisOpacity;
         private static Ease _lyDisEase = Ease.Linear;
 
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { if (v != _open) Toggle(); }
+
         internal static void Toggle()
         {
             _open = !_open;

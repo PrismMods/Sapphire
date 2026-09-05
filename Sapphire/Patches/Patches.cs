@@ -236,7 +236,13 @@ namespace Sapphire
         [HarmonyPatch(typeof(scnEditor), "ZoomCamera")]
         private static class EditorZoomBlockPatch
         {
-            public static bool Prefix() => !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
+            /* PanelKit.AnyPanelHovered covers every floating Sapphire window generically, so a
+               new panel (the Hz tool was the one that slipped through) blocks the zoom without
+               anyone remembering to extend this list. The named checks stay for the surfaces
+               that are NOT PanelKit windows — the timeline strip, help, the docks, the graph
+               and the pickers. */
+            public static bool Prefix() => !UI.PanelKit.AnyPanelHovered()
+                && !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
                 && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
                 && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered
                 && !EditorDecoInspector.Hovered && !EditorBulkEdit.Hovered;

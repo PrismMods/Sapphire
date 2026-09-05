@@ -29,6 +29,12 @@ namespace Sapphire
     internal static class ShapeStore
     {
         internal const string BuiltInCat = "Built-in";
+        // Angle-pad captures land here: the pad's expression is already the WHOLE run (groups are
+        // flattened), so repeating it would be wrong.
+        internal const string NonRepeatCat = "Non-repeating shapes";
+        // Repeat count a user-made shape starts at. Built-ins keep their curated NOverride /
+        // star-closing default; anything captured is taken literally — place what I wrote, once.
+        internal const int DefaultN = 1;
         private static List<string> _categories;
         private static List<ShapeEntry> _shapes;
         private static int _customSeq;
@@ -84,7 +90,7 @@ namespace Sapphire
                                 K = vd.K,
                                 Angles = vd.Angles != null ? vd.Angles.ToArray() : new double[0],
                                 Twirls = vd.Twirls != null ? vd.Twirls.ToArray() : new bool[0],
-                                N = vd.N < 1 ? 3 : vd.N
+                                N = vd.N < 1 ? DefaultN : vd.N
                             });
                     if (!_categories.Contains(e.Category)) _categories.Add(e.Category);
                     _shapes.Add(e);
@@ -182,7 +188,7 @@ namespace Sapphire
                 if (!ExprEval.TryEval(t, out double v)) return null;
                 angles.Add(v); twirls.Add(tw); sum += v;
             }
-            return new ShapeVariant { K = angles.Count, Angles = angles.ToArray(), Twirls = twirls.ToArray(), N = 3 };
+            return new ShapeVariant { K = angles.Count, Angles = angles.ToArray(), Twirls = twirls.ToArray(), N = DefaultN };
         }
 
         internal static double SumOf(ShapeVariant v)
@@ -217,7 +223,7 @@ namespace Sapphire
                     angles.Add(System.Math.Round(180.0 - turn, 3));      // relative charter
                     twirls.Add(twSet.Contains(seq - 1));                 // twirl sits one tile before
                 }
-                return new ShapeVariant { K = angles.Count, Angles = angles.ToArray(), Twirls = twirls.ToArray(), N = 3 };
+                return new ShapeVariant { K = angles.Count, Angles = angles.ToArray(), Twirls = twirls.ToArray(), N = DefaultN };
             }
             catch { return null; }
         }

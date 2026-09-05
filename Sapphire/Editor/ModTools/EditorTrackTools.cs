@@ -83,6 +83,9 @@ namespace Sapphire
         private static int _gtCount = 4;
         private static bool _gtPreview = true;
 
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { if (v != _open) Toggle(); }
+
         internal static void Toggle()
         {
             _open = !_open;

@@ -17,17 +17,6 @@ namespace Sapphire.UI.Pages
     {
         private static readonly string[] LangLabels = { "Auto (follow game)", "English", "한국어" };
 
-        // Hotkey lines for the quick-chart page; each is a Loc key in its own right.
-        private static readonly string[] QuickChartKeys =
-        {
-            "I — swirl on/off on the selected tile(s)",
-            "O — set speed on the selected tile",
-            "[ / ] — halve / double that tile's speed",
-            "Shift+P — Pause event (prompts for beats)",
-            "Shift+L — tile-location event (prompts X / Y)",
-            "Shift+G — angle pad: space-separated RELATIVE angles (180 = straight; math ok), Place a whole run",
-            "These keys never clash with the game's tile placement.",
-        };
 
         public static void Build(PageStack stack)
         {
@@ -71,8 +60,13 @@ namespace Sapphire.UI.Pages
             UIBuilder.SectionHeader(content, Loc.T("General"));
             UIBuilder.NavRow(content, Loc.T("Language"), () => stack.Push(Loc.T("Language"), LanguagePage),
                 "english, korean, 한국어, auto");
+            UIBuilder.NavRow(content, Loc.T("Keybinds"), () => stack.Push(Loc.T("Keybinds"), KeybindsPage),
+                "hotkey, shortcut, rebind, quick chart, swirl, speed, angle pad, tool slot");
             UIBuilder.Collapsible(content, Loc.T("Invert scroll direction"), s.InvertScroll,
                 v => { s.InvertScroll = v; notify?.Invoke(); }, null);
+            UIBuilder.Collapsible(content, Loc.T("Keep panel layout after restart"), s.PersistPanelLayout,
+                v => { s.PersistPanelLayout = v; PanelLayout.OnOptionChanged(); notify?.Invoke(); },
+                body => UIBuilder.Label(body, Loc.T("PanelLayoutHelp")));
             UIBuilder.NavRow(content, Loc.T("Updates"), () => stack.Push(Loc.T("Updates"), UpdatesPage),
                 "check for updates, pre-release, install, version");
         }
@@ -101,7 +95,72 @@ namespace Sapphire.UI.Pages
             UIBuilder.Collapsible(body, Loc.T("Quick chart mode"), s.FeatQuickChart,
                 v => { s.FeatQuickChart = v; notify?.Invoke(); }, null);
             UIBuilder.Label(body, Loc.T("QuickChartHelp"));
-            foreach (var line in QuickChartKeys) UIBuilder.Label(body, Loc.T(line));
+            // The keys themselves are rebindable, so the page shows the LIVE binds rather than a
+            // hardcoded cheat sheet that goes stale the moment someone rebinds one.
+            BindRows(body, "Quick chart");
+        }
+
+        /* Keybinds page. Every row is the AutoplayPage rebind flow: click to arm a hidden
+           per-frame KeyListener (it reads input directly, so it works with the panel open), then
+           the next non-modifier key becomes the bind — with the Shift state captured AS the user
+           presses it, so Shift+G binds Shift+G and a bare G binds G. There is no cancel: any
+           watched key commits, same as the autoplay-pause rebind. */
+        private static void KeybindsPage(Transform body)
+        {
+            UIBuilder.Label(body, Loc.T("KeybindsHelp"));
+            BindRows(body, null);
+            UIBuilder.Spacer(body);
+            UIBuilder.Button(body, Loc.T("Reset all keybinds"), () =>
+            {
+                Keybinds.ResetAll();
+                UICore.OnSettingsChanged?.Invoke();
+                UICore.RebuildBody();
+            });
+        }
+
+        // Rows for one group (null = every group, with a header per group).
+        private static void BindRows(Transform body, string group)
+        {
+            var listener = UIBuilder.Rect("KeybindListener", body).AddComponent<KeyListener>();
+            var refresh = new System.Collections.Generic.List<Action>();
+            string seen = null;
+            foreach (var d in Keybinds.All)
+            {
+                if (group != null && d.Group != group) continue;
+                if (group == null && d.Group != seen) { seen = d.Group; UIBuilder.SectionHeader(body, Loc.T(d.Group)); }
+                refresh.Add(BindRow(body, d, listener, refresh));
+            }
+        }
+
+        private static Action BindRow(Transform body, Keybinds.Def d, KeyListener listener,
+                                      System.Collections.Generic.List<Action> refreshAll)
+        {
+            TextMeshProUGUI label = null;
+            Action refresh = () =>
+            {
+                if (label == null) return;
+                string conflict = Keybinds.ConflictLabel(d.Id);
+                label.text = Loc.T(d.Label) + ":  " + Keybinds.Label(d.Id)
+                           + (conflict != null ? "   (" + Loc.T("also") + " " + conflict + ")" : "");
+            };
+            var btn = UIBuilder.Button(body, "", () =>
+            {
+                listener.Active = true;
+                // Rebound per arm: one listener serves the whole page, and only the row that was
+                // clicked should take the next key.
+                listener.OnKey = kc =>
+                {
+                    if (Keybinds.IsModifier(kc)) return;   // Shift fires first in "Shift+G" — wait
+                    listener.Active = false;
+                    Keybinds.Set(d.Id, kc, Keybinds.ShiftHeld);
+                    UICore.OnSettingsChanged?.Invoke();
+                    foreach (var r in refreshAll) r();      // a new bind can create/clear conflicts
+                };
+                if (label != null) label.text = Loc.T(d.Label) + ":  " + Loc.T("Press a key…");
+            });
+            label = btn.GetComponentInChildren<TextMeshProUGUI>();
+            refresh();
+            return refresh;
         }
 
         private static void EditorModePage(Transform body)

@@ -42,6 +42,28 @@ namespace Sapphire.UI
         }
 
         internal bool Built => CanvasGo != null && PanelGo != null;
+
+        /* Saved geometry, for PanelLayout. Reading is only meaningful once built; writing before
+           that stashes the rect until the first Rebuild (panels build lazily, on first show). */
+        private Rect? _pendingRect;
+
+        internal bool TryGetRect(out Rect rect)
+        {
+            rect = default(Rect);
+            if (PanelGo == null) { if (!_pendingRect.HasValue) return false; rect = _pendingRect.Value; return true; }
+            var r = (RectTransform)PanelGo.transform;
+            var p = r.anchoredPosition; var sz = r.sizeDelta;
+            rect = new Rect(p.x, p.y, sz.x, sz.y);
+            return true;
+        }
+
+        internal void SetRect(Rect rect)
+        {
+            if (PanelGo == null) { _pendingRect = rect; return; }
+            var r = (RectTransform)PanelGo.transform;
+            r.anchoredPosition = new Vector2(rect.x, rect.y);
+            if (rect.width > 40f && rect.height > 40f) { r.sizeDelta = new Vector2(rect.width, rect.height); W = rect.width; }
+        }
         internal bool Visible => PanelGo != null && PanelGo.activeSelf;
 
         // fired when a header drag releases — hook SnapDockOnDragEnd for edge docking
@@ -566,6 +588,15 @@ namespace Sapphire.UI
             r.pivot = new Vector2(0f, 1f);
             r.anchoredPosition = keepPos;
             if (fresh && DefaultH > 0f) r.sizeDelta = new Vector2(W, DefaultH);
+            // A restored layout arrives before the panel is ever built, so it waits here.
+            if (fresh && _pendingRect.HasValue)
+            {
+                var pr = _pendingRect.Value;
+                r.anchoredPosition = new Vector2(pr.x, pr.y);
+                if (pr.width > 40f && pr.height > 40f) r.sizeDelta = new Vector2(pr.width, pr.height);
+                W = r.sizeDelta.x;
+                _pendingRect = null;
+            }
             var bg = PanelGo.GetComponent<RoundedRectGraphic>() ?? PanelGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 10f;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.94f);
