@@ -11,6 +11,12 @@ namespace Sapphire
     internal static class EditorMasterSwitch
     {
         private const float TrackW = 46f, TrackH = 26f, Knob = 20f;
+
+        /* How far down the top-right corner this cluster reaches, published so other surfaces can
+           sit clear of it instead of hardcoding a guess: the track starts 12 below the top and is
+           TrackH tall, then the "Sapphire" label runs 41..53. Anything spawning top-right should
+           start below ChromeBottom, not beside it — the switch canvas draws over everything. */
+        internal const float ChromeBottom = 53f;
         private static readonly float KnobX = (TrackW - Knob) * 0.5f - 3f; // knob travel from centre
 
         private static GameObject _canvasGo;

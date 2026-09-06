@@ -668,7 +668,13 @@ namespace Sapphire
            an offset from the canvas centre, and it goes through the same containment clamp as a
            dragged window — a default position must never be one the clamp would reject. */
         private const float PadMargin = 16f;
-        private const float PadTopInset = 76f;
+
+        /* Clear of the master switch, which owns the very top-right and whose canvas draws over
+           this one. EditorMasterSwitch.ChromeBottom is where its label ends; the extra clearance
+           is EMPIRICAL — measured against the switch in game, because 76 (its bottom plus a
+           normal margin) still landed on it. Derived rather than hardcoded so a change to the
+           switch's own layout moves the pad with it. */
+        private static float PadTopInset => EditorMasterSwitch.ChromeBottom + 58f;
 
         private static Vector2 DefaultPadPos(float w, float h)
         {
@@ -1264,8 +1270,10 @@ namespace Sapphire
            twirl marker rather than as a circle at 24px. */
         private static void DrawSwirlIcon(GameObject cell)
         {
+            // Thin: at 24px a 1.6-wide stroke over two turns fuses into a disc. 1.0 keeps the
+            // gaps between the windings readable, which is the whole shape.
             const int seg = 26;
-            const float turns = 2.15f, rMax = 7.2f, thick = 1.6f;
+            const float turns = 2.15f, rMax = 7.4f, thick = 1.0f;
             Vector2 prev = Vector2.zero;
             for (int i = 0; i <= seg; i++)
             {
