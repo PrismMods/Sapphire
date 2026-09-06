@@ -3,6 +3,39 @@
 
 # Changelog
 
+## 1.0.0-a5
+
+### Hz tool (new) — toolbar `♪` or `Shift+F`
+
+- **Chart by frequency.** Pick a note and a shape; the tool solves the BPM the run needs (`shape BPM = angle × Hz ÷ 3`) and writes the SetSpeed that makes it real.
+- **Duration is exact** and takes priority over pitch — the tile count is a whole number, so reachable frequencies are quantised and the error is shown in cents.
+- **Exact pitch** pads the remainder with a Pause, so duration *and* pitch can both be exact; with **Perfect circles**, so can a closed loop.
+- **Full circle** builds a regular N-gon. **Laps** re-trace it, **Separate circles** spaces them with PositionTrack offsets you set, and **Suggest** picks the most accurate sides/laps for your duration.
+- **Note picker** with configurable **EDO and tuning reference** (12-EDO, A4 = 440 by default).
+
+### Angle pad
+
+- Always one open in quick chart, top-right, with a **repeat count**, **clear**, and its own help page.
+- The **swirl button** inverts the first tile's twirl for the *first repetition only*, without touching what you typed — so a repeated shape still closes.
+- **Add to Shape Library** saves the run under *Non-repeating shapes*.
+- **Ghost tile preview** of the run, here and in the Hz tool.
+
+### Charting fixes
+
+- **Angles came out inverted** — a `30` tap landed as a `330` beat, because the anchor's spin was read with the wrong sign. This changes angle-pad output.
+- Shapes placed on a **twirled tile now mirror**, keeping their charters and beat.
+- **Twirls are never stacked**: two on one tile cancel each other, so placement toggles instead.
+- New shapes default to **one repeat**.
+
+### Elsewhere
+
+- **Rebindable keybinds** for quick chart, the tool slots and the Hz tool (settings ▸ Editor ▸ Keybinds).
+- **Panel layout** can survive a restart (off by default).
+- Scrolling over a Sapphire window no longer zooms the editor.
+- Error text is readable again, and long runs place faster.
+
+---
+
 ## 1.0.0-a4
 
 ### Decorations
@@ -57,6 +90,39 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a5
+
+### Hz 도구 (신규) — 툴바 `♪` 또는 `Shift+F`
+
+- **주파수로 차팅합니다.** 음과 도형을 고르면 필요한 BPM(`도형 BPM = 각도 × Hz ÷ 3`)을 계산하고, 그 값을 실제로 만드는 SetSpeed까지 작성합니다.
+- **길이는 정확히 맞으며** 음높이보다 우선합니다. 타일 수가 정수라 낼 수 있는 주파수가 띄엄띄엄해지며, 오차는 센트로 표시됩니다.
+- **정확한 음높이**는 남는 시간을 정지(Pause)로 채워 길이와 음높이를 동시에 정확하게 만듭니다. **완전히 닫힌 원**까지 켜면 셋 다 정확해집니다.
+- **완전한 원**은 정N각형을 만듭니다. **바퀴 수**로 다시 그리고, **원 간격 벌리기**로 길 위치 오프셋만큼 떨어뜨리며, **추천**이 지정한 길이에 가장 정확한 변 수·바퀴 수를 찾아 줍니다.
+- **음 건반**과 함께 **EDO·기준 음높이**를 바꿀 수 있습니다 (기본값 12-EDO, A4 = 440).
+
+### 각 패드
+
+- 빠른 차팅 중에는 항상 하나가 우측 상단에 떠 있으며, **반복 횟수**·**지우기**·전용 도움말이 있습니다.
+- **소용돌이 버튼**은 첫 타일의 소용돌이를 *첫 회차에만* 반전하며, 입력한 표현식은 건드리지 않습니다. 그래서 반복되는 도형이 그대로 닫힙니다.
+- **도형 라이브러리에 추가**로 묶음을 *반복 없는 도형*에 저장합니다.
+- 묶음의 **미리보기 타일**이 표시됩니다. Hz 도구도 동일합니다.
+
+### 차팅 관련 수정
+
+- **각도가 뒤집혀 들어가던 문제** — 기준 타일의 회전 방향 부호를 잘못 읽어 `30` 탭이 `330` 박자로 들어갔습니다. 각 패드의 결과가 이번에 바뀝니다.
+- **소용돌이가 걸린 타일**에 도형을 놓으면 이제 상하로 반전되어, 각도와 박자가 유지됩니다.
+- **소용돌이를 겹쳐 쌓지 않습니다.** 한 타일에 두 개면 서로 상쇄되므로 이제 토글합니다.
+- 새로 만든 도형의 기본 반복은 **1**입니다.
+
+### 그 밖에
+
+- 빠른 차팅·도구 슬롯·Hz 도구의 **단축키를 다시 지정**할 수 있습니다 (설정 ▸ 에디터 ▸ 단축키).
+- **패널 배치**를 재시작 후에도 유지할 수 있습니다 (기본 꺼짐).
+- Sapphire 창 위에서 스크롤해도 에디터가 확대되지 않습니다.
+- 오류 문구가 잘 보이고, 긴 묶음 배치가 빨라졌습니다.
+
+---
 
 ## 1.0.0-a4
 
