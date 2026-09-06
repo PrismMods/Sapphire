@@ -102,7 +102,13 @@ namespace Sapphire
                FeatToolsSapphire: the tool has its own keybind, so gating it on the toolbar's
                category would leave Shift+F silently doing nothing whenever that category is off. */
             bool want = _open && ed != null && !ed.playMode && MainClass.EditorSuiteOn;
-            if (!want) { if (_open) LogGate(ed); K.Show(false); return; }
+            if (!want)
+            {
+                if (_open) LogGate(ed);
+                K.Show(false);
+                GhostPreview.Release(GhostOwner); _ghostSig = long.MinValue;
+                return;
+            }
             _gateLogged = null;
 
             // The BASE BPM tracks the selection; it is a reading of the chart, so nothing in the
@@ -141,10 +147,36 @@ namespace Sapphire
             if (K.DockSide == 0 && Input.GetKeyDown(KeyCode.Escape) && !Typing(ed)) { Close(); return; }
             K.Show(true);
             K.TickScroll();
+            TickPreview(ed);
+        }
+
+        /* Ghost tiles for the run this panel would place — same drawing as the angle pad's, so
+           the two share GhostPreview. The Hz run is uniform: `_tiles` taps at `_angle`, no
+           twirls. Re-walked only when one of those changes or the selection moves. */
+        private const string GhostOwner = "hztool";
+        private const int MaxGhosts = 400;
+        private static long _ghostSig = long.MinValue;
+
+        private static void TickPreview(scnEditor ed)
+        {
+            int anchorSeq = GhostPreview.AnchorSeq(ed);
+            long sig = 17;
+            sig = sig * 31 + anchorSeq;
+            sig = sig * 31 + _tiles;
+            sig = sig * 31 + (long)Math.Round(_angle * 1000.0);
+            if (sig == _ghostSig && GhostPreview.OwnedBy(GhostOwner)) return;
+            _ghostSig = sig;
+            int n = Mathf.Clamp(_tiles, 0, MaxGhosts);
+            if (anchorSeq < 0 || n <= 0 || _angle <= 0.0 || _tiles > MaxGhosts)
+            { GhostPreview.Release(GhostOwner); return; }
+            var walk = new GhostStep[n];
+            for (int i = 0; i < n; i++) walk[i] = new GhostStep(_angle, false);
+            GhostPreview.Show(GhostOwner, ed, anchorSeq, walk);
         }
 
         internal static void Dispose()
         {
+            GhostPreview.Release(GhostOwner); _ghostSig = long.MinValue;
             K.Dispose();
             _statusTmp = null; _layoutSig = NoSig; _open = false;
         }
@@ -439,6 +471,7 @@ namespace Sapphire
                 }
                 if (placed > 0) { try { ed.ApplyEventsToFloors(); ed.RemakePath(true, true); } catch { } }
             }
+            GhostPreview.Release(GhostOwner); _ghostSig = long.MinValue;   // the run is real now
             if (placed <= 0) { SetStatus(Loc.T("select a tile / open a level")); return; }
             string msg = placed + Loc.T(" tile") + (placed == 1 ? "" : "s") + Loc.T(" placed");
             if (_writeSpeed)
@@ -593,7 +626,7 @@ namespace Sapphire
             K.Label(Loc.T("Actual Hz"), Pad, y, K.LblW, RowH, Theme.TextMuted);
             K.Label(ActualHz.ToString("0.###") + "   " + CentsLabel(),
                     Pad + K.LblW + 4f, y, fullW - K.LblW - 4f, RowH,
-                    Math.Abs(Cents) > 5.0 ? Theme.DangerHover : Theme.TextMuted, 11.5f);
+                    Math.Abs(Cents) > 5.0 ? Theme.DangerText : Theme.TextMuted, 11.5f);
             y -= RowH + Gap;
 
             y = LockRow(y, Loc.T("Tile angle"), (float)_angle, Var.Angle,
@@ -681,7 +714,7 @@ namespace Sapphire
                 K.Label(PauseBeats.ToString("0.###") + " " + Loc.T("beats") + "   ("
                         + Loc.T("run") + " " + RunBeats.ToString("0.###") + ")",
                         Pad + K.LblW + 4f, y, fullW - K.LblW - 4f, RowH,
-                        PauseBeats < -1e-4 ? Theme.DangerHover : Theme.Text, 11.5f);
+                        PauseBeats < -1e-4 ? Theme.DangerText : Theme.Text, 11.5f);
                 y -= RowH + Gap;
             }
 

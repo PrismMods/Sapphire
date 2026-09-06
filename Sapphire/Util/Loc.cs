@@ -127,6 +127,7 @@ namespace Sapphire
             ["Add to Shape Library"] = "도형 라이브러리에 추가",
             ["Flip the first tile's twirl"] = "첫 타일의 소용돌이 반전",
             ["Angle pad help"] = "각 패드 도움말",
+            ["Clear"] = "지우기",
             ["append t for twirl · math supported"] = "t를 붙이면 소용돌이 · 수식 지원",
             ["run too long to store"] = "저장하기에 너무 긴 묶음입니다",
             ["stored in"] = "저장 위치:",

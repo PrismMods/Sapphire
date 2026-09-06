@@ -99,7 +99,9 @@ right way, so the leading twirl is redundant *this once*. That's a property of t
 pattern, so it can only apply to the first pass. Lights up while it's on.
 
 **Ghost preview** — the run the pad would place is drawn ahead of the selected tile at half
-alpha, updating as you type. It walks the same spin rules the builder does, so it can't disagree
+alpha, updating as you type. The **Hz tool** shows the same preview for its own run; when its
+panel is open it takes over the ghosts, since two panels competing for them every frame would
+just thrash. It walks the same spin rules the builder does, so it can't disagree
 with what Place produces. Ghosts are chained only to each other rather than to the surrounding
 real tiles (MSM's fake-floor preview edits its neighbours; that would leave the live track drawn
 wrong for as long as a pad is open), so the seam at the anchor is a hair off. Capped at 200 tiles.
@@ -109,6 +111,9 @@ wrong for as long as a pad is open), so the seam at the anchor is a hair off. Ca
 tile of *every* copy, whereas as a count the expression stays one **unit**, so flipping its leading
 twirl costs only the first pass — which is the point when the path already enters turning the way
 you want. The spin carries across repetitions, so the rest continue correctly from there.
+
+The header also carries a **clear** button (bin icon — `×` already means close on that row) and
+**`?`** for the pad's help page.
 
 **Add to Shape Library** — the grey button beside Place saves the pad's expression (repeats
 included) into the shape

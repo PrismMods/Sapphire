@@ -157,6 +157,7 @@
         <Compile Include="Editor\Timeline\EditorPitch.cs" />
         <Compile Include="Editor\Charting\EditorShapeLibrary.cs" />
         <Compile Include="Editor\Charting\PseudoBuild.cs" />
+        <Compile Include="Editor\Charting\GhostPreview.cs" />
         <Compile Include="Editor\Level\EditorLevelMenu.cs" />
         <Compile Include="Editor\Level\EditorDecoInspector.cs" />
         <Compile Include="Editor\Level\EditorArtistPicker.cs" />

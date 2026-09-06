@@ -53,7 +53,7 @@ namespace Sapphire
             if (!on)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
-                if (_ghosts.Count > 0) { ClearGhosts(); _ghostSig = long.MinValue; }
+                ClearGhosts();
                 return;
             }
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
@@ -297,7 +297,7 @@ namespace Sapphire
             sr.anchorMin = new Vector2(0f, 1f); sr.anchorMax = new Vector2(1f, 1f);
             sr.pivot = new Vector2(0.5f, 1f);
             sr.offsetMin = new Vector2(pad, -(statusY + 16f)); sr.offsetMax = new Vector2(-pad, -statusY);
-            var status = UIBuilder.Tmp(sGo, "", 10.5f, TextAnchor.MiddleLeft, Theme.DangerHover);
+            var status = UIBuilder.Tmp(sGo, "", 10.5f, TextAnchor.MiddleLeft, Theme.DangerText);
             status.raycastTarget = false;
 
             Action tryOk = () =>
@@ -847,7 +847,7 @@ namespace Sapphire
             titleGo.transform.SetParent(header.transform, false);
             var tr = (RectTransform)titleGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-114f, 0f);
+            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-142f, 0f);
             var title = UIBuilder.Tmp(titleGo, Loc.T("Angle pad"), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
             title.raycastTarget = false;
 
@@ -856,6 +856,13 @@ namespace Sapphire
                it. Dropping it reuses the same angles when the path already progresses the way
                you want, which is the common case when a run is pasted more than once. The icon
                is drawn, not typed: the user's fonts have no spiral glyph. */
+            // Drawn, not a glyph: "×" already means close on this very header, so clear needs a
+            // shape of its own — a bin reads as "empty this" at 24px where a letter would not.
+            MakeIconBtn(header, -118f, 24f, Loc.T("Clear"), DrawClearIcon, () =>
+            {
+                if (pw.Field != null) pw.Field.text = "";
+                if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
+            });
             pw.TwirlBtn = MakeIconBtn(header, -90f, 24f, Loc.T("Flip the first tile's twirl"),
                 DrawSwirlIcon, () => FlipFirstTwirl(pw));
             MakeGlyphBtn(header, "?", -62f, 24f, Loc.T("Angle pad help"),
@@ -1011,7 +1018,7 @@ namespace Sapphire
             var angles = ParseAngles(pw.Field.text);
             if (angles == null || angles.Count == 0)
             {
-                if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
+                if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerText; }
                 return;
             }
             int n = PlaceAngles(SafeEditor(), ExpandRun(angles, RepsOf(pw), pw.FlipFirst));
@@ -1138,7 +1145,7 @@ namespace Sapphire
             var angles = ParseAngles(pw.Field.text);
             if (angles == null || angles.Count == 0)
             {
-                if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
+                if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerText; }
                 return;
             }
             // Store what the pad would PLACE — repeats and the first-tile flip included, since a
@@ -1147,7 +1154,7 @@ namespace Sapphire
             if (angles == null) return;
             if (angles.Count > MaxStoredShapeTiles)
             {
-                if (pw.Hint != null) { pw.Hint.text = Loc.T("run too long to store"); pw.Hint.color = Theme.DangerHover; }
+                if (pw.Hint != null) { pw.Hint.text = Loc.T("run too long to store"); pw.Hint.color = Theme.DangerText; }
                 return;
             }
             var v = new ShapeVariant
@@ -1252,7 +1259,7 @@ namespace Sapphire
             sr.anchorMin = new Vector2(0f, 1f); sr.anchorMax = new Vector2(1f, 1f);
             sr.pivot = new Vector2(0.5f, 1f);
             sr.offsetMin = new Vector2(pad, y - 16f); sr.offsetMax = new Vector2(-pad, y);
-            status = UIBuilder.Tmp(sGo, "", 10.5f, TextAnchor.MiddleLeft, Theme.DangerHover);
+            status = UIBuilder.Tmp(sGo, "", 10.5f, TextAnchor.MiddleLeft, Theme.DangerText);
             status.raycastTarget = false;
 
             Action tryOk = () =>
@@ -1376,6 +1383,21 @@ namespace Sapphire
             }
         }
 
+        // A bin: lid, tapered body, two ribs. Same 1.0 stroke as the swirl beside it.
+        private static void DrawClearIcon(GameObject cell)
+        {
+            const float t = 1.0f;
+            MakeIconLine(cell, new Vector2(-5.6f, 4.4f), new Vector2(5.6f, 4.4f), t);    // lid
+            MakeIconLine(cell, new Vector2(-1.8f, 6.6f), new Vector2(1.8f, 6.6f), t);    // handle
+            MakeIconLine(cell, new Vector2(-1.8f, 6.6f), new Vector2(-1.8f, 4.4f), t);
+            MakeIconLine(cell, new Vector2(1.8f, 6.6f), new Vector2(1.8f, 4.4f), t);
+            MakeIconLine(cell, new Vector2(-4.4f, 4.4f), new Vector2(-3.4f, -6.4f), t);  // body
+            MakeIconLine(cell, new Vector2(4.4f, 4.4f), new Vector2(3.4f, -6.4f), t);
+            MakeIconLine(cell, new Vector2(-3.4f, -6.4f), new Vector2(3.4f, -6.4f), t);
+            MakeIconLine(cell, new Vector2(-1.2f, 2.6f), new Vector2(-1.0f, -4.4f), t);  // ribs
+            MakeIconLine(cell, new Vector2(1.2f, 2.6f), new Vector2(1.0f, -4.4f), t);
+        }
+
         private static void MakeIconLine(GameObject parent, Vector2 a, Vector2 b, float thick)
         {
             var d = b - a;
@@ -1486,29 +1508,13 @@ namespace Sapphire
         }
 
         /* ── ghost-tile preview ────────────────────────────────────────────────
-           The run the pad would place, drawn ahead of the anchor at half alpha — MSM's fake-floor
-           trick (instantiate lm.meshFloor, tint the renderer, hide the number) applied to an
-           APPEND instead of a range sweep, which makes it much simpler: no real floor is touched.
-
-           MSM mutates the surrounding real tiles' exitangle/nextfloor and leans on MakeLevel to
-           put them back. Doing that here would leave the live track drawn wrong for as long as a
-           pad is open, so the ghosts are chained only to EACH OTHER; the first one starts from
-           the anchor's position and heading without writing to it. The seam at the anchor is a
-           hair off as a result, which is invisible at ghost alpha and worth the isolation.
-
-           Rebuilt when the expression, repeat count or anchor changes, and thrown away whenever
-           the game rebuilds the level (real tiles move, so stale ghosts would float). */
-        private static readonly List<GameObject> _ghosts = new List<GameObject>();
+           Which pad drives it, and the change-signature that decides when to re-walk. The
+           drawing itself lives in GhostPreview, shared with the Hz tool. */
         private static long _ghostSig = long.MinValue;
+        private const string GhostOwner = "anglepad";
+        private const int MaxGhosts = 200;
 
-        internal static void OnMakeLevel() { ClearGhosts(); _ghostSig = long.MinValue; }
-
-        private static void ClearGhosts()
-        {
-            for (int i = 0; i < _ghosts.Count; i++)
-                if (_ghosts[i] != null) UnityEngine.Object.DestroyImmediate(_ghosts[i]);
-            _ghosts.Clear();
-        }
+        internal static void ClearGhosts() { GhostPreview.Release(GhostOwner); _ghostSig = long.MinValue; }
 
         // The pad being previewed: the one you are typing in, else the only/first one open.
         private static Pad PreviewPad()
@@ -1523,86 +1529,30 @@ namespace Sapphire
 
         private static void TickPreview(scnEditor ed)
         {
+            // The Hz tool's own preview is the more specific intent while its panel is up, and
+            // two owners fighting for the ghosts every frame would just thrash.
+            bool yield = false;
+            try { yield = EditorHzTool.IsOpen; } catch { }
+            if (yield) { ClearGhosts(); return; }
+
             var pw = PreviewPad();
             string expr = pw != null && pw.Field != null ? pw.Field.text : null;
             int reps = RepsOf(pw);
-            int anchorSeq = -1;
-            try
-            {
-                var sel = ed.selectedFloors;
-                if (sel != null && sel.Count > 0 && sel[sel.Count - 1] != null) anchorSeq = sel[sel.Count - 1].seqID;
-            }
-            catch { }
+            int anchorSeq = GhostPreview.AnchorSeq(ed);
 
             long sig = 17;
             sig = sig * 31 + (expr != null ? expr.GetHashCode() : 0);
             sig = sig * 31 + reps;
             sig = sig * 31 + anchorSeq;
             sig = sig * 31 + (pw != null && pw.FlipFirst ? 1 : 0);
-            if (sig == _ghostSig) return;
+            if (sig == _ghostSig && GhostPreview.OwnedBy(GhostOwner)) return;
             _ghostSig = sig;
-            ClearGhosts();
-            if (anchorSeq < 0 || string.IsNullOrEmpty(expr)) return;
-            var steps = ExpandRun(ParseAngles(expr), reps, pw.FlipFirst);
-            if (steps == null || steps.Count == 0) return;
-            if (steps.Count > MaxGhosts) return;                // a 1000-tile ghost helps nobody
-            BuildGhosts(ed, anchorSeq, steps);
-        }
-
-        private const int MaxGhosts = 200;
-
-        private static void BuildGhosts(scnEditor ed, int anchorSeq, List<AngleStep> steps)
-        {
-            try
-            {
-                var lm = ADOBase.lm;
-                if (lm == null || lm.isOldLevel || lm.meshFloor == null) return;
-                if (anchorSeq < 0 || anchorSeq >= lm.listFloors.Count) return;
-                var anchor = lm.listFloors[anchorSeq];
-                if (anchor == null) return;
-
-                float tile = scrController.instance.tileSize;
-                var host = GameObject.Find("SapphireAnglePadGhosts") ?? new GameObject("SapphireAnglePadGhosts");
-
-                // Same walk PseudoBuild does, so the preview cannot disagree with the placement:
-                // spin from the anchor, flip BEFORE a twirled tap.
-                double dir = lm.floorAngles[Mathf.Clamp(anchorSeq, 0, lm.floorAngles.Length - 1)];
-                int localSign = anchor.isCCW ? -1 : 1;
-                Vector3 pos = anchor.transform.position;
-                var made = new List<scrFloor>();
-
-                for (int i = 0; i < steps.Count; i++)
-                    {
-                        if (steps[i].Twirl) localSign = -localSign;
-                        dir = (dir + localSign * (180.0 - steps[i].Angle)) % 360.0;
-                        if (dir < 0) dir += 360.0;
-                        double a = (-dir + 90.0) * Mathf.PI / 180.0;    // facing -> world angle (MSM's)
-                        pos += scrMisc.getVectorFromAngle(a, tile);
-                        var obj = UnityEngine.Object.Instantiate(lm.meshFloor, pos, Quaternion.identity);
-                        obj.name = "AnglePadGhost";
-                        obj.transform.parent = host.transform;
-                        var f = obj.GetComponent<scrFloor>();
-                        if (f == null) { UnityEngine.Object.DestroyImmediate(obj); continue; }
-                        f.entryangle = (a + Mathf.PI) % (Mathf.PI * 2);
-                        f.exitangle = a;                                 // straight until the next one lands
-                        if (made.Count > 0) { made[made.Count - 1].exitangle = a; made[made.Count - 1].nextfloor = f; }
-                        made.Add(f);
-                        _ghosts.Add(obj);
-                    }
-
-                foreach (var f in made)
-                {
-                    try
-                    {
-                        f.UpdateAngle();
-                        if (f.floorRenderer != null) f.floorRenderer.color = new Color(0.55f, 0.75f, 1f, 0.45f);
-                        if (f.editorNumText != null && f.editorNumText.letterText != null)
-                            f.editorNumText.letterText.gameObject.SetActive(false);
-                    }
-                    catch { }
-                }
-            }
-            catch (Exception ex) { SapphireLog.Log("QuickChart: ghost preview failed: " + ex.Message); ClearGhosts(); }
+            var steps = ExpandRun(ParseAngles(expr), reps, pw != null && pw.FlipFirst);
+            if (anchorSeq < 0 || steps == null || steps.Count == 0 || steps.Count > MaxGhosts)
+            { GhostPreview.Release(GhostOwner); return; }
+            var walk = new GhostStep[steps.Count];
+            for (int i = 0; i < steps.Count; i++) walk[i] = new GhostStep(steps[i].Angle, steps[i].Twirl);
+            GhostPreview.Show(GhostOwner, ed, anchorSeq, walk);
         }
 
         // ── teardown ───────────────────────────────────────────────────────────
@@ -1617,15 +1567,4 @@ namespace Sapphire
         }
     }
 
-    /* Ghost tiles are positioned from the REAL tiles' transforms, so a level rebuild strands
-       them. Drop them whenever the game remakes the level; the next tick re-derives the run. */
-    [HarmonyPatch(typeof(scrLevelMaker), "MakeLevel")]
-    internal static class AnglePadGhostMakeLevelPatch
-    {
-        private static void Postfix()
-        {
-            try { EditorQuickChart.OnMakeLevel(); }
-            catch (Exception ex) { SapphireLog.Log("QuickChart ghosts: " + ex.Message); }
-        }
-    }
 }
