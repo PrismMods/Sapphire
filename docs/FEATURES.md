@@ -97,7 +97,14 @@ it; dropping it reuses the same angles when the path already progresses the way 
 the text, so your maths, grouping and spacing survive (`180-30t` → `180-30`, not `150`), and it
 reaches the first token inside a group: `(30t 150)*4` → `(30 150)*4`.
 
-**Add to Shape Library** — the grey button beside Place saves the pad's expression into the shape
+**`× n` repeat count** — lays the expression down *n* times. Deliberately separate from the
+`(…)*n` group syntax: baking the repetition into the text would make the `t` button flip the first
+tile of *every* copy, whereas as a count the expression stays one **unit**, so flipping its leading
+twirl costs only the first pass — which is the point when the path already enters turning the way
+you want. The spin carries across repetitions, so the rest continue correctly from there.
+
+**Add to Shape Library** — the grey button beside Place saves the pad's expression (repeats
+included) into the shape
 library's **Non-repeating shapes** category with a repeat of 1, since a pad expression already
 spells out the whole run (`(…)*n` groups are flattened before saving).
 
@@ -204,6 +211,11 @@ key-count variants, inserted as a repeating pseudo.
   - **Insert** — appends the run onto the selected tile (one undo). With no tile selected it
     does nothing and says so — there is no anchor to build from.
   - **Rotate** — mirrors the shape along its x-axis (the other of the two valid twirl parities).
+- **Twirls are never stacked.** The game toggles a spin flag per event, so two Twirls on one
+  floor cancel each other while still drawing a swirl marker — and the run's first twirl lands on
+  the anchor tile, exactly where you are most likely to have put one. Every Sapphire build now
+  *toggles* rather than appends: it removes the existing event instead of adding a second, which
+  gives the same spin and leaves valid data.
 - **Twirled anchors mirror automatically** — insert onto a tile whose spin is counter-clockwise
   (it or an earlier tile carries a twirl) and the shape lands **vertically mirrored**, with the
   same charters and the same twirls as on a fresh track. Keeping the original orientation there

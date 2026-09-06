@@ -456,12 +456,14 @@ namespace Sapphire
         // shows). Routed through PseudoBuild's anchor mode (Fixed=false): spin tracked from the
         // anchor, flip before a twirled tap — reproduces this pad's original build exactly. The
         // whole expanded run (ParseAngles already flattens (...)*n) is one unit, so RepeatN=1.
-        private static int PlaceAngles(scnEditor ed, List<AngleStep> steps)
+        private static int PlaceAngles(scnEditor ed, List<AngleStep> steps, int reps = 1)
         {
             if (ed == null || steps == null || steps.Count == 0) return 0;
+            reps = Mathf.Clamp(reps, 1, MaxReps);
+            if ((long)steps.Count * reps > MaxRunTiles) return 0;   // same ceiling as (…)*n
             var unit = new PseudoStep[steps.Count];
             for (int i = 0; i < steps.Count; i++) unit[i] = new PseudoStep(steps[i].Angle, StepKind.Tap, steps[i].Twirl);
-            return PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, RepeatN = 1 });
+            return PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, RepeatN = reps });
         }
 
         private struct AngleStep
@@ -633,8 +635,18 @@ namespace Sapphire
         {
             internal GameObject Root;
             internal TMP_InputField Field;
+            internal TMP_InputField Reps;       // how many times to lay the expression down
             internal TextMeshProUGUI Hint;
             internal GameObject Badge;          // "1".."9" overlay, shown only while picking
+        }
+
+        private const int MaxReps = 999;
+
+        private static int RepsOf(Pad pw)
+        {
+            if (pw == null || pw.Reps == null) return 1;
+            int n;
+            return ExprEval.TryParseInt(pw.Reps.text, out n) ? Mathf.Clamp(n, 1, MaxReps) : 1;
         }
 
         /* Enter places. With one pad open that's unambiguous; with several it can't be, so Enter
@@ -680,7 +692,7 @@ namespace Sapphire
             return ok;
         }
 
-        private static void SpawnPad(Vector2? at, string initial, bool focus = true)
+        private static void SpawnPad(Vector2? at, string initial, bool focus = true, int reps = 1)
         {
             if (!_selfChecked) { _selfChecked = true; SelfCheck(); }
             EnsureCanvas();
@@ -735,7 +747,8 @@ namespace Sapphire
             MakeGlyphBtn(header, "t", -62f, 24f, Loc.T("Flip the first tile's twirl"),
                 () => FlipFirstTwirl(pw));
             MakeGlyphBtn(header, "+", -34f, 24f, Loc.T("Duplicate"),
-                () => SpawnPad(rr.anchoredPosition + new Vector2(26f, -26f), pw.Field != null ? pw.Field.text : ""));
+                () => SpawnPad(rr.anchoredPosition + new Vector2(26f, -26f),
+                               pw.Field != null ? pw.Field.text : "", true, RepsOf(pw)));
             MakeGlyphBtn(header, "×", -6f, 24f, Loc.T("Close"), () => ClosePad(pw));
 
             // input field
@@ -769,9 +782,49 @@ namespace Sapphire
             var hir = (RectTransform)hintGo.transform;
             hir.anchorMin = new Vector2(0f, 1f); hir.anchorMax = new Vector2(1f, 1f);
             hir.pivot = new Vector2(0.5f, 1f);
-            hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad, -68f);
+            hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad - 62f, -68f);
             pw.Hint = UIBuilder.Tmp(hintGo, Loc.T(HintText), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
             pw.Hint.raycastTarget = false;
+
+            /* Repeat count. Kept OUT of the expression on purpose: `(30t 150)*4` bakes the
+               repetition into the text, so the "t" button above would flip the first tile of
+               every copy. As a separate count the expression stays one UNIT — flip its leading
+               twirl and only the first pass through loses it, which is the point when the path
+               already enters turning the right way. PseudoBuild carries the spin across
+               repetitions, so the remaining passes continue correctly from there. */
+            var repsGo = new GameObject("Reps", typeof(RectTransform));
+            repsGo.transform.SetParent(root.transform, false);
+            var rpr = (RectTransform)repsGo.transform;
+            rpr.anchorMin = rpr.anchorMax = new Vector2(1f, 1f);
+            rpr.pivot = new Vector2(1f, 1f);
+            rpr.anchoredPosition = new Vector2(-pad, -66f);
+            rpr.sizeDelta = new Vector2(52f, 20f);
+            var rpbg = repsGo.AddComponent<RoundedRectGraphic>();
+            rpbg.Radius = 5f;
+            rpbg.color = new Color(1f, 1f, 1f, 0.07f);
+            rpbg.BorderWidth = 1f;
+            rpbg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
+            rpbg.raycastTarget = true;
+            var rptGo = new GameObject("Text", typeof(RectTransform));
+            rptGo.transform.SetParent(repsGo.transform, false);
+            var rptr = (RectTransform)rptGo.transform;
+            rptr.anchorMin = Vector2.zero; rptr.anchorMax = Vector2.one;
+            rptr.offsetMin = new Vector2(6f, 0f); rptr.offsetMax = new Vector2(-6f, 0f);
+            var rptxt = UIBuilder.Tmp(rptGo, "1", 11.5f, TextAnchor.MiddleCenter, Theme.Text);
+            rptxt.richText = false;
+            var repsField = UIBuilder.BuildInputField(repsGo, rptxt);
+            repsField.lineType = TMP_InputField.LineType.SingleLine;
+            repsField.text = Mathf.Clamp(reps, 1, MaxReps).ToString();
+            UIBuilder.MakeNumericField(repsField);
+            pw.Reps = repsField;
+            var rlGo = new GameObject("x", typeof(RectTransform));
+            rlGo.transform.SetParent(root.transform, false);
+            var rlr = (RectTransform)rlGo.transform;
+            rlr.anchorMin = rlr.anchorMax = new Vector2(1f, 1f);
+            rlr.pivot = new Vector2(1f, 1f);
+            rlr.anchoredPosition = new Vector2(-pad - 54f, -66f);
+            rlr.sizeDelta = new Vector2(14f, 20f);
+            UIBuilder.Tmp(rlGo, "×", 11.5f, TextAnchor.MiddleRight, Theme.TextMuted).raycastTarget = false;
 
             // place button
             var placeGo = new GameObject("Place", typeof(RectTransform));
@@ -837,7 +890,7 @@ namespace Sapphire
                 if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
                 return;
             }
-            int n = PlaceAngles(SafeEditor(), angles);
+            int n = PlaceAngles(SafeEditor(), angles, RepsOf(pw));
             if (pw.Hint != null)
             {
                 pw.Hint.color = Theme.TextMuted;
@@ -953,6 +1006,15 @@ namespace Sapphire
             {
                 if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
                 return;
+            }
+            // Store what the pad would PLACE, repeats included — the saved shape is non-repeating
+            // by definition, so the count has to be spelled out into it.
+            int reps = RepsOf(pw);
+            if (reps > 1)
+            {
+                var one = angles;
+                angles = new List<AngleStep>(one.Count * reps);
+                for (int r = 0; r < reps; r++) angles.AddRange(one);
             }
             if (angles.Count > MaxStoredShapeTiles)
             {

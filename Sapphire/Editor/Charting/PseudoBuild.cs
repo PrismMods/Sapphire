@@ -129,8 +129,31 @@ namespace Sapphire
             try { return ed.floors.Count > before; } catch { return true; }
         }
 
+        /* NEVER stack two Twirls on one floor. The game toggles a spin flag per event
+           (`ccw = !ccw` in ApplyEventsToFloors), so a second Twirl on the same floor CANCELS the
+           first while still drawing a swirl marker — invalid-looking data that also survives
+           saving, and the game's own twirl toggle then removes only one of them.
+
+           The run's first twirl lands on the ANCHOR floor, which is exactly where a user is
+           likely to have put one already, so this is not a rare case. Removing the existing event
+           gives the SAME spin as adding a second one (odd count -> even either way; AnchorSpin
+           read isCCW *after* the existing twirl, so the build already expects that flip) and
+           leaves one event instead of two. So: toggle, never append blindly. */
         private static void AddTwirl(scnEditor ed, int seq)
-        { try { ed.events.Add(new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Twirl)); } catch (Exception ex) { SapphireLog.Log("PseudoBuild: twirl failed: " + ex.Message); } }
+        {
+            try
+            {
+                for (int i = ed.events.Count - 1; i >= 0; i--)
+                {
+                    var ev = ed.events[i];
+                    if (ev == null || ev.floor != seq || ev.eventType != ADOFAI.LevelEventType.Twirl) continue;
+                    ed.events.RemoveAt(i);
+                    return;
+                }
+                ed.events.Add(new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Twirl));
+            }
+            catch (Exception ex) { SapphireLog.Log("PseudoBuild: twirl failed: " + ex.Message); }
+        }
         private static double Norm360(double a) { a %= 360.0; if (a < 0) a += 360.0; return a; }
 
         /* An append that didn't land means every seqID after it is wrong. Drop the pending twirls
