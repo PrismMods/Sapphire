@@ -636,6 +636,7 @@ namespace Sapphire
             internal GameObject Root;
             internal TMP_InputField Field;
             internal TMP_InputField Reps;       // how many times to lay the expression down
+            internal RoundedRectGraphic TwirlBtn;  // lit while the first tile carries a twirl
             internal TextMeshProUGUI Hint;
             internal GameObject Badge;          // "1".."9" overlay, shown only while picking
         }
@@ -655,7 +656,9 @@ namespace Sapphire
            whole point of a keyboard flow. */
         private static bool _picking;
 
-        private const string HintText = "append t for twirl · math supported · (…)*n";
+        // The group syntax lives in the help topic now — the strip under the field is a reminder,
+        // not a manual, and it has to share its row with the repeat field.
+        private const string HintText = "append t for twirl · math supported";
 
         /* TOP-RIGHT corner. The toolbar is centred on the top edge and its submenus drop
            straight down from it, so the shelf position this used to sit in was covered by the
@@ -697,7 +700,12 @@ namespace Sapphire
             if (!_selfChecked) { _selfChecked = true; SelfCheck(); }
             EnsureCanvas();
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
-            const float w = 300f, h = 122f, pad = 10f;
+            // Taller than the content strictly needs: the button row is lifted clear of the
+            // bottom-right resize grip (22px hit zone) so Place stays clickable to its own edge.
+            // Height is the sum of the rows, not a guess: header 28 + field to -66 + hint row to
+            // -90, then a 8px breather, the 30px button row and 26px of bottom margin that lifts
+            // it clear of the resize grip's 22px corner zone.
+            const float w = 300f, h = 156f, pad = 10f;
 
             var pw = new Pad();
             var root = new GameObject("AnglePad", typeof(RectTransform));
@@ -736,16 +744,19 @@ namespace Sapphire
             titleGo.transform.SetParent(header.transform, false);
             var tr = (RectTransform)titleGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-86f, 0f);
+            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-114f, 0f);
             var title = UIBuilder.Tmp(titleGo, Loc.T("Angle pad"), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
             title.raycastTarget = false;
 
-            /* "t": flip the twirl on the FIRST tile. A twirl reverses the turn direction, so
+            /* Swirl: flip the twirl on the FIRST tile. A twirl reverses the turn direction, so
                the leading one decides which way the whole run bends — the rest are relative to
                it. Dropping it reuses the same angles when the path already progresses the way
-               you want, which is the common case when a run is pasted more than once. */
-            MakeGlyphBtn(header, "t", -62f, 24f, Loc.T("Flip the first tile's twirl"),
-                () => FlipFirstTwirl(pw));
+               you want, which is the common case when a run is pasted more than once. The icon
+               is drawn, not typed: the user's fonts have no spiral glyph. */
+            pw.TwirlBtn = MakeIconBtn(header, -90f, 24f, Loc.T("Flip the first tile's twirl"),
+                DrawSwirlIcon, () => FlipFirstTwirl(pw));
+            MakeGlyphBtn(header, "?", -62f, 24f, Loc.T("Angle pad help"),
+                () => { Deselect(); EditorHelp.OpenTopic("AnglePad"); });
             MakeGlyphBtn(header, "+", -34f, 24f, Loc.T("Duplicate"),
                 () => SpawnPad(rr.anchoredPosition + new Vector2(26f, -26f),
                                pw.Field != null ? pw.Field.text : "", true, RepsOf(pw)));
@@ -782,7 +793,7 @@ namespace Sapphire
             var hir = (RectTransform)hintGo.transform;
             hir.anchorMin = new Vector2(0f, 1f); hir.anchorMax = new Vector2(1f, 1f);
             hir.pivot = new Vector2(0.5f, 1f);
-            hir.offsetMin = new Vector2(pad, -84f); hir.offsetMax = new Vector2(-pad - 62f, -68f);
+            hir.offsetMin = new Vector2(pad, -90f); hir.offsetMax = new Vector2(-pad - 68f, -70f);
             pw.Hint = UIBuilder.Tmp(hintGo, Loc.T(HintText), 10.5f, TextAnchor.MiddleLeft, Theme.TextMuted);
             pw.Hint.raycastTarget = false;
 
@@ -797,7 +808,7 @@ namespace Sapphire
             var rpr = (RectTransform)repsGo.transform;
             rpr.anchorMin = rpr.anchorMax = new Vector2(1f, 1f);
             rpr.pivot = new Vector2(1f, 1f);
-            rpr.anchoredPosition = new Vector2(-pad, -66f);
+            rpr.anchoredPosition = new Vector2(-pad, -70f);
             rpr.sizeDelta = new Vector2(52f, 20f);
             var rpbg = repsGo.AddComponent<RoundedRectGraphic>();
             rpbg.Radius = 5f;
@@ -822,18 +833,22 @@ namespace Sapphire
             var rlr = (RectTransform)rlGo.transform;
             rlr.anchorMin = rlr.anchorMax = new Vector2(1f, 1f);
             rlr.pivot = new Vector2(1f, 1f);
-            rlr.anchoredPosition = new Vector2(-pad - 54f, -66f);
+            rlr.anchoredPosition = new Vector2(-pad - 56f, -70f);
             rlr.sizeDelta = new Vector2(14f, 20f);
             UIBuilder.Tmp(rlGo, "×", 11.5f, TextAnchor.MiddleRight, Theme.TextMuted).raycastTarget = false;
 
-            // place button
+            /* Button row. Both edges line up with the expression field above (pad / -pad) rather
+               than being inset for the resize grip — the row is lifted above the grip's 22px
+               corner zone instead, so nothing steals a click and the card reads as one column. */
+            const float btnH = 30f, btnY = 26f, btnGap = 8f;
+            float placeW = 96f;
             var placeGo = new GameObject("Place", typeof(RectTransform));
             placeGo.transform.SetParent(root.transform, false);
             var pr = (RectTransform)placeGo.transform;
             pr.anchorMin = new Vector2(1f, 0f); pr.anchorMax = new Vector2(1f, 0f);
             pr.pivot = new Vector2(1f, 0f);
-            pr.anchoredPosition = new Vector2(-pad - 16f, pad); // clear the bottom-right resize grip
-            pr.sizeDelta = new Vector2(78f, 28f);
+            pr.anchoredPosition = new Vector2(-pad, btnY);
+            pr.sizeDelta = new Vector2(placeW, btnH);
             var pbg = placeGo.AddComponent<RoundedRectGraphic>();
             pbg.Radius = 6f;
             pbg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.34f);
@@ -851,15 +866,19 @@ namespace Sapphire
 
             // Store-as-shape: same row as Place but GREY, because it's the secondary action —
             // Place is what the pad is for, this just files the run away for later.
-            MakeFlatBtn(root, Loc.T("Add to Shape Library"), -pad - 16f - 78f - 8f, pad, 152f, 28f,
+            MakeFlatBtn(root, Loc.T("Add to Shape Library"), -pad - placeW - btnGap, btnY,
+                        w - pad * 2f - placeW - btnGap, btnH,
                         () => { Deselect(); StoreAsShape(pw); });
 
             // Enter in the field places too (keeps hands on the keyboard).
             field.onSubmit.AddListener(_ => DoPlace(pw));
+            field.onValueChanged.AddListener(_ => SyncTwirlBtn(pw));
+            SyncTwirlBtn(pw);
 
             // Resizable like the MSM/MH popups — grip at the bottom-right; content is anchored
             // (header/field/hint stretch, buttons ride the edges) so it re-fits width automatically.
-            ResizeHandle.AttachAll(rr, true, 262f, 108f);   // floor = both bottom buttons + pads
+            // Floors: both bottom buttons + margins across, and every row stacked down.
+            ResizeHandle.AttachAll(rr, true, 262f, 150f);
 
             _pads.Add(pw);
             if (focus) try { field.ActivateInputField(); } catch { }
@@ -964,8 +983,24 @@ namespace Sapphire
             if (pw == null || pw.Field == null) return;
             string next = ToggleFirstTwirl(pw.Field.text);
             if (next == pw.Field.text) return;
-            pw.Field.text = next;
+            pw.Field.text = next;                       // onValueChanged relights the button
             if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
+        }
+
+        // Does the first tile carry a twirl? Drives the button's lit state, so it answers the
+        // question by the same tokenisation the flip uses rather than by remembering a click.
+        private static bool FirstIsTwirled(string expr)
+            => expr != null && ToggleFirstTwirl(expr).Length < expr.Length;
+
+        private static void SyncTwirlBtn(Pad pw)
+        {
+            if (pw == null || pw.TwirlBtn == null || pw.Field == null) return;
+            bool on = FirstIsTwirled(pw.Field.text);
+            var col = on ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
+                         : new Color(1f, 1f, 1f, 0.07f);
+            pw.TwirlBtn.color = col;
+            var hov = pw.TwirlBtn.GetComponent<Hover>();
+            if (hov != null) hov.Rest = col;
         }
 
         /* Toggle the trailing twirl marker on the FIRST angle token, wherever it sits — including
@@ -1201,6 +1236,65 @@ namespace Sapphire
             ClickHandler.Attach(go, onClick);
         }
 
+        /* Same cell as MakeGlyphBtn but with a DRAWN icon: the user's fonts carry no spiral, and
+           a letter standing in for one is what this button already tried. Returns the background
+           so the caller can light it to show state. */
+        private static RoundedRectGraphic MakeIconBtn(GameObject parent, float x, float size, string tip,
+                                                      Action<GameObject> draw, Action onClick)
+        {
+            var go = new GameObject("B", typeof(RectTransform));
+            go.transform.SetParent(parent.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(1f, 0.5f); r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(1f, 0.5f);
+            r.anchoredPosition = new Vector2(x, 0f);
+            r.sizeDelta = new Vector2(size, size);
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 5f;
+            bg.color = new Color(1f, 1f, 1f, 0.07f);
+            bg.raycastTarget = true;
+            draw(go);
+            go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.16f));
+            ClickHandler.Attach(go, () => { Deselect(); onClick(); });
+            return bg;
+        }
+
+        /* A swirl: an Archimedean spiral drawn as short chords, the same trick the toolbar icons
+           use for arcs. Two and a bit turns, tightening inward, which is what makes it read as a
+           twirl marker rather than as a circle at 24px. */
+        private static void DrawSwirlIcon(GameObject cell)
+        {
+            const int seg = 26;
+            const float turns = 2.15f, rMax = 7.2f, thick = 1.6f;
+            Vector2 prev = Vector2.zero;
+            for (int i = 0; i <= seg; i++)
+            {
+                float t = i / (float)seg;
+                float a = t * turns * 2f * Mathf.PI;
+                float rad = rMax * t;
+                var p = new Vector2(Mathf.Cos(a) * rad, Mathf.Sin(a) * rad);
+                if (i > 0) MakeIconLine(cell, prev, p, thick);
+                prev = p;
+            }
+        }
+
+        private static void MakeIconLine(GameObject parent, Vector2 a, Vector2 b, float thick)
+        {
+            var d = b - a;
+            var g = new GameObject("S", typeof(RectTransform));
+            g.transform.SetParent(parent.transform, false);
+            var r = (RectTransform)g.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 0.5f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.anchoredPosition = (a + b) * 0.5f;
+            r.sizeDelta = new Vector2(d.magnitude + thick * 0.5f, thick);
+            r.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            var bar = g.AddComponent<RoundedRectGraphic>();
+            bar.Radius = thick * 0.5f;
+            bar.color = Theme.Text;
+            bar.raycastTarget = false;
+        }
+
         private static void MakeGlyphBtn(GameObject parent, string glyph, float x, float size, string tip, Action onClick)
         {
             var go = new GameObject("B", typeof(RectTransform));
@@ -1286,6 +1380,9 @@ namespace Sapphire
             private RoundedRectGraphic _bg;
             private Color _rest, _hot;
             internal void Init(RoundedRectGraphic bg, Color rest, Color hot) { _bg = bg; _rest = rest; _hot = hot; }
+            // Lit/unlit buttons repaint their resting colour, and the hover must follow or the
+            // next mouse-out restores the old one.
+            internal Color Rest { set { _rest = value; } }
             public void OnPointerEnter(PointerEventData e) { if (_bg != null) _bg.color = _hot; }
             public void OnPointerExit(PointerEventData e) { if (_bg != null) _bg.color = _rest; }
         }

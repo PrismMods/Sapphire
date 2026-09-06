@@ -37,6 +37,16 @@ namespace Sapphire
 
         internal static void Toggle() { if (_open) Close(); else Open(); }
 
+        // Open straight onto one topic — the "?" buttons that sit on a panel already know which
+        // page they want, so they skip the intro and the hunt through Contents.
+        internal static void OpenTopic(string key)
+        {
+            EnsureUi();
+            _canvasGo.SetActive(true);
+            _open = true;
+            ShowTopic(Topics.ContainsKey(key) ? key : "__intro");
+        }
+
         internal static void Tick()
         {
             if (!_open) return;
@@ -491,6 +501,7 @@ namespace Sapphire
             }),
             new Cat("Panels", "패널", new[]
             {
+                "AnglePad",
                 "EventDock", "SapphireLevelMenu", "SapphireCopyPanel", "SapphirePresets",
                 "SapphireCameraCard", "SapphireEasePicker", "SapphireTileMenu", "SapphireFilterPicker",
                 "SapphirePopup",
@@ -530,6 +541,9 @@ namespace Sapphire
             var d = new Dictionary<string, KeyValuePair<string, string>>();
             Add(d, "__intro", "Help mode",
 "<b>What this is</b>\nBrowse every tool and panel from the <b>Contents</b> list on the left — click an entry to read its docs here.\n\nOr point at any Sapphire control: it highlights, and clicking it jumps straight to its documentation.\n\n<b>Keys</b>\nESC — exit help mode.");
+
+            Add(d, "AnglePad", "Angle pad",
+"<b>What it does</b>\nAppends a whole run of tiles from a line of RELATIVE angles (the charter convention: 180 = straight, 90 = quarter turn, 0 = U-turn). Quick chart keeps one pad open at all times.\n\n<b>Syntax</b>\nSpace-separated angles. Maths works per value — 180-30, 360/8, 2*45. A trailing <b>t</b> twirls that tile: 30t 30t 180. Parenthesised groups repeat with *: (30t 150 180)*4, and groups can nest.\n\n<b>Buttons</b>\nSwirl — flip the FIRST tile's twirl. A twirl reverses the turn direction, so the leading one decides which way the whole run bends; drop it when the path already enters turning the way you want. It lights up while the first tile is twirled.\n+ — duplicate this pad, carrying its text and repeat count (each pad is a scratch preset).\n× n — lay the expression down n times. Separate from (…)*n on purpose: as a count the expression stays one UNIT, so flipping its leading twirl costs only the FIRST pass, and the spin carries into the rest.\nAdd to Shape Library — save the run (repeats included) under Non-repeating shapes.\nPlace — build it onto the selected tile, in one undo.\n\n<b>Keys</b>\nShift+G — new pad. Enter — Place (with several pads open, Enter arms a pick and the digit keys choose one).");
 
             Add(d, "ToolCircle", "Circular path",
 "<b>What it does</b>\nGenerates stars, circles and midspin-circles after the selected tile (Star Calculator parameters).\n\n<b>How to use</b>\nSelect a tile, open the tool, set Pseudo per round / interval / angle, optional Reverse, Keep BPM, mid-spin. Apply builds in one undo.\n\n<b>Keys</b>\n1 — open (no tile selected).");
