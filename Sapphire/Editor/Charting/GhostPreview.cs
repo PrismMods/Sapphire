@@ -34,6 +34,8 @@ namespace Sapphire
     {
         private static readonly List<GameObject> _objs = new List<GameObject>();
         private static string _owner;
+        // Cached: GameObject.Find walks the whole scene, and this ran on every rebuild.
+        private static GameObject _host;
 
         internal static bool OwnedBy(string owner) => _owner != null && _owner == owner;
 
@@ -47,8 +49,16 @@ namespace Sapphire
             _owner = null;
         }
 
+        /* Reuse the instances when only the SHAPE changed. Typing in a panel re-walks every
+           frame, and tearing down plus re-instantiating a few hundred mesh floors per keystroke
+           is most of what made a big run feel heavy. Same owner and same count = move them. */
+        private static bool CanReuse(string owner, int count)
+            => _owner == owner && _objs.Count == count && _host != null;
+
         // Ghosts are positioned from the real tiles' transforms, so a level rebuild strands them.
         internal static void OnMakeLevel() { Clear(); }
+
+        internal static void Dispose() { Clear(); if (_host != null) UnityEngine.Object.Destroy(_host); _host = null; }
 
         // The tile a run would be appended to, or -1.
         internal static int AnchorSeq(scnEditor ed)
@@ -64,8 +74,10 @@ namespace Sapphire
 
         internal static void Show(string owner, scnEditor ed, int anchorSeq, IList<GhostStep> steps)
         {
-            Clear();
-            if (owner == null || ed == null || steps == null || steps.Count == 0 || anchorSeq < 0) return;
+            if (owner == null || ed == null || steps == null || steps.Count == 0 || anchorSeq < 0)
+            { Clear(); return; }
+            bool reuse = CanReuse(owner, steps.Count);
+            if (!reuse) Clear();
             _owner = owner;
             try
             {
@@ -76,7 +88,8 @@ namespace Sapphire
                 if (anchor == null) return;
 
                 float tile = scrController.instance.tileSize;
-                var host = GameObject.Find("SapphireGhosts") ?? new GameObject("SapphireGhosts");
+                if (_host == null) _host = GameObject.Find("SapphireGhosts") ?? new GameObject("SapphireGhosts");
+                var host = _host;
 
                 double dir = lm.floorAngles[Mathf.Clamp(anchorSeq, 0, lm.floorAngles.Length - 1)];
                 int localSign = anchor.isCCW ? -1 : 1;
@@ -85,7 +98,12 @@ namespace Sapphire
 
                 for (int i = 0; i < steps.Count; i++)
                 {
-                    if (steps[i].Offset != Vector2.zero) pos += new Vector3(steps[i].Offset.x, steps[i].Offset.y, 0f);
+                    /* PositionTrack's offset is in TILES, not world units — ApplyEventsToFloors
+                       multiplies it by scrController.tileSize before adding (verified in the IL).
+                       The preview was adding it raw, so separated circles previewed at the wrong
+                       spacing and the ghosts disagreed with the placement. */
+                    if (steps[i].Offset != Vector2.zero)
+                        pos += new Vector3(steps[i].Offset.x, steps[i].Offset.y, 0f) * tile;
                     if (steps[i].Twirl) localSign = -localSign;
                     dir = (dir + localSign * (180.0 - steps[i].Angle)) % 360.0;
                     if (dir < 0) dir += 360.0;
@@ -93,16 +111,26 @@ namespace Sapphire
                     double a = (-dir + 90.0) * Mathf.PI / 180.0;
                     pos += scrMisc.getVectorFromAngle(a, tile);
 
-                    var obj = UnityEngine.Object.Instantiate(lm.meshFloor, pos, Quaternion.identity);
-                    obj.name = "SapphireGhost";
-                    obj.transform.parent = host.transform;
+                    GameObject obj;
+                    if (reuse)
+                    {
+                        obj = _objs[i];
+                        if (obj == null) { reuse = false; Clear(); return; }   // torn down under us
+                        obj.transform.position = pos;
+                    }
+                    else
+                    {
+                        obj = UnityEngine.Object.Instantiate(lm.meshFloor, pos, Quaternion.identity);
+                        obj.name = "SapphireGhost";
+                        obj.transform.parent = host.transform;
+                        _objs.Add(obj);
+                    }
                     var f = obj.GetComponent<scrFloor>();
-                    if (f == null) { UnityEngine.Object.DestroyImmediate(obj); continue; }
+                    if (f == null) continue;
                     f.entryangle = (a + Mathf.PI) % (Mathf.PI * 2);
                     f.exitangle = a;                       // straight until the next one lands
                     if (made.Count > 0) { made[made.Count - 1].exitangle = a; made[made.Count - 1].nextfloor = f; }
                     made.Add(f);
-                    _objs.Add(obj);
                 }
 
                 foreach (var f in made)

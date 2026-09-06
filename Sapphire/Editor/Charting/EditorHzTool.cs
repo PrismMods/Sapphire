@@ -161,7 +161,9 @@ namespace Sapphire
            the two share GhostPreview. The Hz run is uniform: `_tiles` taps at `_angle`, no
            twirls. Re-walked only when one of those changes or the selection moves. */
         private const string GhostOwner = "hztool";
-        private const int MaxGhosts = 400;
+        // Each ghost is an instantiated mesh floor; a few hundred is already a lot to reposition
+        // every time a field changes, and beyond that the preview stops telling you anything new.
+        private const int MaxGhosts = 200;
         private static long _ghostSig = long.MinValue;
 
         private static void TickPreview(scnEditor ed)

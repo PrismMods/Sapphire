@@ -389,6 +389,7 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorHzTool.Dispose();
+            GhostPreview.Dispose();
             EditorMasterSwitch.Dispose();
             EditorKeyHints.Dispose();
             EditorShapeLibrary.Dispose();

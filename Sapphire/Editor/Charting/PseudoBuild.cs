@@ -103,7 +103,17 @@ namespace Sapphire
                         placed++;
                     }
 
-                foreach (int seq in twirlSeqs) if (seq >= firstNewSeq - 1) AddTwirl(ed, seq);
+                /* Which floors already carry a Twirl, gathered ONCE. AddTwirl used to scan
+                   ed.events per twirl, which is O(twirls x events) — a 300-tile run of twirled
+                   taps walked the event list three hundred times. */
+                var twirled = new HashSet<int>();
+                try
+                {
+                    foreach (var ev in ed.events)
+                        if (ev != null && ev.eventType == ADOFAI.LevelEventType.Twirl) twirled.Add(ev.floor);
+                }
+                catch { }
+                foreach (int seq in twirlSeqs) if (seq >= firstNewSeq - 1) AddTwirl(ed, seq, twirled);
                 try { ed.RemakePath(true, true); } catch { }
                 return placed;
             }
@@ -139,18 +149,26 @@ namespace Sapphire
            gives the SAME spin as adding a second one (odd count -> even either way; AnchorSpin
            read isCCW *after* the existing twirl, so the build already expects that flip) and
            leaves one event instead of two. So: toggle, never append blindly. */
-        private static void AddTwirl(scnEditor ed, int seq)
+        private static void AddTwirl(scnEditor ed, int seq, HashSet<int> twirled)
         {
             try
             {
-                for (int i = ed.events.Count - 1; i >= 0; i--)
+                if (twirled.Contains(seq))
                 {
-                    var ev = ed.events[i];
-                    if (ev == null || ev.floor != seq || ev.eventType != ADOFAI.LevelEventType.Twirl) continue;
-                    ed.events.RemoveAt(i);
+                    // Only ever the anchor floor in practice, so the linear removal runs at most
+                    // once per build rather than per twirl.
+                    for (int i = ed.events.Count - 1; i >= 0; i--)
+                    {
+                        var ev = ed.events[i];
+                        if (ev == null || ev.floor != seq || ev.eventType != ADOFAI.LevelEventType.Twirl) continue;
+                        ed.events.RemoveAt(i);
+                        break;
+                    }
+                    twirled.Remove(seq);
                     return;
                 }
                 ed.events.Add(new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Twirl));
+                twirled.Add(seq);
             }
             catch (Exception ex) { SapphireLog.Log("PseudoBuild: twirl failed: " + ex.Message); }
         }
