@@ -69,7 +69,9 @@ namespace Sapphire
             /* The pad is the mode's main surface, so the mode is never on with nothing to type
                into. Spawned WITHOUT focus — an auto-appearing field that steals the keyboard
                would eat the editor's own tile keys the moment quick chart turns on. */
-            if (_pads.Count == 0 && CanvasReady) SpawnPad(null, "", focus: false);
+            // No longer waits for a laid-out canvas: the default position is corner-relative, so
+            // there is no rect to read and nothing to get wrong on the first frame.
+            if (_pads.Count == 0) SpawnPad(null, "", focus: false);
 
             if (!Input.anyKeyDown) return; // hotkeys below are all GetKeyDown
             // Prompt-local keys (handled BEFORE the typing gate, since a prompt field is focused).
@@ -609,7 +611,7 @@ namespace Sapphire
             for (int i = _pads.Count - 1; i >= 0; i--)
             {
                 if (_pads[i].Root == null) { _pads.RemoveAt(i); continue; }
-                Clamp((RectTransform)_pads[i].Root.transform);
+                ClampPad((RectTransform)_pads[i].Root.transform);
             }
             if (_promptGo != null) Clamp((RectTransform)_promptGo.transform);
         }
@@ -618,6 +620,18 @@ namespace Sapphire
         // freshly created canvas reports 0 until Unity lays it out, and anything positioned
         // against that lands nowhere near where it was asked to go.
         private static bool CanvasReady => _root != null && _root.rect.width >= 100f;
+
+        // Pads are corner-anchored; the prompt card is still centred, so they clamp differently.
+        private static void ClampPad(RectTransform rt) => rt.anchoredPosition =
+            ClampPad(rt.anchoredPosition, rt.rect.width, rt.rect.height);
+
+        private static Vector2 ClampPad(Vector2 p, float w, float h)
+        {
+            if (_root == null || _root.rect.width < 100f) return p;
+            float xMin = -Mathf.Max(PadMargin, _root.rect.width - w - PadMargin);
+            float yMin = -Mathf.Max(PadMargin, _root.rect.height - h - PadMargin);
+            return new Vector2(Mathf.Clamp(p.x, xMin, -PadMargin), Mathf.Clamp(p.y, yMin, -PadMargin));
+        }
 
         private static void Clamp(RectTransform rt) => rt.anchoredPosition =
             ClampToCanvas(rt.anchoredPosition, rt.rect.width, rt.rect.height);
@@ -743,19 +757,16 @@ namespace Sapphire
            dragged window — a default position must never be one the clamp would reject. */
         private const float PadMargin = 16f;
 
-        /* Clear of the master switch, which owns the very top-right and whose canvas draws over
-           this one. EditorMasterSwitch.ChromeBottom is where its label ends; the extra clearance
-           is EMPIRICAL — measured against the switch in game, because 76 (its bottom plus a
-           normal margin) still landed on it. Derived rather than hardcoded so a change to the
-           switch's own layout moves the pad with it. */
-        private static float PadTopInset => EditorMasterSwitch.ChromeBottom + 58f;
-
-        private static Vector2 DefaultPadPos(float w, float h)
-        {
-            if (!CanvasReady) return new Vector2(0f, 60f);
-            return ClampToCanvas(new Vector2(_root.rect.width * 0.5f - w * 0.5f - PadMargin,
-                                             _root.rect.height * 0.5f - h * 0.5f - PadTopInset), w, h);
-        }
+        /* Pads anchor to the canvas TOP-RIGHT, not to its centre. Twice now a centre-anchored
+           default computed from `_root.rect` still landed on the master switch, and the rect is
+           the one term here that cannot be checked from the source. Anchoring at the corner makes
+           the placement true BY CONSTRUCTION — "16 in from the right, ChromeBottom+12 down from
+           the top" — with no canvas arithmetic to be wrong about and nothing for the clamp to
+           fight. With pivot (1,1) an anchoredPosition of (x, y) means the pad's right edge sits
+           -x left of the canvas right edge and its top edge -y below the canvas top, so both are
+           negative and read directly as insets. */
+        private static Vector2 DefaultPadPos()
+            => new Vector2(-PadMargin, -(EditorMasterSwitch.ChromeBottom + 12f));
 
         /* One runnable check for the text transform — it is the only piece of the pad that
            rewrites what the user typed, and getting it wrong silently corrupts an expression.
@@ -791,13 +802,14 @@ namespace Sapphire
             var root = new GameObject("AnglePad", typeof(RectTransform));
             root.transform.SetParent(_root, false);
             var rr = (RectTransform)root.transform;
-            rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 0.5f);
-            rr.pivot = new Vector2(0.5f, 0.5f);
+            rr.anchorMin = rr.anchorMax = new Vector2(1f, 1f);
+            rr.pivot = new Vector2(1f, 1f);
             rr.sizeDelta = new Vector2(w, h);
-            Vector2 pos = at ?? DefaultPadPos(w, h);
+            Vector2 pos = at ?? DefaultPadPos();
             // Duplicates cascade DOWN-LEFT, back into the screen: the default spot is the
             // top-right corner, so any other direction walks them off it.
             if (at == null) { int k = _spawnSeq++ % 6; pos += new Vector2(-k * 26f, -k * 26f); }
+            pos = ClampPad(pos, w, h);
             rr.anchoredPosition = pos;
             var bg = root.AddComponent<RoundedRectGraphic>();
             bg.Radius = 9f;
@@ -1349,16 +1361,18 @@ namespace Sapphire
            twirl marker rather than as a circle at 24px. */
         private static void DrawSwirlIcon(GameObject cell)
         {
-            // Thin: at 24px a 1.6-wide stroke over two turns fuses into a disc. 1.0 keeps the
-            // gaps between the windings readable, which is the whole shape.
-            const int seg = 26;
-            const float turns = 2.15f, rMax = 7.4f, thick = 1.0f;
+            /* Starts at rMin, not at the centre: a spiral drawn from r=0 crowds a dozen chords
+               into the first two pixels and reads as a filled dot with a tail. Beginning off-centre
+               keeps every winding open — pitch is (rMax-rMin)/turns = 3.3px against a 1.0 stroke,
+               so 2.3px of daylight between them. */
+            const int seg = 32;
+            const float turns = 1.75f, rMin = 1.6f, rMax = 7.4f, thick = 1.0f;
             Vector2 prev = Vector2.zero;
             for (int i = 0; i <= seg; i++)
             {
                 float t = i / (float)seg;
                 float a = t * turns * 2f * Mathf.PI;
-                float rad = rMax * t;
+                float rad = Mathf.Lerp(rMin, rMax, t);
                 var p = new Vector2(Mathf.Cos(a) * rad, Mathf.Sin(a) * rad);
                 if (i > 0) MakeIconLine(cell, prev, p, thick);
                 prev = p;
