@@ -91,6 +91,12 @@ One pad is always on screen while the mode is on, spawning in the **top-right co
 the toolbar's drop-down submenus and of the key hints below); `×` on the last pad clears it
 instead of closing it.
 
+**`t` flips the first tile's twirl** — `30t 30t 180` ⇄ `30 30t 180`. A twirl reverses the turn
+direction, so the *leading* one decides which way the whole run bends and the rest are relative to
+it; dropping it reuses the same angles when the path already progresses the way you want. It edits
+the text, so your maths, grouping and spacing survive (`180-30t` → `180-30`, not `150`), and it
+reaches the first token inside a group: `(30t 150)*4` → `(30 150)*4`.
+
 **Add to Shape Library** — the grey button beside Place saves the pad's expression into the shape
 library's **Non-repeating shapes** category with a repeat of 1, since a pad expression already
 spells out the whole run (`(…)*n` groups are flattened before saving).

@@ -125,6 +125,7 @@ namespace Sapphire
             // angle pad → shape library
             ["Store as shape"] = "도형으로 저장",
             ["Add to Shape Library"] = "도형 라이브러리에 추가",
+            ["Flip the first tile's twirl"] = "첫 타일의 소용돌이 반전",
             ["append t for twirl · math supported · (…)*n"] = "t를 붙이면 소용돌이 · 수식 지원 · (…)*n",
             ["run too long to store"] = "저장하기에 너무 긴 묶음입니다",
             ["stored in"] = "저장 위치:",

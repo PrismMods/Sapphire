@@ -662,8 +662,27 @@ namespace Sapphire
                                              _root.rect.height * 0.5f - h * 0.5f - PadTopInset), w, h);
         }
 
+        /* One runnable check for the text transform — it is the only piece of the pad that
+           rewrites what the user typed, and getting it wrong silently corrupts an expression.
+           Flipping twice must return the original, formatting and all. */
+        private static bool _selfChecked;
+
+        private static bool SelfCheck()
+        {
+            bool ok = ToggleFirstTwirl("30t 30t 180") == "30 30t 180"
+                   && ToggleFirstTwirl("30 30t 180") == "30t 30t 180"
+                   && ToggleFirstTwirl("(30t 150 180)*4") == "(30 150 180)*4"
+                   && ToggleFirstTwirl("((30t 150)*2 180)*3") == "((30 150)*2 180)*3"
+                   && ToggleFirstTwirl("  180-30t 90 ") == "  180-30 90 "   // maths + spacing kept
+                   && ToggleFirstTwirl("360/8 45") == "360/8t 45"
+                   && ToggleFirstTwirl("") == "" && ToggleFirstTwirl("   ") == "   ";
+            SapphireLog.Log("EditorQuickChart.SelfCheck: " + (ok ? "PASS" : "FAIL"));
+            return ok;
+        }
+
         private static void SpawnPad(Vector2? at, string initial, bool focus = true)
         {
+            if (!_selfChecked) { _selfChecked = true; SelfCheck(); }
             EnsureCanvas();
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
             const float w = 300f, h = 122f, pad = 10f;
@@ -705,10 +724,16 @@ namespace Sapphire
             titleGo.transform.SetParent(header.transform, false);
             var tr = (RectTransform)titleGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-58f, 0f);
+            tr.offsetMin = new Vector2(pad, 0f); tr.offsetMax = new Vector2(-86f, 0f);
             var title = UIBuilder.Tmp(titleGo, Loc.T("Angle pad"), 12.5f, TextAnchor.MiddleLeft, Theme.Text);
             title.raycastTarget = false;
 
+            /* "t": flip the twirl on the FIRST tile. A twirl reverses the turn direction, so
+               the leading one decides which way the whole run bends — the rest are relative to
+               it. Dropping it reuses the same angles when the path already progresses the way
+               you want, which is the common case when a run is pasted more than once. */
+            MakeGlyphBtn(header, "t", -62f, 24f, Loc.T("Flip the first tile's twirl"),
+                () => FlipFirstTwirl(pw));
             MakeGlyphBtn(header, "+", -34f, 24f, Loc.T("Duplicate"),
                 () => SpawnPad(rr.anchoredPosition + new Vector2(26f, -26f), pw.Field != null ? pw.Field.text : ""));
             MakeGlyphBtn(header, "×", -6f, 24f, Loc.T("Close"), () => ClosePad(pw));
@@ -879,6 +904,39 @@ namespace Sapphire
             _pads.Remove(pw);
             if (pw.Root != null) UnityEngine.Object.Destroy(pw.Root);
             pw.Root = null;
+        }
+
+        private static void FlipFirstTwirl(Pad pw)
+        {
+            if (pw == null || pw.Field == null) return;
+            string next = ToggleFirstTwirl(pw.Field.text);
+            if (next == pw.Field.text) return;
+            pw.Field.text = next;
+            if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
+        }
+
+        /* Toggle the trailing twirl marker on the FIRST angle token, wherever it sits — including
+           inside a group, so "(30t 150)*4" flips too. Works on the TEXT rather than on a parsed
+           run so the user's own formatting, maths and grouping all survive the round trip; a
+           parse-and-reprint would quietly rewrite "180-30" as "150".
+
+           Separator set matches ParseSeq exactly (whitespace, comma, parens) — a token here has
+           to be the same token the parser will see. */
+        internal static string ToggleFirstTwirl(string expr)
+        {
+            if (string.IsNullOrEmpty(expr)) return expr;
+            int i = 0;
+            while (i < expr.Length && (char.IsWhiteSpace(expr[i]) || expr[i] == ',' || expr[i] == '(')) i++;
+            int start = i;
+            while (i < expr.Length && !char.IsWhiteSpace(expr[i])
+                   && expr[i] != '(' && expr[i] != ')' && expr[i] != ',') i++;
+            if (i <= start) return expr;                      // nothing that parses as a tile
+            string tok = expr.Substring(start, i - start);
+            char last = tok[tok.Length - 1];
+            string flipped = last == 't' || last == 'T'
+                ? tok.Substring(0, tok.Length - 1)
+                : tok + "t";
+            return expr.Substring(0, start) + flipped + expr.Substring(i);
         }
 
         /* Store the pad's run as a shape. The pad's text is the WHOLE run — ParseAngles already
