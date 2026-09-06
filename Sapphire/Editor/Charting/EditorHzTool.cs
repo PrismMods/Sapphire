@@ -60,6 +60,11 @@ namespace Sapphire
         private static int _sides = 16;           // circle mode: tiles per revolution
         private static int _laps = 1;             // circle mode: how many times round
         private static bool _perfectCircle = true; // must the loop close, or may it stop partway?
+        /* Laps re-trace the SAME polygon, so without this every circle lands exactly on top of the
+           last one and reads as a single ring. A PositionTrack at each lap boundary steps the
+           track sideways; the offsets accumulate, so equal steps lay the circles out in a row. */
+        private static bool _separate;
+        private static double _sepX = 6.0, _sepY;
         private static bool _pauseFill;           // pad the leftover time with a Pause event
 
         private static bool _writeSpeed = true;   // emit the SetSpeed that makes _bpm real
@@ -141,6 +146,8 @@ namespace Sapphire
             sig = sig * 31 + _sides * 4096 + _laps;
             sig = sig * 31 + (_perfectCircle ? 1 : 0);
             sig = sig * 31 + (_pauseFill ? 1 : 0);
+            sig = sig * 31 + (_separate ? 1 : 0);
+            sig = sig * 31 + (long)Math.Round(_sepX * 100.0) * 4096 + (long)Math.Round(_sepY * 100.0);
             sig = sig * 31 + (_writeSpeed ? 1 : 0);
             if (K.SyncWidth()) _layoutSig = NoSig;
             if (!K.Built || sig != _layoutSig) { _layoutSig = sig; Build(); }
@@ -164,13 +171,21 @@ namespace Sapphire
             sig = sig * 31 + anchorSeq;
             sig = sig * 31 + _tiles;
             sig = sig * 31 + (long)Math.Round(_angle * 1000.0);
+            sig = sig * 31 + (_separate ? 1 : 0);
+            sig = sig * 31 + _sides * 8192 + _laps;
+            sig = sig * 31 + (long)Math.Round(_sepX * 100.0) * 4096 + (long)Math.Round(_sepY * 100.0);
             if (sig == _ghostSig && GhostPreview.OwnedBy(GhostOwner)) return;
             _ghostSig = sig;
             int n = Mathf.Clamp(_tiles, 0, MaxGhosts);
             if (anchorSeq < 0 || n <= 0 || _angle <= 0.0 || _tiles > MaxGhosts)
             { GhostPreview.Release(GhostOwner); return; }
+            bool sep = _circle && _separate && _laps > 1 && _sides > 0;
+            var jump = new Vector2((float)_sepX, (float)_sepY);
             var walk = new GhostStep[n];
-            for (int i = 0; i < n; i++) walk[i] = new GhostStep(_angle, false);
+            for (int i = 0; i < n; i++)
+                walk[i] = sep && i > 0 && i % _sides == 0
+                    ? new GhostStep(_angle, false, jump)
+                    : new GhostStep(_angle, false);
             GhostPreview.Show(GhostOwner, ed, anchorSeq, walk);
         }
 
@@ -463,6 +478,19 @@ namespace Sapphire
                    restore SetSpeed is forced onto that same tile even at the end of the track —
                    otherwise the hold would be counted in the run's fast beats instead of the
                    section's, and the run would finish early by exactly the speed multiplier. */
+                /* One PositionTrack at the first tile of every lap after the first. The offsets
+                   are relative and accumulate down the track, so an equal step per lap spaces the
+                   circles evenly instead of piling them at one displacement. */
+                if (placed > 0 && _circle && _separate && _laps > 1 && _sides > 0
+                    && (Math.Abs(_sepX) > 1e-6 || Math.Abs(_sepY) > 1e-6))
+                {
+                    for (int lap = 1; lap < _laps; lap++)
+                    {
+                        int seq = firstSeq + lap * _sides;
+                        if (seq > firstSeq + placed - 1) break;
+                        EditorQuickChart.AddPositionTrack(ed, seq, _sepX, _sepY);
+                    }
+                }
                 if (placed > 0 && _pauseFill && PauseBeats > 1e-4)
                 {
                     int lastSeq = firstSeq + placed - 1;
@@ -530,7 +558,7 @@ namespace Sapphire
             double bpm = _bpm, hz = _hz, ang = _angle, beats = _beats, bb = _baseBpm;
             int tiles = _tiles, sides = _sides, laps = _laps;
             bool lt = _lockTiles, circ = _circle, auto = _baseAuto, perf = _perfectCircle;
-            bool pf = _pauseFill;
+            bool pf = _pauseFill, sep = _separate;
             Var lk = _lock;
             string st = _status;
 
@@ -586,9 +614,20 @@ namespace Sapphire
                && Mathf.Abs((float)(_tiles / ActualHz - RunBeats * 60.0 / _baseBpm)) < 1e-4;
             _pauseFill = false;
 
+            /* SEPARATION lands one PositionTrack per lap boundary, laps-1 of them, and must not
+               disturb the geometry: the run is still sides*laps tiles at the same angle. */
+            _laps = 4; _separate = true; _perfectCircle = true;
+            SolveCircle();
+            int boundaries = 0;
+            for (int i = 1; i < _tiles; i++) if (i % _sides == 0) boundaries++;
+            ok &= boundaries == _laps - 1
+               && _tiles == _sides * _laps
+               && Mathf.Abs((float)(_angle - (180.0 - 360.0 / _sides))) < 1e-6;
+            _separate = false;
+
             _bpm = bpm; _hz = hz; _angle = ang; _beats = beats; _baseBpm = bb; _baseAuto = auto;
             _tiles = tiles; _sides = sides; _laps = laps; _lockTiles = lt; _circle = circ;
-            _perfectCircle = perf; _pauseFill = pf; _lock = lk; _status = st;
+            _perfectCircle = perf; _pauseFill = pf; _separate = sep; _lock = lk; _status = st;
             SapphireLog.Log("EditorHzTool.SelfCheck: " + (ok ? "PASS" : "FAIL"));
             return ok;
         }
@@ -749,6 +788,14 @@ namespace Sapphire
                     K.Label(ActualLaps.ToString("0.###"), Pad + K.LblW + 4f, y,
                             fullW - K.LblW - 4f, RowH, Theme.Text, 11.5f);
                     y -= RowH + Gap;
+                }
+                if (_laps > 1)
+                {
+                    y = K.ToggleRow(y, Loc.T("Separate circles"), _separate,
+                        v => { _separate = v; _ghostSig = long.MinValue; _layoutSig = NoSig; });
+                    if (_separate)
+                        y = K.FloatPairRow(y, Loc.T("Offset X / Y"), () => (float)_sepX, () => (float)_sepY,
+                            (a, b) => { _sepX = a; _sepY = b; _ghostSig = long.MinValue; _layoutSig = NoSig; });
                 }
                 K.Label(Loc.T("Tiles"), Pad, y, K.LblW, RowH, Theme.TextMuted);
                 K.Label(_tiles + "   (" + Loc.T("ideal") + " " + IdealTiles.ToString("0.##") + ")",

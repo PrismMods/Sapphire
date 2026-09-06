@@ -10,7 +10,11 @@ namespace Sapphire
     {
         public readonly double Angle;
         public readonly bool Twirl;
-        public GhostStep(double angle, bool twirl) { Angle = angle; Twirl = twirl; }
+        // Jump applied BEFORE this tile — mirrors a PositionTrack, so a preview of separated
+        // circles lands where the real ones will instead of stacking them all on one spot.
+        public readonly Vector2 Offset;
+        public GhostStep(double angle, bool twirl) { Angle = angle; Twirl = twirl; Offset = Vector2.zero; }
+        public GhostStep(double angle, bool twirl, Vector2 offset) { Angle = angle; Twirl = twirl; Offset = offset; }
     }
 
     /* Translucent tiles showing the run a tool WOULD place, drawn ahead of the anchor.
@@ -81,6 +85,7 @@ namespace Sapphire
 
                 for (int i = 0; i < steps.Count; i++)
                 {
+                    if (steps[i].Offset != Vector2.zero) pos += new Vector3(steps[i].Offset.x, steps[i].Offset.y, 0f);
                     if (steps[i].Twirl) localSign = -localSign;
                     dir = (dir + localSign * (180.0 - steps[i].Angle)) % 360.0;
                     if (dir < 0) dir += 360.0;

@@ -390,6 +390,20 @@ namespace Sapphire
             catch (Exception ex) { SapphireLog.Log("QuickChart: add Pause failed: " + ex.Message); }
         }
 
+        // Shared with the Hz tool: a PositionTrack offset on one floor. Same reason as AddPause —
+        // the SetXY + Enable pair is the landmine and wants exactly one implementation.
+        internal static void AddPositionTrack(scnEditor ed, int floorSeq, double x, double y)
+        {
+            try
+            {
+                var ev = new ADOFAI.LevelEvent(floorSeq, ADOFAI.LevelEventType.PositionTrack);
+                if (!SetXY(ev, "positionOffset", x, y)) LogKeys("PositionTrack", ev);
+                Enable(ev, "positionOffset");
+                ed.events.Add(ev);
+            }
+            catch (Exception ex) { SapphireLog.Log("QuickChart: add PositionTrack failed: " + ex.Message); }
+        }
+
         private static bool SetNum(ADOFAI.LevelEvent ev, string key, double val)
         {
             try

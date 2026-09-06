@@ -103,6 +103,8 @@ namespace Sapphire
             ["Duration (beats)"] = "길이 (박자)",
             ["Full circle"] = "완전한 원",
             ["Perfect circles"] = "완전히 닫힌 원",
+            ["Separate circles"] = "원 간격 벌리기",
+            ["Offset X / Y"] = "간격 X / Y",
             ["Exact pitch (pad with a pause)"] = "정확한 음높이 (정지로 채우기)",
             ["Pause"] = "정지",
             ["pause"] = "정지",
