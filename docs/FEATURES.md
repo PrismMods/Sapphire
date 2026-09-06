@@ -91,11 +91,12 @@ One pad is always on screen while the mode is on, spawning in the **top-right co
 the toolbar's drop-down submenus and of the key hints below); `×` on the last pad clears it
 instead of closing it.
 
-**`t` flips the first tile's twirl** — `30t 30t 180` ⇄ `30 30t 180`. A twirl reverses the turn
-direction, so the *leading* one decides which way the whole run bends and the rest are relative to
-it; dropping it reuses the same angles when the path already progresses the way you want. It edits
-the text, so your maths, grouping and spacing survive (`180-30t` → `180-30`, not `150`), and it
-reaches the first token inside a group: `(30t 150)*4` → `(30 150)*4`.
+**Swirl button — invert the first tile's twirl, first repetition only.** It does *not* edit what
+you typed. A twirl in the expression is part of the **shape**: `30t 30t 120t` is a unit whose three
+twirls make it close, so rewriting it to `30 30t 120t` would change every repetition and the run
+would stop being that shape. What the toggle says is narrower — the path already enters turning the
+right way, so the leading twirl is redundant *this once*. That's a property of the entry, not of the
+pattern, so it can only apply to the first pass. Lights up while it's on.
 
 **Ghost preview** — the run the pad would place is drawn ahead of the selected tile at half
 alpha, updating as you type. It walks the same spin rules the builder does, so it can't disagree

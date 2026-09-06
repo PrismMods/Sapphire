@@ -462,14 +462,16 @@ namespace Sapphire
         // shows). Routed through PseudoBuild's anchor mode (Fixed=false): spin tracked from the
         // anchor, flip before a twirled tap — reproduces this pad's original build exactly. The
         // whole expanded run (ParseAngles already flattens (...)*n) is one unit, so RepeatN=1.
-        private static int PlaceAngles(scnEditor ed, List<AngleStep> steps, int reps = 1)
+        /* Takes the EXPANDED run (ExpandRun already applied the repeats and the first-tile flip),
+           so RepeatN stays 1 — one description of the run, no chance of the repeat rule being
+           applied differently here than in the preview. */
+        private static int PlaceAngles(scnEditor ed, List<AngleStep> steps)
         {
             if (ed == null || steps == null || steps.Count == 0) return 0;
-            reps = Mathf.Clamp(reps, 1, MaxReps);
-            if ((long)steps.Count * reps > MaxRunTiles) return 0;   // same ceiling as (…)*n
+            if (steps.Count > MaxRunTiles) return 0;
             var unit = new PseudoStep[steps.Count];
             for (int i = 0; i < steps.Count; i++) unit[i] = new PseudoStep(steps[i].Angle, StepKind.Tap, steps[i].Twirl);
-            return PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, RepeatN = reps });
+            return PseudoBuild.Build(ed, unit, new PseudoContext { Fixed = false, RepeatN = 1 });
         }
 
         private struct AngleStep
@@ -654,7 +656,8 @@ namespace Sapphire
             internal GameObject Root;
             internal TMP_InputField Field;
             internal TMP_InputField Reps;       // how many times to lay the expression down
-            internal RoundedRectGraphic TwirlBtn;  // lit while the first tile carries a twirl
+            internal bool FlipFirst;            // invert the very first tile's twirl at build time
+            internal RoundedRectGraphic TwirlBtn;  // lit while FlipFirst is on
             internal GameObject Stepper;        // ▲▼ over the repeat field, shown on hover
             internal RectTransform RepsRect;    // hover target for the stepper
             internal TextMeshProUGUI Hint;
@@ -768,20 +771,28 @@ namespace Sapphire
         private static Vector2 DefaultPadPos()
             => new Vector2(-PadMargin, -(EditorMasterSwitch.ChromeBottom + 12f));
 
-        /* One runnable check for the text transform — it is the only piece of the pad that
-           rewrites what the user typed, and getting it wrong silently corrupts an expression.
-           Flipping twice must return the original, formatting and all. */
+        /* One runnable check for the rule that decides what actually gets built. The subtle part
+           is that the flip is scoped to ONE tile of ONE repetition — everything else must come
+           through byte-identical, or a repeated shape stops closing. */
         private static bool _selfChecked;
 
         private static bool SelfCheck()
         {
-            bool ok = ToggleFirstTwirl("30t 30t 180") == "30 30t 180"
-                   && ToggleFirstTwirl("30 30t 180") == "30t 30t 180"
-                   && ToggleFirstTwirl("(30t 150 180)*4") == "(30 150 180)*4"
-                   && ToggleFirstTwirl("((30t 150)*2 180)*3") == "((30 150)*2 180)*3"
-                   && ToggleFirstTwirl("  180-30t 90 ") == "  180-30 90 "   // maths + spacing kept
-                   && ToggleFirstTwirl("360/8 45") == "360/8t 45"
-                   && ToggleFirstTwirl("") == "" && ToggleFirstTwirl("   ") == "   ";
+            var unit = new List<AngleStep> { new AngleStep(30, true), new AngleStep(30, true), new AngleStep(120, true) };
+            var plain = ExpandRun(unit, 3, false);
+            var flipped = ExpandRun(unit, 3, true);
+            bool ok = plain != null && plain.Count == 9 && flipped != null && flipped.Count == 9;
+            if (ok)
+            {
+                ok &= !flipped[0].Twirl && plain[0].Twirl;            // first tile inverted…
+                for (int i = 1; i < 9 && ok; i++)                      // …and nothing else touched
+                    ok &= flipped[i].Twirl == plain[i].Twirl
+                       && Math.Abs(flipped[i].Angle - plain[i].Angle) < 1e-9;
+                for (int r = 1; r < 3 && ok; r++)                      // later reps are the unit
+                    for (int i = 0; i < 3 && ok; i++)
+                        ok &= flipped[r * 3 + i].Twirl == unit[i].Twirl;
+            }
+            ok &= ExpandRun(null, 2, true) == null && ExpandRun(new List<AngleStep>(), 2, true) == null;
             SapphireLog.Log("EditorQuickChart.SelfCheck: " + (ok ? "PASS" : "FAIL"));
             return ok;
         }
@@ -967,7 +978,6 @@ namespace Sapphire
 
             // Enter in the field places too (keeps hands on the keyboard).
             field.onSubmit.AddListener(_ => DoPlace(pw));
-            field.onValueChanged.AddListener(_ => SyncTwirlBtn(pw));
             SyncTwirlBtn(pw);
 
             // Resizable like the MSM/MH popups — grip at the bottom-right; content is anchored
@@ -1004,7 +1014,7 @@ namespace Sapphire
                 if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
                 return;
             }
-            int n = PlaceAngles(SafeEditor(), angles, RepsOf(pw));
+            int n = PlaceAngles(SafeEditor(), ExpandRun(angles, RepsOf(pw), pw.FlipFirst));
             // The run is real now; the ghosts of it would sit on top of the tiles just placed.
             ClearGhosts(); _ghostSig = long.MinValue;
             if (pw.Hint != null)
@@ -1077,51 +1087,43 @@ namespace Sapphire
 
         private static void FlipFirstTwirl(Pad pw)
         {
-            if (pw == null || pw.Field == null) return;
-            string next = ToggleFirstTwirl(pw.Field.text);
-            if (next == pw.Field.text) return;
-            pw.Field.text = next;                       // onValueChanged relights the button
+            if (pw == null) return;
+            pw.FlipFirst = !pw.FlipFirst;
+            SyncTwirlBtn(pw);
+            _ghostSig = long.MinValue;                  // preview has to re-walk
             if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
         }
 
-        // Does the first tile carry a twirl? Drives the button's lit state, so it answers the
-        // question by the same tokenisation the flip uses rather than by remembering a click.
-        private static bool FirstIsTwirled(string expr)
-            => expr != null && ToggleFirstTwirl(expr).Length < expr.Length;
-
         private static void SyncTwirlBtn(Pad pw)
         {
-            if (pw == null || pw.TwirlBtn == null || pw.Field == null) return;
-            bool on = FirstIsTwirled(pw.Field.text);
-            var col = on ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
-                         : new Color(1f, 1f, 1f, 0.07f);
+            if (pw == null || pw.TwirlBtn == null) return;
+            var col = pw.FlipFirst ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
+                                   : new Color(1f, 1f, 1f, 0.07f);
             pw.TwirlBtn.color = col;
             var hov = pw.TwirlBtn.GetComponent<Hover>();
             if (hov != null) hov.Rest = col;
         }
 
-        /* Toggle the trailing twirl marker on the FIRST angle token, wherever it sits — including
-           inside a group, so "(30t 150)*4" flips too. Works on the TEXT rather than on a parsed
-           run so the user's own formatting, maths and grouping all survive the round trip; a
-           parse-and-reprint would quietly rewrite "180-30" as "150".
+        /* THE RUN AS IT WILL ACTUALLY BE PLACED: `reps` copies of the unit, with the very first
+           tile of the FIRST copy's twirl inverted when the pad's swirl toggle is on.
 
-           Separator set matches ParseSeq exactly (whitespace, comma, parens) — a token here has
-           to be the same token the parser will see. */
-        internal static string ToggleFirstTwirl(string expr)
+           The flip deliberately does NOT touch the expression. A twirl in the text is part of the
+           SHAPE — "30t 30t 120t" is a unit whose three twirls make it close — so rewriting the
+           text to "30 30t 120t" changes every repetition and the run stops being that shape. What
+           the toggle actually means is narrower: the path already enters turning the right way, so
+           the leading twirl is redundant THIS ONCE. That is a property of the entry, not of the
+           pattern, and it can only apply to the first pass.
+
+           One function so placement, the ghost preview and Add to Shape Library cannot disagree
+           about what the run is. */
+        private static List<AngleStep> ExpandRun(List<AngleStep> unit, int reps, bool flipFirst)
         {
-            if (string.IsNullOrEmpty(expr)) return expr;
-            int i = 0;
-            while (i < expr.Length && (char.IsWhiteSpace(expr[i]) || expr[i] == ',' || expr[i] == '(')) i++;
-            int start = i;
-            while (i < expr.Length && !char.IsWhiteSpace(expr[i])
-                   && expr[i] != '(' && expr[i] != ')' && expr[i] != ',') i++;
-            if (i <= start) return expr;                      // nothing that parses as a tile
-            string tok = expr.Substring(start, i - start);
-            char last = tok[tok.Length - 1];
-            string flipped = last == 't' || last == 'T'
-                ? tok.Substring(0, tok.Length - 1)
-                : tok + "t";
-            return expr.Substring(0, start) + flipped + expr.Substring(i);
+            if (unit == null || unit.Count == 0) return null;
+            reps = Mathf.Clamp(reps, 1, MaxReps);
+            var run = new List<AngleStep>(unit.Count * reps);
+            for (int r = 0; r < reps; r++) run.AddRange(unit);
+            if (flipFirst) run[0] = new AngleStep(run[0].Angle, !run[0].Twirl);
+            return run;
         }
 
         /* Store the pad's run as a shape. The pad's text is the WHOLE run — ParseAngles already
@@ -1139,15 +1141,10 @@ namespace Sapphire
                 if (pw.Hint != null) { pw.Hint.text = Loc.T("check the expression"); pw.Hint.color = Theme.DangerHover; }
                 return;
             }
-            // Store what the pad would PLACE, repeats included — the saved shape is non-repeating
-            // by definition, so the count has to be spelled out into it.
-            int reps = RepsOf(pw);
-            if (reps > 1)
-            {
-                var one = angles;
-                angles = new List<AngleStep>(one.Count * reps);
-                for (int r = 0; r < reps; r++) angles.AddRange(one);
-            }
+            // Store what the pad would PLACE — repeats and the first-tile flip included, since a
+            // saved shape is non-repeating by definition and has to spell the whole run out.
+            angles = ExpandRun(angles, RepsOf(pw), pw.FlipFirst);
+            if (angles == null) return;
             if (angles.Count > MaxStoredShapeTiles)
             {
                 if (pw.Hint != null) { pw.Hint.text = Loc.T("run too long to store"); pw.Hint.color = Theme.DangerHover; }
@@ -1541,19 +1538,20 @@ namespace Sapphire
             sig = sig * 31 + (expr != null ? expr.GetHashCode() : 0);
             sig = sig * 31 + reps;
             sig = sig * 31 + anchorSeq;
+            sig = sig * 31 + (pw != null && pw.FlipFirst ? 1 : 0);
             if (sig == _ghostSig) return;
             _ghostSig = sig;
             ClearGhosts();
             if (anchorSeq < 0 || string.IsNullOrEmpty(expr)) return;
-            var steps = ParseAngles(expr);
+            var steps = ExpandRun(ParseAngles(expr), reps, pw.FlipFirst);
             if (steps == null || steps.Count == 0) return;
-            if ((long)steps.Count * reps > MaxGhosts) return;   // a 1000-tile ghost helps nobody
-            BuildGhosts(ed, anchorSeq, steps, reps);
+            if (steps.Count > MaxGhosts) return;                // a 1000-tile ghost helps nobody
+            BuildGhosts(ed, anchorSeq, steps);
         }
 
         private const int MaxGhosts = 200;
 
-        private static void BuildGhosts(scnEditor ed, int anchorSeq, List<AngleStep> steps, int reps)
+        private static void BuildGhosts(scnEditor ed, int anchorSeq, List<AngleStep> steps)
         {
             try
             {
@@ -1573,8 +1571,7 @@ namespace Sapphire
                 Vector3 pos = anchor.transform.position;
                 var made = new List<scrFloor>();
 
-                for (int r = 0; r < reps; r++)
-                    for (int i = 0; i < steps.Count; i++)
+                for (int i = 0; i < steps.Count; i++)
                     {
                         if (steps[i].Twirl) localSign = -localSign;
                         dir = (dir + localSign * (180.0 - steps[i].Angle)) % 360.0;
