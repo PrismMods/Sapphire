@@ -97,7 +97,13 @@ it; dropping it reuses the same angles when the path already progresses the way 
 the text, so your maths, grouping and spacing survive (`180-30t` → `180-30`, not `150`), and it
 reaches the first token inside a group: `(30t 150)*4` → `(30 150)*4`.
 
-**`× n` repeat count** — lays the expression down *n* times. Deliberately separate from the
+**Ghost preview** — the run the pad would place is drawn ahead of the selected tile at half
+alpha, updating as you type. It walks the same spin rules the builder does, so it can't disagree
+with what Place produces. Ghosts are chained only to each other rather than to the surrounding
+real tiles (MSM's fake-floor preview edits its neighbours; that would leave the live track drawn
+wrong for as long as a pad is open), so the seam at the anchor is a hair off. Capped at 200 tiles.
+
+**`× n` repeat count** — lays the expression down *n* times. Hover it for **▲▼ nudge arrows**. Deliberately separate from the
 `(…)*n` group syntax: baking the repetition into the text would make the `t` button flip the first
 tile of *every* copy, whereas as a count the expression stays one **unit**, so flipping its leading
 twirl costs only the first pass — which is the point when the path already enters turning the way

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -52,6 +53,7 @@ namespace Sapphire
             if (!on)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
+                if (_ghosts.Count > 0) { ClearGhosts(); _ghostSig = long.MinValue; }
                 return;
             }
             if (_canvasGo != null && !_canvasGo.activeSelf) _canvasGo.SetActive(true);
@@ -62,6 +64,8 @@ namespace Sapphire
                of delay the first time the mode is switched on. */
             EnsureCanvas();
             ClampPads();
+            TickSteppers();
+            TickPreview(ed);
             /* The pad is the mode's main surface, so the mode is never on with nothing to type
                into. Spawned WITHOUT focus — an auto-appearing field that steals the keyboard
                would eat the editor's own tile keys the moment quick chart turns on. */
@@ -637,11 +641,81 @@ namespace Sapphire
             internal TMP_InputField Field;
             internal TMP_InputField Reps;       // how many times to lay the expression down
             internal RoundedRectGraphic TwirlBtn;  // lit while the first tile carries a twirl
+            internal GameObject Stepper;        // ▲▼ over the repeat field, shown on hover
+            internal RectTransform RepsRect;    // hover target for the stepper
             internal TextMeshProUGUI Hint;
             internal GameObject Badge;          // "1".."9" overlay, shown only while picking
         }
 
         private const int MaxReps = 999;
+
+        /* Nudge arrows over the repeat field, revealed on hover so the resting card stays clean.
+           Drawn triangles, not glyphs: the arrow characters are exactly the sort the user's fonts
+           drop, and this button is 10px tall — a tofu box here would be the whole control. */
+        private static GameObject BuildStepper(GameObject fieldGo, Pad pw)
+        {
+            var host = new GameObject("Stepper", typeof(RectTransform));
+            host.transform.SetParent(fieldGo.transform, false);
+            var hr = (RectTransform)host.transform;
+            hr.anchorMin = new Vector2(1f, 0f); hr.anchorMax = new Vector2(1f, 1f);
+            hr.pivot = new Vector2(1f, 0.5f);
+            hr.anchoredPosition = new Vector2(-2f, 0f);
+            hr.sizeDelta = new Vector2(13f, -2f);
+            StepBtn(host, true, () => StepReps(pw, +1));
+            StepBtn(host, false, () => StepReps(pw, -1));
+            return host;
+        }
+
+        private static void StepBtn(GameObject host, bool up, Action onClick)
+        {
+            var go = new GameObject(up ? "Up" : "Down", typeof(RectTransform));
+            go.transform.SetParent(host.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, up ? 0.5f : 0f);
+            r.anchorMax = new Vector2(1f, up ? 1f : 0.5f);
+            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+            var bg = go.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 2f;
+            bg.color = new Color(1f, 1f, 1f, 0.10f);
+            bg.raycastTarget = true;
+            var triGo = new GameObject("T", typeof(RectTransform));
+            triGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)triGo.transform;
+            tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 0.5f);
+            tr.pivot = new Vector2(0.5f, 0.5f);
+            tr.sizeDelta = Vector2.zero;
+            var poly = triGo.AddComponent<PolyGraphic>();
+            poly.color = Theme.Text;
+            poly.raycastTarget = false;
+            float d = up ? 1f : -1f;
+            poly.SetPolygon(new[]
+            {
+                new Vector2(-3.2f, -1.6f * d), new Vector2(3.2f, -1.6f * d), new Vector2(0f, 2.0f * d),
+            });
+            go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.24f));
+            ClickHandler.Attach(go, onClick);
+        }
+
+        private static void StepReps(Pad pw, int delta)
+        {
+            if (pw == null || pw.Reps == null) return;
+            pw.Reps.text = Mathf.Clamp(RepsOf(pw) + delta, 1, MaxReps).ToString();
+        }
+
+        // Per-frame rather than pointer events on two overlapping rects: the stepper sits INSIDE
+        // the field, so enter/exit pairs fight each other as the cursor crosses the boundary.
+        private static void TickSteppers()
+        {
+            Vector2 m = Input.mousePosition;
+            for (int i = 0; i < _pads.Count; i++)
+            {
+                var pw = _pads[i];
+                if (pw == null || pw.Stepper == null || pw.RepsRect == null) continue;
+                bool over = false;
+                try { over = RectTransformUtility.RectangleContainsScreenPoint(pw.RepsRect, m, null); } catch { }
+                if (pw.Stepper.activeSelf != over) pw.Stepper.SetActive(over);
+            }
+        }
 
         private static int RepsOf(Pad pw)
         {
@@ -826,7 +900,7 @@ namespace Sapphire
             rptGo.transform.SetParent(repsGo.transform, false);
             var rptr = (RectTransform)rptGo.transform;
             rptr.anchorMin = Vector2.zero; rptr.anchorMax = Vector2.one;
-            rptr.offsetMin = new Vector2(6f, 0f); rptr.offsetMax = new Vector2(-6f, 0f);
+            rptr.offsetMin = new Vector2(6f, 0f); rptr.offsetMax = new Vector2(-16f, 0f);   // stepper column
             var rptxt = UIBuilder.Tmp(rptGo, "1", 11.5f, TextAnchor.MiddleCenter, Theme.Text);
             rptxt.richText = false;
             var repsField = UIBuilder.BuildInputField(repsGo, rptxt);
@@ -834,6 +908,9 @@ namespace Sapphire
             repsField.text = Mathf.Clamp(reps, 1, MaxReps).ToString();
             UIBuilder.MakeNumericField(repsField);
             pw.Reps = repsField;
+            pw.RepsRect = rpr;
+            pw.Stepper = BuildStepper(repsGo, pw);
+            pw.Stepper.SetActive(false);
             var rlGo = new GameObject("x", typeof(RectTransform));
             rlGo.transform.SetParent(root.transform, false);
             var rlr = (RectTransform)rlGo.transform;
@@ -916,6 +993,8 @@ namespace Sapphire
                 return;
             }
             int n = PlaceAngles(SafeEditor(), angles, RepsOf(pw));
+            // The run is real now; the ghosts of it would sit on top of the tiles just placed.
+            ClearGhosts(); _ghostSig = long.MinValue;
             if (pw.Hint != null)
             {
                 pw.Hint.color = Theme.TextMuted;
@@ -1395,14 +1474,147 @@ namespace Sapphire
             public void OnPointerExit(PointerEventData e) { if (_bg != null) _bg.color = _rest; }
         }
 
+        /* ── ghost-tile preview ────────────────────────────────────────────────
+           The run the pad would place, drawn ahead of the anchor at half alpha — MSM's fake-floor
+           trick (instantiate lm.meshFloor, tint the renderer, hide the number) applied to an
+           APPEND instead of a range sweep, which makes it much simpler: no real floor is touched.
+
+           MSM mutates the surrounding real tiles' exitangle/nextfloor and leans on MakeLevel to
+           put them back. Doing that here would leave the live track drawn wrong for as long as a
+           pad is open, so the ghosts are chained only to EACH OTHER; the first one starts from
+           the anchor's position and heading without writing to it. The seam at the anchor is a
+           hair off as a result, which is invisible at ghost alpha and worth the isolation.
+
+           Rebuilt when the expression, repeat count or anchor changes, and thrown away whenever
+           the game rebuilds the level (real tiles move, so stale ghosts would float). */
+        private static readonly List<GameObject> _ghosts = new List<GameObject>();
+        private static long _ghostSig = long.MinValue;
+
+        internal static void OnMakeLevel() { ClearGhosts(); _ghostSig = long.MinValue; }
+
+        private static void ClearGhosts()
+        {
+            for (int i = 0; i < _ghosts.Count; i++)
+                if (_ghosts[i] != null) UnityEngine.Object.DestroyImmediate(_ghosts[i]);
+            _ghosts.Clear();
+        }
+
+        // The pad being previewed: the one you are typing in, else the only/first one open.
+        private static Pad PreviewPad()
+        {
+            var es = EventSystem.current;
+            var sel = es != null ? es.currentSelectedGameObject : null;
+            if (sel != null)
+                foreach (var p in _pads)
+                    if (p != null && p.Field != null && sel == p.Field.gameObject) return p;
+            return _pads.Count > 0 ? _pads[0] : null;
+        }
+
+        private static void TickPreview(scnEditor ed)
+        {
+            var pw = PreviewPad();
+            string expr = pw != null && pw.Field != null ? pw.Field.text : null;
+            int reps = RepsOf(pw);
+            int anchorSeq = -1;
+            try
+            {
+                var sel = ed.selectedFloors;
+                if (sel != null && sel.Count > 0 && sel[sel.Count - 1] != null) anchorSeq = sel[sel.Count - 1].seqID;
+            }
+            catch { }
+
+            long sig = 17;
+            sig = sig * 31 + (expr != null ? expr.GetHashCode() : 0);
+            sig = sig * 31 + reps;
+            sig = sig * 31 + anchorSeq;
+            if (sig == _ghostSig) return;
+            _ghostSig = sig;
+            ClearGhosts();
+            if (anchorSeq < 0 || string.IsNullOrEmpty(expr)) return;
+            var steps = ParseAngles(expr);
+            if (steps == null || steps.Count == 0) return;
+            if ((long)steps.Count * reps > MaxGhosts) return;   // a 1000-tile ghost helps nobody
+            BuildGhosts(ed, anchorSeq, steps, reps);
+        }
+
+        private const int MaxGhosts = 200;
+
+        private static void BuildGhosts(scnEditor ed, int anchorSeq, List<AngleStep> steps, int reps)
+        {
+            try
+            {
+                var lm = ADOBase.lm;
+                if (lm == null || lm.isOldLevel || lm.meshFloor == null) return;
+                if (anchorSeq < 0 || anchorSeq >= lm.listFloors.Count) return;
+                var anchor = lm.listFloors[anchorSeq];
+                if (anchor == null) return;
+
+                float tile = scrController.instance.tileSize;
+                var host = GameObject.Find("SapphireAnglePadGhosts") ?? new GameObject("SapphireAnglePadGhosts");
+
+                // Same walk PseudoBuild does, so the preview cannot disagree with the placement:
+                // spin from the anchor, flip BEFORE a twirled tap.
+                double dir = lm.floorAngles[Mathf.Clamp(anchorSeq, 0, lm.floorAngles.Length - 1)];
+                int localSign = anchor.isCCW ? -1 : 1;
+                Vector3 pos = anchor.transform.position;
+                var made = new List<scrFloor>();
+
+                for (int r = 0; r < reps; r++)
+                    for (int i = 0; i < steps.Count; i++)
+                    {
+                        if (steps[i].Twirl) localSign = -localSign;
+                        dir = (dir + localSign * (180.0 - steps[i].Angle)) % 360.0;
+                        if (dir < 0) dir += 360.0;
+                        double a = (-dir + 90.0) * Mathf.PI / 180.0;    // facing -> world angle (MSM's)
+                        pos += scrMisc.getVectorFromAngle(a, tile);
+                        var obj = UnityEngine.Object.Instantiate(lm.meshFloor, pos, Quaternion.identity);
+                        obj.name = "AnglePadGhost";
+                        obj.transform.parent = host.transform;
+                        var f = obj.GetComponent<scrFloor>();
+                        if (f == null) { UnityEngine.Object.DestroyImmediate(obj); continue; }
+                        f.entryangle = (a + Mathf.PI) % (Mathf.PI * 2);
+                        f.exitangle = a;                                 // straight until the next one lands
+                        if (made.Count > 0) { made[made.Count - 1].exitangle = a; made[made.Count - 1].nextfloor = f; }
+                        made.Add(f);
+                        _ghosts.Add(obj);
+                    }
+
+                foreach (var f in made)
+                {
+                    try
+                    {
+                        f.UpdateAngle();
+                        if (f.floorRenderer != null) f.floorRenderer.color = new Color(0.55f, 0.75f, 1f, 0.45f);
+                        if (f.editorNumText != null && f.editorNumText.letterText != null)
+                            f.editorNumText.letterText.gameObject.SetActive(false);
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("QuickChart: ghost preview failed: " + ex.Message); ClearGhosts(); }
+        }
+
         // ── teardown ───────────────────────────────────────────────────────────
         internal static void Dispose()
         {
+            ClearGhosts(); _ghostSig = long.MinValue;
             _picking = false;
             _pads.Clear();
             ClosePrompt();
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _root = null; _spawnSeq = 0;
+        }
+    }
+
+    /* Ghost tiles are positioned from the REAL tiles' transforms, so a level rebuild strands
+       them. Drop them whenever the game remakes the level; the next tick re-derives the run. */
+    [HarmonyPatch(typeof(scrLevelMaker), "MakeLevel")]
+    internal static class AnglePadGhostMakeLevelPatch
+    {
+        private static void Postfix()
+        {
+            try { EditorQuickChart.OnMakeLevel(); }
+            catch (Exception ex) { SapphireLog.Log("QuickChart ghosts: " + ex.Message); }
         }
     }
 }
