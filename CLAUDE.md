@@ -85,8 +85,11 @@ Fundamentals for any tile/pseudo/shape work. Exhaustive detail lives in memory
   `Loc.T`; add EN→KO pairs in `Util/Loc.cs`.
 - Credits: permission-based ports (named author + repo) live in README's Credits; acknowledge
   inspiration from mods whose author is unknown separately, and don't invent an author/URL.
-- Mod UI glyphs: user fonts lack exotic glyphs (⚙ ▼ ❚). Use proven ones (▶ ← × ›) or draw
-  icons procedurally (dots, bars).
+- Mod UI glyphs: `Resources/SapphireSymbols.ttf` (DejaVu subset, built by
+  `tools/build-symbol-font.py`) rides every panel font as a TMP fallback, so these blocks are
+  SAFE in any label: arrows, Misc Technical, Control Pictures, Geometric Shapes (▲▼●○■), Misc
+  Symbols (⚙ ♪), Dingbats (✓ ✕ ❚). Anything outside them (pictograms, emoji) still gets drawn
+  procedurally. Adding a glyph = add it to `REQUIRED` in the script and rebuild the font.
 - uGUI gotchas that have bitten: clicked Buttons stay selected and Space re-submits them
   (always deselect after click); `CanvasGroup.interactable=false` silently kills proxied
   Button clicks (fade with alpha 0 + blocksRaycasts false only); game code rewrites UI

@@ -680,9 +680,7 @@ namespace Sapphire
 
         private const int MaxReps = 999;
 
-        /* Nudge arrows over the repeat field, revealed on hover so the resting card stays clean.
-           Drawn triangles, not glyphs: the arrow characters are exactly the sort the user's fonts
-           drop, and this button is 10px tall — a tofu box here would be the whole control. */
+        /* Nudge arrows over the repeat field, revealed on hover so the resting card stays clean. */
         private static GameObject BuildStepper(GameObject fieldGo, Pad pw)
         {
             var host = new GameObject("Stepper", typeof(RectTransform));
@@ -709,20 +707,14 @@ namespace Sapphire
             bg.Radius = 2f;
             bg.color = new Color(1f, 1f, 1f, 0.10f);
             bg.raycastTarget = true;
-            var triGo = new GameObject("T", typeof(RectTransform));
-            triGo.transform.SetParent(go.transform, false);
-            var tr = (RectTransform)triGo.transform;
-            tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 0.5f);
-            tr.pivot = new Vector2(0.5f, 0.5f);
-            tr.sizeDelta = Vector2.zero;
-            var poly = triGo.AddComponent<PolyGraphic>();
-            poly.color = Theme.Text;
-            poly.raycastTarget = false;
-            float d = up ? 1f : -1f;
-            poly.SetPolygon(new[]
-            {
-                new Vector2(-3.2f, -1.6f * d), new Vector2(3.2f, -1.6f * d), new Vector2(0f, 2.0f * d),
-            });
+            // Real ▲▼ glyphs: SapphireSymbols rides the panel font as a fallback, so these are
+            // no longer the kind of character the user's fonts drop.
+            var lGo = new GameObject("G", typeof(RectTransform));
+            lGo.transform.SetParent(go.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = lr.offsetMax = Vector2.zero;
+            UIBuilder.Tmp(lGo, up ? "\u25B2" : "\u25BC", 7f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
             go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.24f));
             ClickHandler.Attach(go, onClick);
         }

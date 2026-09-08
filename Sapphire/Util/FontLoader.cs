@@ -42,6 +42,7 @@ namespace Sapphire
                             _tmp.name = Name + " (TMP)";
                             if (BoldSibling != null && BoldSibling != this)
                                 _tmp.fontWeightTable[7].regularTypeface = BoldSibling.TmpFont;
+                            EnsureSymbolFallback(_tmp);
                         }
                     }
                     return _tmp;
@@ -59,6 +60,71 @@ namespace Sapphire
                 UnityEngine.Object.Destroy(_tmp);
                 _tmp = null;
             }
+        }
+
+        /* UI symbols — arrows, ▲▼●○, ⚙ ♪, ✓ ✕ — are missing from nearly every display font,
+           Paperlogy included, so TMP borrows them from whatever fallback has them (the game's
+           CJK asset, whose normalized metrics draw them tiny and off-baseline) or shows tofu.
+           Resources/SapphireSymbols.ttf is a DejaVu Sans subset of exactly those blocks (see
+           tools/build-symbol-font.py); it rides every panel font as the FIRST fallback and is
+           never a pickable font itself. This is what lets a label say "▲" or "●" directly
+           instead of a letter standing in or a hand-drawn polygon. */
+        internal const string SymbolFontName = "SapphireSymbols";
+        private static string _symbolFontPath;
+        private static TMP_FontAsset _symbolFont;
+        private static bool _symbolFontLogged;
+
+        internal static TMP_FontAsset SymbolFont
+        {
+            get
+            {
+                if (_symbolFont == null && !string.IsNullOrEmpty(_symbolFontPath))
+                {
+                    _symbolFont = TMP_FontAsset.CreateFontAsset(
+                        _symbolFontPath, 0, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024);
+                    if (_symbolFont != null) _symbolFont.name = SymbolFontName + " (TMP)";
+                }
+                /* Logged once: every way this fails looks identical in game — a symbol drawn
+                   small and low, or a box — and the cause is on disk, not in code: an install
+                   that copied only the dll has no Resources/SapphireSymbols.ttf. */
+                if (!_symbolFontLogged)
+                {
+                    _symbolFontLogged = true;
+                    if (_symbolFont != null)
+                        MainClass.Logger.Log("[Sapphire] Symbol font loaded from " + _symbolFontPath);
+                    else if (string.IsNullOrEmpty(_symbolFontPath))
+                        MainClass.Logger.Warning("[Sapphire] " + SymbolFontName +
+                            ".ttf missing from Resources — UI symbols (▲▼ ● ⚙) fall back to the game font");
+                    else
+                        MainClass.Logger.Warning("[Sapphire] Could not build a font asset from " + _symbolFontPath);
+                }
+                return _symbolFont;
+            }
+        }
+
+        // First in the table, ahead of anything TMP or the game appends later.
+        internal static void EnsureSymbolFallback(TMP_FontAsset target)
+        {
+            var sym = SymbolFont;
+            if (target == null || sym == null || target == sym) return;
+            var fb = target.fallbackFontAssetTable;
+            if (fb == null) target.fallbackFontAssetTable = fb = new List<TMP_FontAsset>();
+            if (fb.Count > 0 && fb[0] == sym) return;
+            fb.Remove(sym);
+            fb.Insert(0, sym);
+        }
+
+        private static void DestroySymbolFont()
+        {
+            if (_symbolFont == null) return;
+            var atlases = _symbolFont.atlasTextures;
+            if (atlases != null)
+                foreach (var tex in atlases)
+                    if (tex != null) UnityEngine.Object.Destroy(tex);
+            if (_symbolFont.material != null) UnityEngine.Object.Destroy(_symbolFont.material);
+            UnityEngine.Object.Destroy(_symbolFont);
+            _symbolFont = null;
+            _symbolFontLogged = false;
         }
 
         /* Canonical ordering for weight cycle. Names not in this list sort last, in
@@ -141,7 +207,7 @@ namespace Sapphire
                 {
                     string name = Path.GetFileName(filePath);
                     string ext = Path.GetExtension(filePath).ToLowerInvariant();
-                    if (ext == ".meta" || ext == ".ttf" || ext == ".otf") continue; // fonts handled below
+                    if (ext == ".meta" || ext == ".ttf" || ext == ".otf" || ext == ".txt") continue; // fonts below; .txt = license
                     // Skip bundles belonging to a different platform
                     bool wrongPlatform = false;
                     foreach (string s in new[] { "-mac", "-win", "-linux" })
@@ -193,6 +259,8 @@ namespace Sapphire
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
                 if (ext != ".ttf" && ext != ".otf") continue;
                 string name = Path.GetFileNameWithoutExtension(filePath);
+                if (string.Equals(name, SymbolFontName, StringComparison.OrdinalIgnoreCase))
+                { _symbolFontPath = filePath; continue; }   // a fallback, never a pickable font
                 if (Find(result, name) != null) continue;
                 result.Add(new FontEntry(name, filePath));
                 MainClass.Logger.Log($"[Sapphire] Found custom font '{name}' ({Path.GetFileName(filePath)})");
@@ -239,8 +307,8 @@ namespace Sapphire
 
         internal static void DestroyTmpAssets(List<FontEntry> entries)
         {
-            if (entries == null) return;
-            foreach (var e in entries) e.DestroyTmp();
+            if (entries != null) foreach (var e in entries) e.DestroyTmp();
+            DestroySymbolFont();   // it is a fallback on every one of those, so it goes with them
         }
 
         private static void TryLoadBundle(string path, List<FontEntry> result)

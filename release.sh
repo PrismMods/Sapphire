@@ -40,6 +40,7 @@ mkdir -p "$STAGE/Sapphire/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$STAGE/Sapphire/"
 cp Info.json "$STAGE/Sapphire/"
 cp Sapphire/Resources/*.ttf "$STAGE/Sapphire/Resources/"
+cp Sapphire/Resources/*.txt "$STAGE/Sapphire/Resources/"
 
 rm -f "$ZIP_NAME"
 (cd "$STAGE" && zip -qr out.zip Sapphire)

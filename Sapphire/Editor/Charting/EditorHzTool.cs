@@ -870,7 +870,7 @@ namespace Sapphire
             float fw = K.W - Pad * 2f - K.LblW - 4f - LockW - Gap;
             K.InputField(Pad + K.LblW + 4f, y, fw, value.ToString("0.###"),
                          v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
-            K.Cell(on ? "L" : "·", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
+            K.Cell(on ? "●" : "○", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
                    () => { _lock = on ? Var.None : id; _layoutSig = NoSig; }, true, accent: on);
             return y - (RowH + Gap);
         }
@@ -883,7 +883,7 @@ namespace Sapphire
             float fw = K.W - Pad * 2f - K.LblW - 4f - LockW - Gap;
             K.InputField(Pad + K.LblW + 4f, y, fw, value.ToString("0.###"),
                          v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
-            K.Cell(pinned ? "L" : "·", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
+            K.Cell(pinned ? "●" : "○", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
                    () => setPin(!pinned), true, accent: pinned);
             return y - (RowH + Gap);
         }
@@ -896,7 +896,7 @@ namespace Sapphire
             float fw = K.W - Pad * 2f - K.LblW - 4f - LockW - Gap;
             K.InputField(Pad + K.LblW + 4f, y, fw, isTiles ? value.ToString("0") : value.ToString("0.###"),
                          v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
-            K.Cell(on ? "L" : "·", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
+            K.Cell(on ? "●" : "○", Pad + K.LblW + 4f + fw + Gap, y, LockW, RowH,
                    () => { _lockTiles = isTiles; SolveLength(); _layoutSig = NoSig; }, true, accent: on);
             return y - (RowH + Gap);
         }
