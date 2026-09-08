@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 namespace Sapphire
 {
-    /* Editor event displays (Tweaks tab → Editor), ticked from Overlay.Update like the
+    /* Editor event displays (Features tab → Event timeline), ticked from SapphireTicker like the
        tile-angle readout and hidden outside the editor / during play-testing.
 
        - Selected-tile chips: one chip per event on the last selected tile, tinted by the

@@ -64,8 +64,7 @@ zoom, transport controls, and a mode cluster.
 ## Quick chart mode (`Q`)
 
 A fast, tool-less charting mode. While on, the timeline hides and these keys are live
-(gated to the editor, not typing). **Every key below is rebindable** — settings ▸ Editor ▸
-Keybinds, or the Quick chart page:
+(gated to the editor, not typing). **Every key below is rebindable** — settings ▸ Keybinds:
 
 | Key | Action |
 |---|---|
@@ -295,12 +294,12 @@ release asset, and archive entries that would escape the mods folder are rejecte
 - **Floating windows** — level-settings popup and dialogs are blocker-less, draggable, and
   remember their position (some also resize).
 - **Panel layout memory** — open/closed state and position stick for the whole session. A
-  relaunch starts clean by default; `Ctrl+E` → Editor → **Keep panel layout after restart**
+  relaunch starts clean by default; `Ctrl+E` → Misc → **Keep panel layout after restart**
   turns that reset off (covers the shape library, level settings, Magic Shape, Track tools,
   Deco tools and the Hz tool).
 - **On-screen key hints** — a card in the bottom-right lists the keys live in the current
   context. It rides above the event timeline, sizes itself to its content, collapses to a
-  header, and can be turned off (`Ctrl+E` → Editor).
+  header, and can be turned off (`Ctrl+E` → Features).
 
 ---
 
@@ -326,8 +325,7 @@ release asset, and archive entries that would escape the mods folder are rejecte
 | `I` `O` `[` `]` | Quick chart | Swirl / set speed / halve / double |
 | `Shift+P` `Shift+L` `Shift+G` | Quick chart | Pause / location / angle pad |
 
-The quick-chart and tool-slot rows above are **defaults**; rebind them in settings ▸ Editor ▸
-Keybinds. Defaults avoid the editor's 17 tile-placement letters (`a b c d e h j m n q s t v w
+The quick-chart and tool-slot rows above are **defaults**; rebind them in settings ▸ Keybinds. Defaults avoid the editor's 17 tile-placement letters (`a b c d e h j m n q s t v w
 x y z`), which the game binds with **and** without `Shift` — so a bind on one of those steals
 tile placement.
 | `A` `N` | editor | Autoplay pan / no-fail toggle |

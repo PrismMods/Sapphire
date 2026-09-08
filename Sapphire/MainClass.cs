@@ -131,7 +131,15 @@ namespace Sapphire
             BuildTabs();
         }
 
-        private static void BuildTabs() => UICore.Tabs.AddTab("Editor", PageEditor.Build);
+        // Four tabs. Names go through Loc so the rail re-localizes with the body on a language
+        // change; TabLabelGuard keeps the game's own localizer from rewriting them afterwards.
+        private static void BuildTabs()
+        {
+            UICore.Tabs.AddTab(Loc.T("Features"), PageFeatures.Build);
+            UICore.Tabs.AddTab(Loc.T("Keybinds"), PageKeybinds.Build);
+            UICore.Tabs.AddTab(Loc.T("Updates"),  PageUpdates.Build);
+            UICore.Tabs.AddTab(Loc.T("Misc"),     PageMisc.Build);
+        }
 
         // The editor features tick per frame; Sapphire has no overlay component to ride,
         // so it brings its own DDOL ticker.

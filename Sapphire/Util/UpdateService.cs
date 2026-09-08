@@ -19,10 +19,11 @@ namespace Sapphire
         internal string PageUrl;
         internal string AssetUrl;
         internal string AssetSha256;  // from GitHub's asset digest; null when absent
+        internal string Notes;        // release body (GitHub markdown); null/empty when absent
     }
 
     /* GitHub-releases self-updater. Runs entirely on a worker thread and touches NO Unity API —
-       every field here is plain state that UpdateToast / PageEditor poll from the main thread on
+       every field here is plain state that UpdateToast / PageUpdates poll from the main thread on
        their own Tick. That's deliberate: marshalling callbacks back onto Unity's thread is the
        usual source of "works in editor, crashes in build" in mods, and polling costs nothing at
        the once-per-frame rate the UI already runs at.
@@ -170,6 +171,7 @@ namespace Sapphire
                     PageUrl = (string)rel["html_url"],
                     AssetUrl = url,
                     AssetSha256 = sha,
+                    Notes = (string)rel["body"],
                 };
             }
             return best;

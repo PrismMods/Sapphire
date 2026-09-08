@@ -106,7 +106,10 @@
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
         <Compile Include="UI\ShapePathGraphic.cs" />
-        <Compile Include="UI\Pages\PageEditor.cs" />
+        <Compile Include="UI\Pages\PageFeatures.cs" />
+        <Compile Include="UI\Pages\PageKeybinds.cs" />
+        <Compile Include="UI\Pages\PageUpdates.cs" />
+        <Compile Include="UI\Pages\PageMisc.cs" />
         <Compile Include="UI\Pages\KeyTokens.cs" />
         <Compile Include="Util\SapphireLog.cs" />
         <Compile Include="Util\Loc.cs" />

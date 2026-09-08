@@ -34,7 +34,8 @@ Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens
   - `Level/` — level settings menu, game settings, artist picker, decoration inspector.
 - `UI/` — panel framework carried from Bismuth (UICore/UIBuilder/TabRail/PageStack/Theme +
   `PanelKit`, the floating-window shell every palette is built on).
-  Settings tab: `UI/Pages/PageEditor.cs`. Rebindable hotkeys: `Util/Keybinds.cs`.
+  Settings panel = four tabs, one file each under `UI/Pages/` (Features / Keybinds /
+  Updates / Misc). Rebindable hotkeys: `Util/Keybinds.cs`.
 - `Util/Tweaks.cs` — autoplay-pause key (transpiler target), Editor Mode, tile angle.
 - Game types are researched from an IL dump: `monodis Assembly-CSharp.dll > /tmp/acs.il`,
   then grep. Verify field/method accessibility there before writing code.

@@ -11,7 +11,7 @@ using Sapphire.UI;
 namespace Sapphire
 {
     /* Quick-chart mode: fast in-place charting without arming a tool. Defaults (all rebindable
-       from the settings panel — Editor ▸ Keybinds):
+       from the settings panel's Keybinds tab):
          • I        toggle a swirl (Twirl) on the selected tile(s)
          • O        prompt for a speed on the selected tile; [ / ] halve / double it
          • Shift+P  prompt for beats → place a Pause event on the selected tile
