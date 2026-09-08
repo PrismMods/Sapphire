@@ -15,7 +15,14 @@ namespace Sapphire
         public static bool IsEnabled { get; private set; }
         public static Settings Settings { get; private set; }
         // Editor-suite master switch (the corner button) — every editor feature gates on this.
-        internal static bool EditorSuiteOn => Settings == null || Settings.EditorSuiteOn;
+        /* What the corner switch is set to — the user's own preference. */
+        internal static bool MasterSwitchOn => Settings == null || Settings.EditorSuiteOn;
+
+        /* Whether the suite is actually SHOWING. Every module gates on this, so Play mode gets
+           "hide all Sapphire UI" for free by turning it off, with no per-module churn. The pitch
+           overlay is the one deliberate exception and gates on MasterSwitchOn instead. */
+        internal static bool EditorSuiteOn =>
+            MasterSwitchOn && !(Settings != null && Settings.PlayModeActive);
         // Wheel delta for Sapphire's own scroll surfaces, honoring the invert setting.
         internal static float WheelY
         {
@@ -230,7 +237,8 @@ namespace Sapphire
                 UI.UpdateToast.Tick();
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
-                Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
+                Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickPlayMode();
+                Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
                 EditorChrome.Tick(); Acc(3);
                 EditorInspector.Tick(); Acc(4);

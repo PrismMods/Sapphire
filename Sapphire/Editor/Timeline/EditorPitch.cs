@@ -27,7 +27,9 @@ namespace Sapphire
             var s = MainClass.Settings;
             scnEditor ed = null;
             bool want = false;
-            try { ed = scnEditor.instance; want = ed != null && s != null && MainClass.EditorSuiteOn && s.EditorPitchOverlay; }
+            // MasterSwitchOn, not EditorSuiteOn: pitch is the one surface Play mode keeps, so it
+            // answers to the corner switch directly rather than to the effective suite state.
+            try { ed = scnEditor.instance; want = ed != null && s != null && MainClass.MasterSwitchOn && s.EditorPitchOverlay; }
             catch { }
             if (!want)
             {

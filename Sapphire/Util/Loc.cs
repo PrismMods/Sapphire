@@ -76,6 +76,13 @@ namespace Sapphire
             ["Keybinds"] = "단축키",
             // ── settings tabs (Sept 2026 split: Features / Keybinds / Updates / Misc) ──
             ["Misc"] = "기타",
+            ["Play mode"] = "플레이 모드",
+            ["Enable no-fail"] = "노페일 켜기",
+            ["PlayModeHelp1"] = "채보를 실제로 플레이하기 위한 모드입니다. 켜면 자동 재생이 꺼지고,\n"
+                + "타임라인을 포함한 Sapphire UI가 음정 오버레이만 남기고 모두 숨겨집니다.",
+            ["PlayModeNoFailHelp"] = "끄면 실패가 그대로 적용됩니다. 미스를 직접 느끼며 확인하고 싶을 때 유용합니다.",
+            ["PlayModeHelp2"] = "에디터 모드와는 서로 배타적입니다(한쪽을 켜면 다른 쪽이 꺼집니다).\n"
+                + "UI가 모두 숨겨져 있어도 Ctrl+E는 항상 열립니다.",
             ["Fixed keys"] = "고정 단축키",
             ["pick dock event"] = "독 이벤트 선택",
             ["Its keys are on the Keybinds tab."] = "이 모드의 키는 단축키 탭에 있습니다.",

@@ -100,6 +100,22 @@ namespace Sapphire
         // icons, autoplay text and hit error meter hide (see EditorModeActive / the OR'd
         // Active* accessors). Doesn't touch any of the underlying settings.
         public bool EditorModeEnabled = false;
+
+        /* Play mode: the mirror of Editor mode, for PLAYTESTING rather than charting. Autoplay
+           off, no-fail on (optional — some charters want to feel the misses), and every Sapphire
+           surface hidden except the pitch overlay. The two modes are mutually exclusive: they
+           want opposite things from autoplay, so enabling one clears the other. */
+        public bool PlayModeEnabled = false;
+        public bool PlayModeNoFail = true;
+
+        [System.Xml.Serialization.XmlIgnore] public bool PlayModeActive
+        {
+            get
+            {
+                if (!PlayModeEnabled) return false;
+                try { return scnEditor.instance != null; } catch { return false; }
+            }
+        }
         // Editor Mode only bites inside the editor scene (play-testing included), so
         // normal play is never affected by leaving it on.
         [System.Xml.Serialization.XmlIgnore] public bool EditorModeActive

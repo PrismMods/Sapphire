@@ -7,7 +7,7 @@ namespace Sapphire
     /* Master on/off switch for the whole editor suite — an iOS-style slide toggle pinned to the
        editor's top-right corner, ALWAYS visible there (it's the way back on, so it must not gate
        on the flag it toggles). Flips Settings.EditorSuiteOn; every editor module's Tick gates on
-       MainClass.EditorSuiteOn and restores the game UI when it goes false — no Ctrl+E needed. */
+       MainClass.MasterSwitchOn and restores the game UI when it goes false — no Ctrl+E needed. */
     internal static class EditorMasterSwitch
     {
         private const float TrackW = 46f, TrackH = 26f, Knob = 20f;
@@ -29,7 +29,10 @@ namespace Sapphire
         {
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
-            bool want = ed != null && !ed.playMode;
+            // Hidden by Play mode like every other Sapphire surface; Ctrl+E is the way back.
+            bool playMode = false;
+            try { var st = MainClass.Settings; playMode = st != null && st.PlayModeActive; } catch { }
+            bool want = ed != null && !ed.playMode && !playMode;
             if (!want)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
@@ -37,7 +40,7 @@ namespace Sapphire
             }
             if (_canvasGo == null) Build();
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
-            if (_shownOn != MainClass.EditorSuiteOn) Sync();
+            if (_shownOn != MainClass.MasterSwitchOn) Sync();   // the knob shows the SETTING
 
             // iOS feel: the knob slides to its side instead of teleporting.
             if (_knobRect != null)
@@ -125,7 +128,7 @@ namespace Sapphire
 
         private static void Sync()
         {
-            _shownOn = MainClass.EditorSuiteOn;
+            _shownOn = MainClass.MasterSwitchOn;
             if (_track != null)
             {
                 _track.color = _shownOn

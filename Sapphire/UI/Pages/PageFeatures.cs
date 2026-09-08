@@ -39,9 +39,13 @@ namespace Sapphire.UI.Pages
                 () => stack.Push(Loc.T("Quick chart"), QuickChartPage),
                 "swirl, set speed, pause event, tile location, angle pad, hz tool");
             UIBuilder.NavRow(content, Loc.T("Editor mode"), s.EditorModeEnabled,
-                v => { s.EditorModeEnabled = v; notify?.Invoke(); },
+                v => { s.EditorModeEnabled = v; if (v) s.PlayModeEnabled = false; notify?.Invoke(); },
                 () => stack.Push(Loc.T("Editor mode"), EditorModePage),
                 "clean screen, hide key viewer, hide autoplay, hit error meter");
+            UIBuilder.NavRow(content, Loc.T("Play mode"), s.PlayModeEnabled,
+                v => { s.PlayModeEnabled = v; if (v) s.EditorModeEnabled = false; notify?.Invoke(); },
+                () => stack.Push(Loc.T("Play mode"), PlayModePage),
+                "playtest, autoplay off, no fail, hide ui, clean screen");
             UIBuilder.NavRow(content, Loc.T("Autoplay pause"), s.AutoplayPauseEnabled,
                 v => { s.AutoplayPauseEnabled = v; notify?.Invoke(); },
                 () => stack.Push(Loc.T("Autoplay pause"), AutoplayPage),
@@ -66,6 +70,22 @@ namespace Sapphire.UI.Pages
                 v => { s.EditorModeEnabled = v; notify?.Invoke(); }, null);
             UIBuilder.Label(body, Loc.T("EditorModeHelp1"));
             UIBuilder.Label(body, Loc.T("EditorModeHelp2"));
+        }
+
+        /* The two modes are opposites — Editor mode turns autoplay ON for charting, Play mode
+           turns it OFF to actually play — so each clears the other rather than letting a user
+           hold both and wonder which one won. */
+        private static void PlayModePage(Transform body)
+        {
+            var s = UICore.Settings;
+            var notify = UICore.OnSettingsChanged;
+            UIBuilder.Collapsible(body, Loc.T("Play mode"), s.PlayModeEnabled,
+                v => { s.PlayModeEnabled = v; if (v) s.EditorModeEnabled = false; notify?.Invoke(); }, null);
+            UIBuilder.Label(body, Loc.T("PlayModeHelp1"));
+            UIBuilder.Collapsible(body, Loc.T("Enable no-fail"), s.PlayModeNoFail,
+                v => { s.PlayModeNoFail = v; notify?.Invoke(); },
+                b => UIBuilder.Label(b, Loc.T("PlayModeNoFailHelp")));
+            UIBuilder.Label(body, Loc.T("PlayModeHelp2"));
         }
 
         private static void AutoplayPage(Transform body)

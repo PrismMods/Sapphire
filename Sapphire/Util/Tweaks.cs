@@ -196,6 +196,42 @@ namespace Sapphire
             try { FadeCorners(ed, false); } catch { }
         }
 
+        /* PLAY MODE — the playtest preset. Autoplay off, no-fail on (optional), and the whole
+           Sapphire UI hidden except pitch (that part is free: MainClass.EditorSuiteOn turns
+           false while this is active, and every module already gates on it).
+
+           Asserted on EDGES, not every frame: switching the mode on, and starting a playtest.
+           Holding autoplay off every frame would fight the game's own keys, and a charter who
+           deliberately flips autoplay mid-run should keep it. */
+        private static bool _wasPlayActive, _wasPlayPlaying;
+
+        internal static void TickPlayMode()
+        {
+            var s = MainClass.Settings;
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            bool active = false, playing = false;
+            try { active = s != null && s.PlayModeActive; } catch { }
+            try { playing = ed != null && ed.playMode; } catch { }
+
+            bool assert = active && (!_wasPlayActive || (playing && !_wasPlayPlaying));
+            _wasPlayActive = active;
+            _wasPlayPlaying = playing;
+            if (!assert) return;
+
+            try { RDC.auto = false; } catch { }
+            if (!s.PlayModeNoFail) return;
+            try
+            {
+                // Both: GCS is the setting the run starts from, the controller flag is the live
+                // run (the editor's own N shortcut writes the controller, not GCS).
+                GCS.useNoFail = true;
+                var c = scrController.instance;
+                if (c != null) c.noFail = true;
+            }
+            catch { }
+        }
+
         internal static void TickEditorMode()
         {
             bool playing = false;
