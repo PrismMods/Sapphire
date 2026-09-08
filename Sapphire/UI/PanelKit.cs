@@ -882,17 +882,38 @@ namespace Sapphire.UI
            standard way an open padlock reads, and the only difference legible at 12px. */
         internal static void DrawPadlock(GameObject cell, bool locked)
         {
-            const float bodyW = 9.5f, bodyH = 7f, r = 3f, stroke = 1.3f;
-            IconRect(cell, new Vector2(0f, -2.5f), new Vector2(bodyW, bodyH), 1.6f);
-            var c = locked ? new Vector2(0f, 1f) : new Vector2(2.4f, 2f);
-            IconArc(cell, c, r, 0f, 180f, 7, stroke);
-            // Legs down to the body. Open: only the right one still reaches it.
-            if (locked) IconBar(cell, new Vector2(-r, 0.6f), new Vector2(stroke, 1.2f), 0f);
-            IconBar(cell, new Vector2(c.x + r, locked ? 0.6f : 0.1f), new Vector2(stroke, locked ? 1.2f : 2.2f), 0f);
+            /* Sized to the cell rather than to the old 12px sketch: the body is 11x8.5 in a 26x24
+               cell, so a 0.9 stroke leaves a real 9.2x6.7 opening instead of a border that eats
+               its own interior. The keyhole is what makes it read as a padlock rather than a
+               handbag at this size. */
+            const float stroke = 0.9f, bodyW = 11f, bodyH = 8.5f, bodyTop = 0.5f, r = 3f;
+            IconRect(cell, new Vector2(0f, bodyTop - bodyH * 0.5f), new Vector2(bodyW, bodyH), 1.8f, stroke);
+            IconBar(cell, new Vector2(0f, bodyTop - bodyH * 0.5f), new Vector2(1.8f, 1.8f), 0f);
+
+            /* LOCKED is a symmetric arch closed onto the body: centred on the top edge at radius
+               3 against a half-width of 5.5, so both endpoints land on it and no legs are needed.
+
+               OPEN both LIFTS and TILTS. Offsetting alone was too subtle to tell apart at a
+               glance — the arc now sweeps -25..155 instead of 0..180, so the arch visibly swings
+               open, with its left end high and clear of the body while the right end still drops
+               into it. The tilt is the cue that survives being 14px tall. */
+            if (locked)
+            {
+                IconArc(cell, new Vector2(0f, bodyTop), r, 0f, 180f, 9, stroke);
+                return;
+            }
+            var c = new Vector2(1.8f, 2.6f);
+            const float from = -25f, to = 155f;
+            IconArc(cell, c, r, from, to, 9, stroke);
+            // Short leg from the arc's lower end down into the body, so it still reads attached.
+            var foot = c + new Vector2(Mathf.Cos(from * Mathf.Deg2Rad), Mathf.Sin(from * Mathf.Deg2Rad)) * r;
+            IconBar(cell, new Vector2(foot.x, (foot.y + bodyTop) * 0.5f),
+                    new Vector2(stroke, Mathf.Max(0.1f, foot.y - bodyTop)), 0f);
         }
 
         // ── minimal icon primitives (rounded rect, rotated bar, chorded arc) ──
-        private static void IconRect(GameObject parent, Vector2 pos, Vector2 size, float radius)
+        // stroke 0 = filled; > 0 = outline at that width.
+        private static void IconRect(GameObject parent, Vector2 pos, Vector2 size, float radius, float stroke = 0f)
         {
             var g = new GameObject("I", typeof(RectTransform));
             g.transform.SetParent(parent.transform, false);
@@ -903,7 +924,13 @@ namespace Sapphire.UI
             rt.sizeDelta = size;
             var gr = g.AddComponent<RoundedRectGraphic>();
             gr.Radius = radius;
-            gr.color = Theme.Text;
+            if (stroke > 0f)
+            {
+                gr.color = new Color(0f, 0f, 0f, 0f);
+                gr.BorderWidth = stroke;
+                gr.BorderColor = Theme.Text;
+            }
+            else gr.color = Theme.Text;
             gr.raycastTarget = false;
         }
 
