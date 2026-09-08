@@ -309,6 +309,12 @@ release asset, and archive entries that would escape the mods folder are rejecte
 - **Non-destructive pitch overlay**.
 - **WASD** camera pan.
 - **Autoplay-pause key**, **Editor Mode**, live **tile-angle readout**.
+- **Play mode** — the playtest mirror of Editor mode (`Ctrl+E` → Features). Autoplay off,
+  no-fail on (optional — turn it off to feel the misses), timeline hidden, and every Sapphire
+  surface hidden **except the pitch overlay**. Autoplay and no-fail are asserted when you switch
+  the mode on and when a playtest starts, not every frame, so flipping autoplay mid-run still
+  works. Mutually exclusive with Editor mode, which wants autoplay *on*. The corner master
+  switch hides too, so `Ctrl+E` is the way back.
 
 ---
 

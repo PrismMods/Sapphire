@@ -3,6 +3,31 @@
 
 # Changelog
 
+## 1.0.0-a6
+
+### Play mode (new)
+
+- The playtest mirror of Editor mode (`Ctrl+E` → Features): **autoplay off, no-fail on, timeline hidden, and every Sapphire surface hidden except the pitch overlay**. No-fail is optional — turn it off to feel the misses.
+- Autoplay and no-fail are set when you switch the mode on and when a playtest starts, not every frame, so flipping autoplay mid-run still works. Mutually exclusive with Editor mode, which wants autoplay *on*.
+
+### Settings, rebuilt
+
+- **Four tabs** instead of one: **Features** (what Sapphire adds), **Keybinds** (every key on one screen, including the fixed ones), **Updates**, **Misc**.
+- **Updates** shows installed vs latest side by side, a real progress bar, an **Install** button, and the release's **notes in the panel**.
+- **UI scale** and **accent colour** are finally reachable — both were live settings with no control since the split.
+
+### Smaller download
+
+- **5.9 MB → 1.7 MB.** The old font bundle carried 19 fonts to use one; Sapphire now ships the two Paperlogy weights it actually needs. Upgrading removes the old bundle for you.
+
+### Looks
+
+- A **symbol font** rides every panel font, so arrows, ▲▼, ●○, ⚙ and ✓ render properly instead of borrowing metrics from the game's CJK font.
+- **Real padlock icons** on the Hz tool's lock rows.
+- The four tool palettes (Magic Shape, Track, Deco, Hz) share **one width, label column and button geometry** — their columns line up when docked side by side.
+
+---
+
 ## 1.0.0-a5
 
 ### Hz tool (new) — toolbar `♪` or `Shift+F`
@@ -90,6 +115,31 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a6
+
+### 플레이 모드 (신규)
+
+- 에디터 모드의 반대편으로, 채보를 실제로 플레이하기 위한 모드입니다 (`Ctrl+E` → 기능). **자동 재생이 꺼지고, 노페일이 켜지며, 타임라인을 포함한 Sapphire UI가 음정 오버레이만 남기고 모두 숨겨집니다.** 노페일은 옵션이라 끄면 미스를 그대로 느낄 수 있습니다.
+- 자동 재생과 노페일은 모드를 켤 때와 플레이를 시작할 때만 적용되므로 도중에 직접 바꾼 값은 유지됩니다. 자동 재생을 *켜는* 에디터 모드와는 서로 배타적입니다.
+
+### 설정 개편
+
+- 탭이 하나에서 **넷**으로 나뉘었습니다. **기능**(Sapphire가 더하는 것), **단축키**(고정 키를 포함한 모든 키를 한 화면에), **업데이트**, **기타**.
+- **업데이트** 탭은 설치된 버전과 최신 버전을 나란히 보여 주고, 실제 진행 막대와 **설치** 버튼, 그리고 해당 릴리스의 **변경 사항**을 패널 안에 표시합니다.
+- **UI 크기**와 **강조색**을 드디어 조절할 수 있습니다. 둘 다 분리 이후 조작 수단이 없던 설정이었습니다.
+
+### 용량 감소
+
+- **5.9 MB → 1.7 MB.** 기존 폰트 번들은 하나를 쓰려고 19개를 담고 있었습니다. 이제 실제로 필요한 Paperlogy 두 종만 포함하며, 업데이트하면 예전 번들은 자동으로 삭제됩니다.
+
+### 모양
+
+- **기호 폰트**가 모든 패널 폰트에 붙어, 화살표·▲▼·●○·⚙·✓가 게임 CJK 폰트에서 빌려온 어색한 크기 대신 제대로 표시됩니다.
+- Hz 도구의 잠금 줄에 **실제 자물쇠 아이콘**이 들어갔습니다.
+- 네 개의 도구 팔레트(Magic Shape·트랙·장식·Hz)가 **너비와 라벨 열, 버튼 형태를 공유**하여, 나란히 도킹했을 때 열이 정확히 맞습니다.
+
+---
 
 ## 1.0.0-a5
 
