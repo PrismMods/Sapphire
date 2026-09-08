@@ -292,13 +292,13 @@ namespace Sapphire
 
         // ── UI ───────────────────────────────────────────────────────────────
 
-        private const float MinW = 240f, MinH = 160f, DefaultH = 380f;
-        private const float PanelW = 332f;
+        private const float MinW = PanelKit.PaletteMinW, MinH = PanelKit.PaletteMinH;
+        private const float DefaultH = PanelKit.PaletteDefaultH, PanelW = PanelKit.PaletteW;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
         private static void Build()
         {
-            K.LblW = 104f;
+            K.LblW = PanelKit.PaletteLblW;
             // Vertical resize: the body scrolls, so a dragged height sticks instead of
             // SetHeight snapping the window back to the content on the next rebuild.
             K.Scrollable = true;
@@ -307,16 +307,8 @@ namespace Sapphire
             ResizeHandle.AttachAll((RectTransform)K.PanelGo.transform, true, MinW, MinH);
 
             float y = -34f;
-            var tabNames = new[] { Loc.T("Flipbook"), Loc.T("Extract"), Loc.T("3D stack"), Loc.T("Lyrics") };
-            float tabW = (K.W - Pad * 2f - Gap * 3f) / 4f;
-            for (int i = 0; i < 4; i++)
-            {
-                int idx = i;
-                var cellBg = K.Cell(tabNames[i], Pad + i * (tabW + Gap), y, tabW, RowH,
-                    () => { _tab = idx; _status = ""; Refresh(); }, false);
-                cellBg.color = PanelKit.Tint(_tab == i);
-            }
-            y -= RowH + 10f;
+            y = K.TabRow(y, new[] { Loc.T("Flipbook"), Loc.T("Extract"), Loc.T("3D stack"), Loc.T("Lyrics") },
+                         _tab, i => { _tab = i; _status = ""; Refresh(); });
 
             switch (_tab)
             {
@@ -345,8 +337,7 @@ namespace Sapphire
             y = K.FloatRow(y, Loc.T("Start angle"), _fbInitAngle, v => _fbInitAngle = v);
             y = K.FloatRow(y, Loc.T("Angle per frame"), _fbStep, v => _fbStep = v);
             y -= 4f;
-            K.Cell(Loc.T("Create flipbook"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoFlipbook, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Create flipbook"), DoFlipbook);
         }
 
         private static float BuildExtract(float y)
@@ -356,8 +347,7 @@ namespace Sapphire
             y -= RowH + Gap;
             y = K.SegRow(y, Loc.T("Format"), new[] { "PNG", "JPG" }, () => _exFormat, v => _exFormat = v);
             y -= 4f;
-            K.Cell(Loc.T("Extract frames"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoExtract, true, true);
-            y -= (RowH + 2f) + Gap;
+            y = K.PrimaryRow(y, Loc.T("Extract frames"), DoExtract);
             K.Label(Loc.T("Frames land in a folder named after the video — use it in Flipbook."),
                 Pad, y, K.W - Pad * 2f, 28f, Theme.TextMuted, 10.5f);
             return y - 30f - 6f;
@@ -441,8 +431,7 @@ namespace Sapphire
             }
 
             y -= 4f;
-            K.Cell(Loc.T("Generate lyrics"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoLyrics, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Generate lyrics"), DoLyrics);
         }
 
         // [label] [hexA] [hexB]

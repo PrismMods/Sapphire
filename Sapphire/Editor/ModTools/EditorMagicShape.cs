@@ -218,13 +218,13 @@ namespace Sapphire
 
         // ── UI ──────────────────────────────────────────────────────────────
 
-        private const float MinW = 240f, MinH = 160f, DefaultH = 380f;
-        private const float PanelW = 292f;
+        private const float MinW = PanelKit.PaletteMinW, MinH = PanelKit.PaletteMinH;
+        private const float DefaultH = PanelKit.PaletteDefaultH, PanelW = PanelKit.PaletteW;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
 
         private static void Build()
         {
-            K.LblW = 92f;
+            K.LblW = PanelKit.PaletteLblW;
             // Vertical resize: the body scrolls, so a dragged height sticks instead of
             // SetHeight snapping the window back to the content on the next rebuild.
             K.Scrollable = true;
@@ -234,16 +234,8 @@ namespace Sapphire
 
             float y = -34f;
 
-            float tabW = (K.W - Pad * 2f - Gap * 2f) / 3f;
-            var tabNames = new[] { Loc.T("Multiply"), Loc.T("Create"), Loc.T("Rotate") };
-            for (int i = 0; i < 3; i++)
-            {
-                int idx = i;
-                var cellBg = K.Cell(tabNames[i], Pad + i * (tabW + Gap), y, tabW, RowH,
-                    () => { _tab = idx; _status = ""; }, false);
-                cellBg.color = PanelKit.Tint(_tab == i);
-            }
-            y -= RowH + 10f;
+            y = K.TabRow(y, new[] { Loc.T("Multiply"), Loc.T("Create"), Loc.T("Rotate") }, _tab,
+                         i => { _tab = i; _status = ""; });
 
             if (_tab == 0) y = BuildMultiply(y);
             else if (_tab == 1) y = BuildCreate(y);
@@ -288,8 +280,7 @@ namespace Sapphire
             }
 
             y -= 4f;
-            K.Cell(Loc.T("Apply to selection"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoMultiply, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Apply to selection"), DoMultiply);
         }
 
         private static float BuildCreate(float y)
@@ -301,8 +292,7 @@ namespace Sapphire
             y -= RowH + Gap;
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _cPreview, v => { _cPreview = v; });
             y -= RowH + Gap + 4f;
-            K.Cell(Loc.T("Create shape"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoCreate, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Create shape"), DoCreate);
         }
 
         private static float BuildRotate(float y)
@@ -311,8 +301,7 @@ namespace Sapphire
             y = FieldRow(y, Loc.T("Degrees"), _rDeg.ToString("0.###"), v =>
             { float f; if (ExprEval.TryParseFloat(v, out f)) _rDeg = f; });
             y -= 4f;
-            K.Cell(Loc.T("Rotate range"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoRotate, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Rotate range"), DoRotate);
         }
 
         // ── row builders (thin wrappers over PanelKit's shared rows) ─────────

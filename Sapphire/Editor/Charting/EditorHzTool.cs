@@ -545,7 +545,8 @@ namespace Sapphire
 
         // DefaultH is only the height of the FIRST frame; FitHeight sizes it to the real content
         // as soon as the rows are laid out.
-        private const float PanelW = 306f, MinW = 260f, MinH = 200f, DefaultH = 430f;
+        private const float PanelW = PanelKit.PaletteW, MinW = PanelKit.PaletteMinW;
+        private const float MinH = PanelKit.PaletteMinH, DefaultH = PanelKit.PaletteDefaultH;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
         private const float WhiteW = 20f, WhiteH = 62f, BlackH = 38f;
 
@@ -637,7 +638,7 @@ namespace Sapphire
         private static void Build()
         {
             if (!_selfChecked) { _selfChecked = true; SelfCheck(); }
-            K.LblW = 104f;
+            K.LblW = PanelKit.PaletteLblW;
             K.Scrollable = true;
             K.DefaultH = DefaultH;
             // PanelKit panels anchor TOP-LEFT with a top-left pivot, so x is measured rightward
@@ -826,10 +827,7 @@ namespace Sapphire
             y = K.ToggleRow(y, Loc.T("Write SetSpeed for this BPM"), _writeSpeed,
                 v => { _writeSpeed = v; _layoutSig = NoSig; });
 
-            float bw = (fullW - Gap) * 0.5f;
-            K.Cell(Loc.T("Place"), Pad, y, bw, RowH + 4f, Place, true, accent: true);
-            K.Cell(Loc.T("To angle pad"), Pad + bw + Gap, y, bw, RowH + 4f, ToPad, true);
-            y -= RowH + 4f + Gap;
+            y = K.PrimaryRow(y, Loc.T("Place"), Place, Loc.T("To angle pad"), ToPad);
 
             _statusTmp = K.Status(_status, y);
             y -= 30f;

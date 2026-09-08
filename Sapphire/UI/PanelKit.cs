@@ -14,6 +14,17 @@ namespace Sapphire.UI
     {
         internal const float RowH = 24f, Gap = 5f, Pad = 10f;
 
+        /* Shared TOOL-PALETTE geometry. Magic Shape, Track, Deco and the Hz tool were built at
+           different times and drifted apart — 292 / 306 / 332 wide with 92 or 104 label columns —
+           which is invisible alone and obvious the moment two are docked side by side and their
+           label columns don't line up. One set of numbers, adopted by all four. */
+        internal const float PaletteW = 320f, PaletteMinW = 240f, PaletteMinH = 180f;
+        internal const float PaletteDefaultH = 400f, PaletteLblW = 104f;
+
+        /* Trailing gap under a palette's commit button. Every one of them hand-wrote
+           `y - (RowH + 2f) - 10f`; it lives here now so PrimaryRow and its callers agree. */
+        private const float ActionH = RowH + 2f, ActionGap = 10f;
+
         private readonly string _canvasName;
         private readonly int _sortingOrder;
         /* LIVE template width every row helper lays out against. Not readonly: a panel can be
@@ -825,6 +836,42 @@ namespace Sapphire.UI
 
         internal void Footer(string text, float y)
             => Label(text, Pad, y, W - Pad * 2f, 12f, new Color(0.42f, 0.42f, 0.47f, 1f), 9.5f);
+
+        /* Tab strip across the palette's width. `perRow` wraps (Track has six tabs in two rows
+           of three); 0 means one row. Was copy-pasted three times with three slightly different
+           width formulas, so a fourth palette got them subtly wrong by construction. */
+        internal float TabRow(float y, string[] names, int current, Action<int> select, int perRow = 0)
+        {
+            if (names == null || names.Length == 0) return y;
+            if (perRow <= 0) perRow = names.Length;
+            float tabW = (W - Pad * 2f - Gap * (perRow - 1)) / perRow;
+            for (int i = 0; i < names.Length; i++)
+            {
+                int idx = i;
+                var bg = Cell(names[i], Pad + (i % perRow) * (tabW + Gap),
+                              y - (i / perRow) * (RowH + Gap), tabW, RowH,
+                              () => select(idx), false);
+                bg.color = Tint(current == i);
+            }
+            int rows = (names.Length + perRow - 1) / perRow;
+            return y - (RowH + Gap) * rows - 4f;
+        }
+
+        // The panel's commit button: full width, accent, one per tab.
+        internal float PrimaryRow(float y, string label, Action action)
+        {
+            Cell(label, Pad, y, W - Pad * 2f, ActionH, action, true, true);
+            return y - ActionH - ActionGap;
+        }
+
+        // Commit plus a secondary action beside it (the Hz tool's Place / To angle pad).
+        internal float PrimaryRow(float y, string primary, Action onPrimary, string secondary, Action onSecondary)
+        {
+            float w = (W - Pad * 2f - Gap) * 0.5f;
+            Cell(primary, Pad, y, w, ActionH, onPrimary, true, true);
+            Cell(secondary, Pad + w + Gap, y, w, ActionH, onSecondary, true);
+            return y - ActionH - ActionGap;
+        }
 
         internal static Color Tint(bool on) => on
             ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)

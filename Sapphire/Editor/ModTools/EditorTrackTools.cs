@@ -270,8 +270,8 @@ namespace Sapphire
 
         // ── UI ───────────────────────────────────────────────────────────────
 
-        private const float MinW = 240f, MinH = 160f, DefaultH = 380f;
-        private const float PanelW = 332f;
+        private const float MinW = PanelKit.PaletteMinW, MinH = PanelKit.PaletteMinH;
+        private const float DefaultH = PanelKit.PaletteDefaultH, PanelW = PanelKit.PaletteW;
         private const float Pad = PanelKit.Pad, RowH = PanelKit.RowH, Gap = PanelKit.Gap;
         private const float LblW = 104f;
 
@@ -285,16 +285,9 @@ namespace Sapphire
             ResizeHandle.AttachAll((RectTransform)K.PanelGo.transform, true, MinW, MinH);
 
             float y = -34f;
-            var tabNames = new[] { Loc.T("Fade in"), Loc.T("Fade out"), Loc.T("Explode"), Loc.T("Size"), Loc.T("Multi"), Loc.T("Generate") };
-            float tabW = (K.W - Pad * 2f - Gap * 2f) / 3f;
-            for (int i = 0; i < 6; i++)
-            {
-                int idx = i;
-                var cellBg = K.Cell(tabNames[i], Pad + (i % 3) * (tabW + Gap), y - (i / 3) * (RowH + Gap), tabW, RowH,
-                    () => { _tab = idx; _status = ""; Refresh(); }, false);
-                cellBg.color = PanelKit.Tint(_tab == i);
-            }
-            y -= (RowH + Gap) * 2f + 6f;
+            y = K.TabRow(y, new[] { Loc.T("Fade in"), Loc.T("Fade out"), Loc.T("Explode"),
+                                    Loc.T("Size"), Loc.T("Multi"), Loc.T("Generate") }, _tab,
+                         i => { _tab = i; _status = ""; Refresh(); }, perRow: 3);
 
             switch (_tab)
             {
@@ -338,8 +331,7 @@ namespace Sapphire
             { float f; if (ExprEval.TryParseFloat(v, out f)) s.AngleOffset = f; });
             y = EaseRow(y, () => s.Ease, v => s.Ease = v);
             y -= 4f;
-            K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoFade, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Apply"), DoFade);
         }
 
         private static float BuildSize(float y)
@@ -350,8 +342,7 @@ namespace Sapphire
             y = RandRow(y, Loc.T("Planets"), () => _szPlaOn, v => _szPlaOn = v, () => _szPlaA, () => _szPlaB, (a, b) => { _szPlaA = a; _szPlaB = b; });
             y = EaseRow(y, () => _szEase, v => _szEase = v);
             y -= 4f;
-            K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoSize, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Apply"), DoSize);
         }
 
         private static float BuildMulti(float y)
@@ -411,7 +402,7 @@ namespace Sapphire
                 { float f; if (ExprEval.TryParseFloat(v, out f)) _muAngle = f; });
                 y = EaseRow(y, () => _muEase, v => _muEase = v);
                 y -= 4f;
-                K.Cell(Loc.T("Apply"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoMulti, true, true);
+                return K.PrimaryRow(y, Loc.T("Apply"), DoMulti);
             }
             return y - (RowH + 2f) - 10f;
         }
@@ -435,8 +426,7 @@ namespace Sapphire
             { int n; if (ExprEval.TryParseInt(v, out n)) { _gtCount = Math.Max(1, n); PreviewRefresh(); } });
             ToggleRow(y, Loc.T("Preview (ghost tiles)"), _gtPreview, v => { _gtPreview = v; });
             y -= RowH + Gap + 4f;
-            K.Cell(Loc.T("Generate"), Pad, y, K.W - Pad * 2f, RowH + 2f, DoGenerate, true, true);
-            return y - (RowH + 2f) - 10f;
+            return K.PrimaryRow(y, Loc.T("Generate"), DoGenerate);
         }
 
         // ── row builders (thin wrappers over PanelKit's shared rows) ─────────
