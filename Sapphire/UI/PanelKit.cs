@@ -873,6 +873,72 @@ namespace Sapphire.UI
             return y - ActionH - ActionGap;
         }
 
+        /* A real padlock, drawn: no font has one. DejaVu — which SapphireSymbols subsets — stops
+           short of U+1F512 LOCK, and the panel fonts never had it, so a padlock is exactly the
+           "pictogram outside the covered blocks" case the glyph rule sends here.
+
+           Body is a filled rounded rect; the shackle is a chorded arc sitting on top of it.
+           OPEN shifts the shackle right and up so its left leg lifts clear of the body — the
+           standard way an open padlock reads, and the only difference legible at 12px. */
+        internal static void DrawPadlock(GameObject cell, bool locked)
+        {
+            const float bodyW = 9.5f, bodyH = 7f, r = 3f, stroke = 1.3f;
+            IconRect(cell, new Vector2(0f, -2.5f), new Vector2(bodyW, bodyH), 1.6f);
+            var c = locked ? new Vector2(0f, 1f) : new Vector2(2.4f, 2f);
+            IconArc(cell, c, r, 0f, 180f, 7, stroke);
+            // Legs down to the body. Open: only the right one still reaches it.
+            if (locked) IconBar(cell, new Vector2(-r, 0.6f), new Vector2(stroke, 1.2f), 0f);
+            IconBar(cell, new Vector2(c.x + r, locked ? 0.6f : 0.1f), new Vector2(stroke, locked ? 1.2f : 2.2f), 0f);
+        }
+
+        // ── minimal icon primitives (rounded rect, rotated bar, chorded arc) ──
+        private static void IconRect(GameObject parent, Vector2 pos, Vector2 size, float radius)
+        {
+            var g = new GameObject("I", typeof(RectTransform));
+            g.transform.SetParent(parent.transform, false);
+            var rt = (RectTransform)g.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            var gr = g.AddComponent<RoundedRectGraphic>();
+            gr.Radius = radius;
+            gr.color = Theme.Text;
+            gr.raycastTarget = false;
+        }
+
+        private static void IconBar(GameObject parent, Vector2 pos, Vector2 size, float rot)
+        {
+            var g = new GameObject("I", typeof(RectTransform));
+            g.transform.SetParent(parent.transform, false);
+            var rt = (RectTransform)g.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            rt.localRotation = Quaternion.Euler(0f, 0f, rot);
+            var gr = g.AddComponent<RoundedRectGraphic>();
+            gr.Radius = Mathf.Min(size.x, size.y) * 0.5f;
+            gr.color = Theme.Text;
+            gr.raycastTarget = false;
+        }
+
+        // Chords, because there is no curve primitive; over-drawn by a stroke so the joints close.
+        private static void IconArc(GameObject parent, Vector2 c, float radius, float from, float to,
+                                    int seg, float thick)
+        {
+            for (int i = 0; i < seg; i++)
+            {
+                float a0 = Mathf.Lerp(from, to, i / (float)seg) * Mathf.Deg2Rad;
+                float a1 = Mathf.Lerp(from, to, (i + 1) / (float)seg) * Mathf.Deg2Rad;
+                var p0 = c + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * radius;
+                var p1 = c + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * radius;
+                var d = p1 - p0;
+                IconBar(parent, (p0 + p1) * 0.5f, new Vector2(d.magnitude + thick, thick),
+                        Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+            }
+        }
+
         internal static Color Tint(bool on) => on
             ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.45f)
             : new Color(1f, 1f, 1f, 0.05f);

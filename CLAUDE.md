@@ -90,6 +90,8 @@ Fundamentals for any tile/pseudo/shape work. Exhaustive detail lives in memory
   SAFE in any label: arrows, Misc Technical, Control Pictures, Geometric Shapes (▲▼●○■), Misc
   Symbols (⚙ ♪), Dingbats (✓ ✕ ❚). Anything outside them (pictograms, emoji) still gets drawn
   procedurally. Adding a glyph = add it to `REQUIRED` in the script and rebuild the font.
+  DejaVu stops short of the pictogram blocks — no 🔒 U+1F512 — so `PanelKit.DrawPadlock`
+  and its `IconRect`/`IconBar`/`IconArc` primitives are the drawn path for that class.
 - uGUI gotchas that have bitten: clicked Buttons stay selected and Space re-submits them
   (always deselect after click); `CanvasGroup.interactable=false` silently kills proxied
   Button clicks (fade with alpha 0 + blocksRaycasts false only); game code rewrites UI
