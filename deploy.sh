@@ -21,7 +21,9 @@ xbuild /p:Configuration=Release Sapphire.sln > /dev/null
 mkdir -p "$MODS_DIR/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$MODS_DIR/"
 cp Info.json "$MODS_DIR/"
-cp Sapphire/Resources/bismuth-fonts "$MODS_DIR/Resources/"
+cp Sapphire/Resources/*.ttf "$MODS_DIR/Resources/"
+# The font bundle was replaced by loose TTFs (Sept 2026); clear one left by an older deploy.
+rm -f "$MODS_DIR/Resources/bismuth-fonts"
 
 cmp -s Sapphire/bin/Release/Sapphire.dll "$MODS_DIR/Sapphire.dll" || { echo "ERROR: deployed dll does not match build output" >&2; exit 1; }
 

@@ -39,7 +39,7 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/Sapphire/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$STAGE/Sapphire/"
 cp Info.json "$STAGE/Sapphire/"
-cp Sapphire/Resources/bismuth-fonts "$STAGE/Sapphire/Resources/"
+cp Sapphire/Resources/*.ttf "$STAGE/Sapphire/Resources/"
 
 rm -f "$ZIP_NAME"
 (cd "$STAGE" && zip -qr out.zip Sapphire)

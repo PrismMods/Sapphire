@@ -133,6 +133,7 @@ namespace Sapphire
             var result = new List<FontEntry>();
             string resourcesDir = Path.Combine(modPath, "Resources");
             string suffix = PlatformBundleSuffix();
+            RetireLegacyBundle(resourcesDir);   // before the bundle scan, or it loads one last time
 
             if (Directory.Exists(resourcesDir))
             {
@@ -155,6 +156,30 @@ namespace Sapphire
 
             LinkFamilies(result);
             return result;
+        }
+
+        /* Sapphire shipped its panel font inside a 5.9 MB AssetBundle (19 fonts, one of them
+           used) until Sept 2026; it now ships two loose TTFs. UMM installs an update by unzipping
+           OVER the existing folder, so every upgrader keeps the old bundle on disk — and since a
+           bundled name beats a loose one in ScanLooseFonts, the bundle would also keep being the
+           font that loads. So this runs BEFORE the bundle scan and decides from the DISK, not
+           from the scan results: if the loose Paperlogy files are here, the bundle has no job
+           left and is deleted. Only that one file, only when its replacement is confirmed. */
+        private const string LegacyBundle = "bismuth-fonts";
+
+        private static void RetireLegacyBundle(string resourcesDir)
+        {
+            try
+            {
+                string bundle = Path.Combine(resourcesDir, LegacyBundle);
+                if (!File.Exists(bundle)) return;
+                bool looseReady = false;
+                foreach (string f in Directory.GetFiles(resourcesDir, "Paperlogy*.ttf")) { looseReady = true; break; }
+                if (!looseReady) return;
+                File.Delete(bundle);
+                MainClass.Logger.Log("[Sapphire] Removed the legacy font bundle (replaced by loose TTFs)");
+            }
+            catch (Exception e) { MainClass.Logger.Warning("[Sapphire] Could not remove legacy font bundle: " + e.Message); }
         }
 
         // Register loose .ttf/.otf files as custom fonts. The file name (minus extension) is the
