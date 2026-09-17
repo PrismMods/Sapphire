@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Sapphire
 {
-    // Editor behaviour helpers: rebindable autoplay-pause key, Editor Mode, tile angle.
+    // Editor behaviour helpers: rebindable autoplay-pause key, Edit mode, tile angle.
     internal static class Tweaks
     {
         /* KeyCode (as int) the editor's autoplay-pause check should read. A transpiler in
@@ -22,7 +22,7 @@ namespace Sapphire
             catch { return (int)KeyCode.Space; }
         }
 
-        // ── Editor Mode ─────────────────────────────────────────────────────
+        // ── Edit mode ───────────────────────────────────────────────────────
         // Clean-screen charting: force autoplay on at play start (rising edge only) and
         // fade the editor's corner icons plus the play-test HUD icons/error meter. The
         // Sapphire mode cluster covers those toggles.
@@ -30,7 +30,7 @@ namespace Sapphire
         private static bool _cornersFaded;
         private static int _cornerCooldown;
 
-        // Bismuth interop: Bismuth's overlays/key viewer honor Editor Mode through a
+        // Bismuth interop: Bismuth's overlays/key viewer honor Edit mode through a
         // static hook (`Bismuth.Settings.ExternalEditorSuppress`, Bismuth ≥1.4.0), set via
         // reflection so the dependency stays soft — no-op when Bismuth isn't installed.
         private static System.Reflection.FieldInfo _bismuthSuppress;
@@ -153,6 +153,75 @@ namespace Sapphire
             return _controlsTipFi.GetValue(ed) as UnityEngine.UI.Graphic;
         }
 
+        /* Ctrl+Z relay.
+
+           scnEditor.HandleKeyboardActions returns early whenever userIsEditingAnInputField is
+           true, and that property only asks the shared EventSystem whether the focused object
+           is a focused TMP_InputField — a Sapphire field counts. So every edit made in one of
+           our panels left the caret in a field and silently swallowed undo. The game's own undo
+           stack is fine (our commits go through SaveStateScope, and LevelData.Copy deep-copies
+           every event), it just never got the key.
+
+           Fires ONLY while a Sapphire field holds focus, i.e. exactly when the game refuses —
+           otherwise the game handles the same press and one keystroke would undo twice. */
+        internal static void TickUndoRelay()
+        {
+            if (!Input.GetKeyDown(KeyCode.Z)) return;
+            if (!(Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+               || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand))) return;
+            try
+            {
+                if (!MainClass.MasterSwitchOn) return;
+                var ed = scnEditor.instance;
+                if (ed == null || ed.playMode || !ed.userIsEditingAnInputField) return;
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                var go = es != null ? es.currentSelectedGameObject : null;
+                if (go == null || !IsSapphireOwned(go)) return;   // a game field: leave it alone
+                var f = go.GetComponent<TMP_InputField>();
+                if (f != null) f.DeactivateInputField();
+                es.SetSelectedGameObject(null);
+                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                if (shift) ed.Redo(); else ed.Undo();
+            }
+            catch { }
+        }
+
+        private static bool IsSapphireOwned(GameObject go)
+        {
+            var t = go.transform;
+            while (t.parent != null) t = t.parent;
+            return t.name.StartsWith("Sapphire");
+        }
+
+        /* Tile-key ring off during a playtest. floorButtonContainer is the ring of angle keys
+           around the selected tile (and floorButtonArbitraryContainer its free-angle twin); the
+           editor leaves both up while the song plays, advertising verbs that Patches now
+           refuses. Re-asserted every frame rather than once, because the editor re-shows them
+           on its own schedule. */
+        internal static void TickPlaytestLock()
+        {
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            if (ed == null) { _lockedRing = false; return; }
+            bool want = MainClass.MasterSwitchOn && ed.playMode;
+            if (!want && !_lockedRing) return;
+            _lockedRing = want;
+            try { if (ed.floorButtonContainer != null) SetRing(ed.floorButtonContainer, !want); } catch { }
+            try { if (ed.floorButtonArbitraryContainer != null) SetRing(ed.floorButtonArbitraryContainer, !want); } catch { }
+        }
+
+        private static bool _lockedRing;
+
+        // Alpha + raycast, never SetActive: the editor reads activeSelf to decide what to
+        // re-show, and toggling it underneath desyncs its own state.
+        private static void SetRing(GameObject go, bool on)
+        {
+            var cg = go.GetComponent<CanvasGroup>() ?? go.AddComponent<CanvasGroup>();
+            float a = on ? 1f : 0f;
+            if (cg.alpha != a) cg.alpha = a;
+            if (cg.blocksRaycasts != on) cg.blocksRaycasts = on;
+        }
+
         internal static void TickControlsTip()
         {
             if (_controlsTipMissing) return;
@@ -185,7 +254,7 @@ namespace Sapphire
         }
 
         // StopMod: un-fade the game's corner HUD (difficulty/speed/no-fail/autoplay/error meter) —
-        // Editor Mode fades them per-frame, so a disable mid-fade would otherwise leave them at
+        // Edit mode fades them per-frame, so a disable mid-fade would otherwise leave them at
         // alpha 0 and break the vanilla UI (and other mods) until a scene reload.
         internal static void DisposeEditorMode()
         {
@@ -193,7 +262,7 @@ namespace Sapphire
             _cornerCooldown = 0;
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
-            try { FadeCorners(ed, false); } catch { }
+            try { FadeCorners(ed, false, false); } catch { }
         }
 
         /* PLAY MODE — the playtest preset. Autoplay off, no-fail on (optional), and the whole
@@ -243,20 +312,25 @@ namespace Sapphire
                 playing = ed != null && ed.playMode;
                 var s = MainClass.Settings;
                 active = ed != null && s != null && MainClass.EditorSuiteOn && s.EditorModeActive;
-                if (playing && !_wasEditorPlay && active)
+                if (playing && !_wasEditorPlay && active && s.EditorModeAutoplay)
                     RDC.auto = true;
             }
             catch { }
             _wasEditorPlay = playing;
             SetBismuthSuppress(active);
 
-            if (active)
+            /* The mode cluster carries difficulty / no-fail / autoplay itself and sits in the
+               same screen corner as the game's icons, so the icons are both redundant and
+               overlapping — drop them whenever the cluster is up, not just in editor mode. */
+            bool hud = active;
+            try { hud = active || EditorEvents.ModeClusterVisible; } catch { }
+            if (hud)
             {
                 // Re-assert periodically: the editor recreates these on scene reloads.
                 if (--_cornerCooldown <= 0)
                 {
                     _cornerCooldown = 30;
-                    FadeCorners(ed, true);
+                    FadeCorners(ed, true, active);
                 }
                 _cornersFaded = true;
             }
@@ -264,11 +338,13 @@ namespace Sapphire
             {
                 _cornersFaded = false;
                 _cornerCooldown = 0;
-                FadeCorners(ed, false);
+                FadeCorners(ed, false, false);
             }
         }
 
-        private static void FadeCorners(scnEditor ed, bool fade)
+        // fadeMeter is separate: the hit error meter is worth keeping while play-testing,
+        // so only editor mode drops it.
+        private static void FadeCorners(scnEditor ed, bool fade, bool fadeMeter)
         {
             if (ed != null)
             {
@@ -294,7 +370,7 @@ namespace Sapphire
             try
             {
                 var c = scrController.instance;
-                if (c != null && c.errorMeter != null) FadeCorner(c.errorMeter, fade);
+                if (c != null && c.errorMeter != null) FadeCorner(c.errorMeter, fadeMeter);
             }
             catch { }
         }

@@ -18,7 +18,12 @@
              $(HOME); override with xbuild /p:AdofaiRoot=... for a non-standard install. -->
         <AdofaiRoot Condition=" '$(AdofaiRoot)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice</AdofaiRoot>
         <GameRoot>$(AdofaiRoot)</GameRoot>
-        <AdofaiManaged>$(AdofaiRoot)/ADanceOfFireAndIce.app/Contents/Resources/Data/Managed</AdofaiManaged>
+        <!-- Two directory layouts ship in the wild: the game as a .app bundle, and a plain
+             <exe>_Data folder beside the executable. A Steam update can move an install from one
+             to the other, which presents as every game type suddenly being missing. Prefer
+             whichever actually has Assembly-CSharp.dll. -->
+        <AdofaiManaged Condition=" Exists('$(AdofaiRoot)/ADanceOfFireAndIce_Data/Managed/Assembly-CSharp.dll') ">$(AdofaiRoot)/ADanceOfFireAndIce_Data/Managed</AdofaiManaged>
+        <AdofaiManaged Condition=" '$(AdofaiManaged)' == '' ">$(AdofaiRoot)/ADanceOfFireAndIce.app/Contents/Resources/Data/Managed</AdofaiManaged>
         <!-- Two supported loader layouts. MelonLoader + UMMCompat: HarmonyX 2.10 under
              MelonLoader/net472, the UMM shim under UserLibs/. Native UMM: both live in
              Managed/UnityModManager, with an OLDER Harmony — which is why the code must stay
@@ -26,6 +31,7 @@
         <HarmonyDll Condition=" '$(HarmonyDll)' == '' AND Exists('$(GameRoot)/MelonLoader/net472/0Harmony.dll') ">$(GameRoot)/MelonLoader/net472/0Harmony.dll</HarmonyDll>
         <HarmonyDll Condition=" '$(HarmonyDll)' == '' ">$(AdofaiManaged)/UnityModManager/0Harmony.dll</HarmonyDll>
         <UmmDll Condition=" '$(UmmDll)' == '' AND Exists('$(GameRoot)/UserLibs/UnityModManager.dll') ">$(GameRoot)/UserLibs/UnityModManager.dll</UmmDll>
+        <UmmDll Condition=" '$(UmmDll)' == '' AND Exists('$(AdofaiRoot)/ADanceOfFireAndIce_Data/Managed/UnityModManager/UnityModManager.dll') ">$(AdofaiRoot)/ADanceOfFireAndIce_Data/Managed/UnityModManager/UnityModManager.dll</UmmDll>
         <UmmDll Condition=" '$(UmmDll)' == '' ">$(AdofaiManaged)/UnityModManager/UnityModManager.dll</UmmDll>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -68,6 +74,8 @@
         <Reference Include="UnityEngine"><HintPath>$(AdofaiManaged)/UnityEngine.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.AssetBundleModule"><HintPath>$(AdofaiManaged)/UnityEngine.AssetBundleModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.AudioModule"><HintPath>$(AdofaiManaged)/UnityEngine.AudioModule.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="UnityEngine.UnityWebRequestModule"><HintPath>$(AdofaiManaged)/UnityEngine.UnityWebRequestModule.dll</HintPath><Private>False</Private></Reference>
+        <Reference Include="UnityEngine.UnityWebRequestAudioModule"><HintPath>$(AdofaiManaged)/UnityEngine.UnityWebRequestAudioModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.CoreModule"><HintPath>$(AdofaiManaged)/UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(AdofaiManaged)/UnityEngine.IMGUIModule.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(AdofaiManaged)/UnityEngine.InputLegacyModule.dll</HintPath><Private>False</Private></Reference>
@@ -104,6 +112,8 @@
         <Compile Include="UI\RoundedRectGraphic.cs" />
         <Compile Include="UI\PolyGraphic.cs" />
         <Compile Include="UI\PanelKit.cs" />
+        <Compile Include="UI\UiAnim.cs" />
+        <Compile Include="UI\ColorWheel.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
         <Compile Include="UI\ShapePathGraphic.cs" />
         <Compile Include="UI\Pages\PageFeatures.cs" />
@@ -119,6 +129,8 @@
         <Compile Include="Util\Keybinds.cs" />
         <Compile Include="Util\PanelLayout.cs" />
         <Compile Include="Util\Tweaks.cs" />
+        <Compile Include="Util\AudioAnalysis.cs" />
+        <Compile Include="Util\OffsetSuggest.cs" />
         <Compile Include="Util\ExprEval.cs" />
         <Compile Include="Util\SemVer.cs" />
         <Compile Include="Util\UpdateService.cs" />
@@ -162,6 +174,9 @@
         <Compile Include="Editor\Charting\PseudoBuild.cs" />
         <Compile Include="Editor\Charting\GhostPreview.cs" />
         <Compile Include="Editor\Level\EditorLevelMenu.cs" />
+        <Compile Include="Editor\Level\EditorDecoMenu.cs" />
+        <Compile Include="Editor\Level\EditorChartAnalysis.cs" />
+        <Compile Include="Editor\Level\EditorVisualizer.cs" />
         <Compile Include="Editor\Level\EditorDecoInspector.cs" />
         <Compile Include="Editor\Level\EditorArtistPicker.cs" />
         <Compile Include="Patches\Patches.cs" />

@@ -95,16 +95,22 @@ namespace Sapphire
         [System.Xml.Serialization.XmlIgnore] public bool EditorPopupBox => FeatToolsSapphire;
         [System.Xml.Serialization.XmlIgnore] public bool EditorFileChip => FeatFileBar;
         [System.Xml.Serialization.XmlIgnore] public bool EditorPanelRail => FeatFileBar;
-        // Features tab › Editor mode: clean-screen charting mode — while in the editor, Sapphire overlays
+        // Edit mode: clean-screen charting mode — while in the editor, Sapphire overlays
         // and the key viewer stand down, and the game's difficulty/no-fail/autoplay
         // icons, autoplay text and hit error meter hide (see EditorModeActive / the OR'd
         // Active* accessors). Doesn't touch any of the underlying settings.
-        public bool EditorModeEnabled = false;
+        public bool EditorModeEnabled = true;
+        // Edit mode turns autoplay ON so charting never means playing the chart. That used to be
+        // escapable by selecting NO mode; with only two modes left, this is the escape hatch.
+        public bool EditorModeAutoplay = true;
 
-        /* Play mode: the mirror of Editor mode, for PLAYTESTING rather than charting. Autoplay
+        /* Play mode: the mirror of Edit mode, for PLAYTESTING rather than charting. Autoplay
            off, no-fail on (optional — some charters want to feel the misses), and every Sapphire
            surface hidden except the pitch overlay. The two modes are mutually exclusive: they
            want opposite things from autoplay, so enabling one clears the other. */
+        // Panel open/close motion. Off restores instant show/hide exactly.
+        public bool UiAnimations = true;
+        public bool EditorWaveform = true;
         public bool PlayModeEnabled = false;
         public bool PlayModeNoFail = true;
 
@@ -116,7 +122,7 @@ namespace Sapphire
                 try { return scnEditor.instance != null; } catch { return false; }
             }
         }
-        // Editor Mode only bites inside the editor scene (play-testing included), so
+        // Edit mode only bites inside the editor scene (play-testing included), so
         // normal play is never affected by leaving it on.
         [System.Xml.Serialization.XmlIgnore] public bool EditorModeActive
         {
@@ -125,6 +131,15 @@ namespace Sapphire
                 if (!EditorModeEnabled) return false;
                 try { return scnEditor.instance != null; } catch { return false; }
             }
+        }
+
+        /* Exactly one mode, always. A settings file written before the modes merged can carry
+           neither (or, from a bad write, both); the chip toggles between two states and has no
+           way to express a third, so normalise on load rather than rendering a lie. */
+        internal void NormalizeModes()
+        {
+            if (PlayModeEnabled) { EditorModeEnabled = false; return; }
+            EditorModeEnabled = true;
         }
         // Developer mode: shows [dbg] lines in the log viewer.
         public bool DebugMode = false;

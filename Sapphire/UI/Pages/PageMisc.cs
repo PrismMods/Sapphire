@@ -31,6 +31,9 @@ namespace Sapphire.UI.Pages
             // on screen while its contents grow; see UICore.ApplyScale.
             UIBuilder.Slider(content, Loc.T("UI scale"), s.UiScale, 0.5f, 2f,
                 v => { UICore.ApplyScale(v); notify?.Invoke(); }, "0.00", 0.05f);
+            UIBuilder.Collapsible(content, Loc.T("Panel animations"), s.UiAnimations,
+                v => { s.UiAnimations = v; notify?.Invoke(); },
+                body => UIBuilder.Label(body, Loc.T("UiAnimationsHelp")));
             UIBuilder.AccentSwatches(content, Loc.T("Accent colour"), Theme.AccentPresets,
                 new Color(s.UiAccentR, s.UiAccentG, s.UiAccentB),
                 c => { UICore.ApplyAccent(c); notify?.Invoke(); });

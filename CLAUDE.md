@@ -81,7 +81,7 @@ Fundamentals for any tile/pseudo/shape work. Exhaustive detail lives in memory
 - Docs: keep `docs/FEATURES.md` ⇄ `docs/FEATURES.ko.md` in sync; both carry a top nav header
   (`| English | [한국어](FEATURES.ko.md) |`). Korean prose ends in `-니다` (no fragment+period);
   fixed terms — 동타 (pseudo), 드르륵 (zip), 소용돌이 (twirl), 도형 (shape), 빠른 차팅
-  (quick chart), 각 패드 (angle pad), 가감속 (ease). User-facing UI strings go through
+  (quick chart), 각도 패드 (angle pad), 가감속 (ease). User-facing UI strings go through
   `Loc.T`; add EN→KO pairs in `Util/Loc.cs`.
 - Credits: permission-based ports (named author + repo) live in README's Credits; acknowledge
   inspiration from mods whose author is unknown separately, and don't invent an author/URL.

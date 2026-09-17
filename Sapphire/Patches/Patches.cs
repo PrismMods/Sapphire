@@ -217,6 +217,52 @@ namespace Sapphire
 
         // The editor's A shortcut toggles autoplay — while A is a PAN key (no selection),
         // swallow the toggle entirely (its lambda fires on key-repeat, so post-hoc restores lose).
+        /* A playtest is for LISTENING, not charting: the editor keeps its tile verbs live while
+           the song runs, so a stray key press edits the level you are auditioning. Block the
+           create and delete paths outright while playMode is set — the tile-key ring that offers
+           them is hidden at the same time (Tweaks.TickPlaytestLock). Gated on the master switch
+           so turning Sapphire off restores stock behaviour exactly. */
+        private static bool PlaytestLocked()
+        {
+            try
+            {
+                if (!MainClass.MasterSwitchOn) return false;
+                var ed = scnEditor.instance;
+                return ed != null && ed.playMode;
+            }
+            catch { return false; }
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "CreateFloorWithCharOrAngle")]
+        private static class NoPlaceDuringPlaytestPatch
+        {
+            public static bool Prefix() => !PlaytestLocked();
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "DeleteSingleSelection")]
+        private static class NoDeleteSinglePatch
+        {
+            public static bool Prefix() => !PlaytestLocked();
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "DeleteMultiSelection")]
+        private static class NoDeleteMultiPatch
+        {
+            public static bool Prefix() => !PlaytestLocked();
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "DeleteSubsequentFloors")]
+        private static class NoDeleteSubsequentPatch
+        {
+            public static bool Prefix() => !PlaytestLocked();
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "DeletePrecedingFloors")]
+        private static class NoDeletePrecedingPatch
+        {
+            public static bool Prefix() => !PlaytestLocked();
+        }
+
         [HarmonyPatch(typeof(scnEditor), "ToggleAuto")]
         private static class PanAutoGuardPatch
         {
@@ -268,9 +314,9 @@ namespace Sapphire
             }
         }
 
-        /* Editor Mode hides the autoplay status label. Disabling the Text directly is the
+        /* Edit mode hides the autoplay status label. Disabling the Text directly is the
            safe way — Bismuth's approach of flipping RDC.auto around the update made
-           autoplay turn itself off in the editor. Restores itself: with Editor Mode off
+           autoplay turn itself off in the editor. Restores itself: with Edit mode off
            the component re-enables its own Text next frame. */
         [HarmonyPatch(typeof(scrShowIfDebug), "Update")]
         private static class AutoplayLabelHidePatch

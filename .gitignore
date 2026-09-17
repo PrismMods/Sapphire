@@ -436,3 +436,8 @@ RELEASE_NOTES.md
 
 # tester zips
 Sapphire-*.zip
+
+# harness virtualenv and generated data
+tools/tempo-harness/.venv/
+tools/tempo-harness/osu_audio/
+tools/tempo-harness/*.npy

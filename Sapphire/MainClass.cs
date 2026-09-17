@@ -44,6 +44,8 @@ namespace Sapphire
         private static bool _deferredApplyPending;
         private static bool _forceReloadPending;
         private static GameObject _tickerGo;
+        // A MonoBehaviour any module can hang a coroutine on (audio decode, for one).
+        internal static MonoBehaviour Runner;
 
         internal static void Setup(UnityModManager.ModEntry modEntry)
         {
@@ -51,6 +53,7 @@ namespace Sapphire
             ModPath = modEntry.Path;
             try { ModVersion = modEntry.Info.Version; } catch { ModVersion = ""; }
             Settings = Settings.Load<Settings>(modEntry);
+            Settings.NormalizeModes();   // EDIT or PLAY, never neither
             Settings.EnsureDefaults();
             modEntry.OnToggle = OnToggle;
             modEntry.OnGUI = OnGUI;
@@ -155,7 +158,7 @@ namespace Sapphire
             if (_tickerGo != null) return;
             _tickerGo = new GameObject("SapphireTicker");
             UnityEngine.Object.DontDestroyOnLoad(_tickerGo);
-            _tickerGo.AddComponent<SapphireTicker>();
+            Runner = _tickerGo.AddComponent<SapphireTicker>();
         }
 
         private class SapphireTicker : MonoBehaviour
@@ -206,7 +209,8 @@ namespace Sapphire
             private static readonly List<UnityEngine.UI.Graphic> _censusBuf = new List<UnityEngine.UI.Graphic>();
             private static readonly double[] _perfMs = new double[28];
             private static readonly double[] _perfMax = new double[28];
-            private static int _perfFrames;
+        private static bool _leftTabsReg;
+        private static int _perfFrames;
 
             /* Lap timer: banks the elapsed slice into module i (no allocations). Reads the raw
                timestamp once per lap instead of Elapsed + Restart (two platform timer reads,
@@ -238,7 +242,7 @@ namespace Sapphire
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickPlayMode();
-                Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Acc(0);
+                Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Tweaks.TickUndoRelay(); Tweaks.TickPlaytestLock(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
                 EditorChrome.Tick(); Acc(3);
                 EditorInspector.Tick(); Acc(4);
@@ -249,6 +253,9 @@ namespace Sapphire
                 EditorCameraPath.Tick(); Acc(9);
                 EditorPitch.Tick(); Acc(10);
                 EditorLevelMenu.Tick(); Acc(11);
+                EditorDecoMenu.Tick();
+                EditorVisualizer.Tick();
+                EditorChartAnalysis.Tick();
                 EditorDecoInspector.Tick();
                 EditorArtistPicker.Tick();
                 EditorGameSettings.Tick(); Acc(12);
@@ -265,6 +272,7 @@ namespace Sapphire
                 EditorEventPanel.Tick(); Acc(24);
                 EditorBulkEdit.Tick();
                 EditorEventSelector.Tick(); Acc(25);
+                UI.ColorWheel.Tick();
                 UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
                 EditorQuickChart.Tick(); Acc(26);
                 EditorHzTool.Tick();
@@ -278,6 +286,47 @@ namespace Sapphire
                 // chrome (dividers / drop indicator / canvas) down — gating it on EditorSuiteOn
                 // left that chrome stranded on screen.
                 {
+                    /* Which panels CAN live on the sidebar rail. Events and Level settings start
+                       there; the rest join by being dragged onto the sidebar and leave the same
+                       way. A panel absent from this table still docks the old stacked way — it
+                       just has no open flag PanelKit could drive from a tab. */
+                    if (!_leftTabsReg)
+                    {
+                        _leftTabsReg = true;
+                        UI.PanelKit.RegisterTabbable(EditorEventSelector.Kit, Loc.T("Events"),
+                            EditorEventSelector.TabAvailable,
+                            () => EditorEventSelector.IsOpen, EditorEventSelector.SetOpen, true);
+                        UI.PanelKit.RegisterTabbable(EditorLevelMenu.Kit, Loc.T("Level settings"),
+                            EditorLevelMenu.TabAvailable,
+                            () => EditorLevelMenu.IsOpen, EditorLevelMenu.SetOpen, true);
+                        UI.PanelKit.RegisterTabbable(EditorDecoMenu.Kit, Loc.T("Decorations"),
+                            EditorDecoMenu.TabAvailable,
+                            () => EditorDecoMenu.IsOpen, EditorDecoMenu.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorVisualizer.Kit, Loc.T("Audio"),
+                            EditorVisualizer.TabAvailable,
+                            () => EditorVisualizer.IsOpen, EditorVisualizer.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorChartAnalysis.Kit, Loc.T("Chart analysis"),
+                            EditorChartAnalysis.TabAvailable,
+                            () => EditorChartAnalysis.IsOpen, EditorChartAnalysis.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorShapeLibrary.Kit, Loc.T("Shape library"), null,
+                            () => EditorShapeLibrary.IsOpen, EditorShapeLibrary.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorMagicShape.Kit, Loc.T("Magic Shape"), null,
+                            () => EditorMagicShape.IsOpen, EditorMagicShape.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorTrackTools.Kit, Loc.T("Track Tools"), null,
+                            () => EditorTrackTools.IsOpen, EditorTrackTools.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorDecoTools.Kit, Loc.T("Deco Tools"), null,
+                            () => EditorDecoTools.IsOpen, EditorDecoTools.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorHzTool.Kit, Loc.T("Hz tool"), null,
+                            () => EditorHzTool.IsOpen, EditorHzTool.SetOpen);
+                    }
+                    bool rails = false;
+                    try
+                    {
+                        var red = scnEditor.instance;
+                        rails = EditorSuiteOn && red != null && !red.playMode;
+                    }
+                    catch { }
+                    UI.PanelKit.RailsEnabled = rails;
                     float below = 0f;
                     try { below = EditorEvents.BottomChromeTop; } catch { }
                     UI.PanelKit.TickDocks(56f, below > 0f ? below : 12f);
@@ -386,6 +435,10 @@ namespace Sapphire
             EditorCameraPath.Dispose();
             EditorPitch.Dispose();
             EditorLevelMenu.Dispose();
+            EditorDecoMenu.Dispose();
+            EditorVisualizer.Dispose();
+            EditorChartAnalysis.Dispose();
+            UI.ColorWheel.Dispose();
             EditorDecoInspector.Dispose();
             EditorArtistPicker.Dispose();
             EditorBulkEdit.Dispose();

@@ -514,14 +514,20 @@ namespace Sapphire
             }),
             new Cat("Chrome", "크롬", new[]
             {
-                "FileChip", "SettingsChip", "LevelSettingsChip", "GameSettingsChip", "LeaveChip",
+                "FileChip", "SettingsChip", "GameSettingsChip", "LeaveChip",
                 "HelpChip", "SapphireMasterSwitch", "SapphireEditorChrome", "SapphireToolbar",
             }),
         };
 
-        // ── documentation ───────────────────────────────────────────────────
-        // key → (title, body). Keys are GameObject names (specific) or root canvas names
-        // (per-feature fallback). KEEP CURRENT when features change.
+        /* ── documentation ───────────────────────────────────────────────────
+           key → (title, body). Keys are GameObject names (specific) or root canvas names
+           (per-feature fallback). KEEP CURRENT when features change.
+
+           Bodies are verbatim (@"…") literals, so what you see in the file is what the panel
+           shows: real line breaks, a blank line for a paragraph break, <b>…</b> for bold. The
+           one escape is a double quote, written "". Entries are grouped in the same order as
+           Index above, so the file reads like the Contents list. Korean lives in
+           EditorHelpKo.cs under the same keys and the same grouping. */
         private static readonly Dictionary<string, KeyValuePair<string, string>> Topics = Build();
 
         // en/ko variants picked once at table build (language changes need a rebuild = relaunch).
@@ -539,143 +545,386 @@ namespace Sapphire
         private static Dictionary<string, KeyValuePair<string, string>> Build()
         {
             var d = new Dictionary<string, KeyValuePair<string, string>>();
-            Add(d, "__intro", "Help mode",
-"<b>What this is</b>\nBrowse every tool and panel from the <b>Contents</b> list on the left — click an entry to read its docs here.\n\nOr point at any Sapphire control: it highlights, and clicking it jumps straight to its documentation.\n\n<b>Keys</b>\nESC — exit help mode.");
 
-            Add(d, "AnglePad", "Angle pad",
-"<b>What it does</b>\nAppends a whole run of tiles from a line of RELATIVE angles (the charter convention: 180 = straight, 90 = quarter turn, 0 = U-turn). Quick chart keeps one pad open at all times.\n\n<b>Syntax</b>\nSpace-separated angles. Maths works per value — 180-30, 360/8, 2*45. A trailing <b>t</b> twirls that tile: 30t 30t 180. Parenthesised groups repeat with *: (30t 150 180)*4, and groups can nest.\n\n<b>Buttons</b>\nSwirl — invert the very first tile's twirl, for the FIRST repetition only. It does not touch what you typed: a twirl in the expression is part of the SHAPE, so rewriting it would change every repetition and the run would stop being that shape. What this says is narrower — the path already enters turning the right way, so the leading twirl is redundant this once. It lights up while it is on.\n+ — duplicate this pad, carrying its text and repeat count (each pad is a scratch preset).\n× n — lay the expression down n times. Separate from (…)*n on purpose: as a count the expression stays one UNIT, so flipping its leading twirl costs only the FIRST pass, and the spin carries into the rest.\nAdd to Shape Library — save the run (repeats included) under Non-repeating shapes.\nPlace — build it onto the selected tile, in one undo.\n\n<b>Keys</b>\nShift+G — new pad. Enter — Place (with several pads open, Enter arms a pick and the digit keys choose one).");
+            Add(d, "__intro", "Help mode",
+@"<b>What this is</b>
+Browse every tool and panel from the <b>Contents</b> list on the left — click an entry to read its docs here.
+
+Or point at any Sapphire control: it highlights, and clicking it jumps straight to its documentation.
+
+<b>Keys</b>
+ESC — exit help mode.");
+
+            // ── Tools ─────────────────────────────────────────────────────
 
             Add(d, "ToolCircle", "Circular path",
-"<b>What it does</b>\nGenerates stars, circles and midspin-circles after the selected tile (Star Calculator parameters).\n\n<b>How to use</b>\nSelect a tile, open the tool, set Pseudo per round / interval / angle, optional Reverse, Keep BPM, mid-spin. Apply builds in one undo.\n\n<b>Keys</b>\n1 — open (no tile selected).");
+@"<b>What it does</b>
+Generates stars, circles and midspin-circles after the selected tile (Star Calculator parameters).
+
+<b>How to use</b>
+Select a tile, open the tool, set Pseudo per round / interval / angle, optional Reverse, Keep BPM, mid-spin. Apply builds in one undo.
+
+<b>Keys</b>
+1 — open (no tile selected).");
 
             Add(d, "ToolFreeAngle", "Free angle",
-"<b>What it does</b>\nAim the next tile freely with the mouse.\n\n<b>How to use</b>\nToggle the tool (or hold left-Alt) with a single tile selected; the preview follows the cursor. Left-click places. Leaving without placing reverts the preview.\n\n<b>Keys</b>\n2 — toggle (no tile selected). Left-Alt — hold for quick use.");
+@"<b>What it does</b>
+Aim the next tile freely with the mouse.
+
+<b>How to use</b>
+Toggle the tool (or hold left-Alt) with a single tile selected; the preview follows the cursor. Left-click places. Leaving without placing reverts the preview.
+
+<b>Keys</b>
+2 — toggle (no tile selected). Left-Alt — hold for quick use.");
 
             Add(d, "ToolPseudo", "Pseudo",
-"<b>What it does</b>\nConverts tiles into pseudos (multi-hit tiles). Beat-neutral: a pseudo replaces one beat with K hits.\n\n<b>How to use</b>\nSingle tile: with the tool on, click the selected tile again to convert. Multi-select: a dialog offers interval + style (Upwards / Sideways / Inline) — pseudos are added ON TOP of the selected path.\n\n<b>Submenu</b>\nKey count (buttons or typed), tap angle presets + custom field, Midspin toggle (interleaved tap+midspin pairs), Custom per-tile angles.\n\n<b>Keys</b>\n3 — toggle (no tile selected). Digits set the key count while active.");
+@"<b>What it does</b>
+Converts tiles into pseudos (multi-hit tiles). Beat-neutral: a pseudo replaces one beat with K hits.
 
-            Add(d, "ToolCamera", "Camera path",
-"<b>What it does</b>\nOverlays every MoveCamera keyframe: cyan dots (orange = player-relative) joined by dotted lines.\n\n<b>How to use</b>\nClick a dot for its details card and the framed-area box. ▶ on the card previews that move with its real duration and ease.\n\n<b>Submenu</b>\n▶ Play all — run the whole sequence. ▶ Sel — from the selected keyframe. Gaps — wait out the real beat gaps between events.\n\n<b>Keys</b>\n9 — toggle (no tile selected).");
+<b>How to use</b>
+Single tile: with the tool on, click the selected tile again to convert. Multi-select: a dialog offers interval + style (Upwards / Sideways / Inline) — pseudos are added ON TOP of the selected path.
 
-            Add(d, "ToolVfx", "VFX preview",
-"<b>What it does</b>\nHides ALL UI — Sapphire and the game's — for a clean view of the level. Stays hidden through play-testing.\n\n<b>Keys</b>\n0 — toggle (no tile selected). ESC — exit (the only way out; the toolbar is hidden too).");
+<b>Submenu</b>
+Key count (buttons or typed), tap angle presets + custom field, Midspin toggle (interleaved tap+midspin pairs), Custom per-tile angles.
 
-            Add(d, "ToolInspector", "Inspector",
-"<b>What it does</b>\nEvent format-painter: copy one tile's events, paste onto others.\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to CAPTURE its events. Right-click any tile to PASTE. The panel that appears is the paste filter — untick types you don't want pasted.\n\n<b>Keys</b>\n8 — toggle (no tile selected).");
+<b>Keys</b>
+3 — toggle (no tile selected). The key count comes from the submenu.");
 
             Add(d, "ToolZip", "Zip",
-"<b>What it does</b>\nReplaces a tile with a zip — a run of redirecting tiles + swirls totalling 360° (8k = 45° per tile).\n\n<b>How to use</b>\nWith the tool on, click the selected tile again to zip it. The submenu picks the key count (from 4k) and the total duration in beats (default 2 = 360°).\n\n<b>Keys</b>\n4 — toggle (no tile selected). Digits 4–8 set the key count while active.");
+@"<b>What it does</b>
+Replaces a tile with a zip — a run of redirecting tiles + swirls totalling 360° (8k = 45° per tile).
+
+<b>How to use</b>
+With the tool on, click the selected tile again to zip it. The submenu picks the key count (from 4k) and the total duration in beats (default 2 = 360°).
+
+<b>Keys</b>
+4 — toggle (no tile selected). The key count comes from the submenu.");
 
             Add(d, "ToolMagic", "Magic shape",
-"<b>What it does</b>\nMagic-circle toolkit: MULTIPLY retimes the selection so every hit lands at a target BPM (or ×multiplier, or reshapes the angles instead), CREATE sweeps a tile range into an N-vertex shape with a ghost preview, ROTATE offsets tile angles across a range.\n\n<b>How to use</b>\nOpen the panel, pick a tab, set the range (Sel = selection, All = whole level) and Apply. Errors show in the status line.\n\n<b>Keys</b>\n5 — toggle (no tile selected).\n\n<b>Credits</b>\nMagicShapeMultiply (tjwogud, JofoDuh) + MappingHelper (Sprout34).");
+@"<b>What it does</b>
+Magic-circle toolkit: MULTIPLY retimes the selection so every hit lands at a target BPM (or ×multiplier, or reshapes the angles instead), CREATE sweeps a tile range into an N-vertex shape with a ghost preview, ROTATE offsets tile angles across a range.
+
+<b>How to use</b>
+Open the panel, pick a tab, set the range (Sel = selection, All = whole level) and Apply. Errors show in the status line.
+
+<b>Keys</b>
+5 — toggle (no tile selected).
+
+<b>Credits</b>
+MagicShapeMultiply (tjwogud, JofoDuh) + MappingHelper (Sprout34).");
 
             Add(d, "ToolTrack", "Track tools",
-"<b>What it does</b>\nTrack VFX generators: FADE IN/OUT (randomized MoveTrack animations), EXPLODE (rippling shockwave), SIZE (eased scale ramps), MULTI (decoration copies of the track ± fake planets, and animating tagged copies), GENERATE (append tiles from an angle string, T = twirl, with ghost preview).\n\n<b>How to use</b>\nPick a tab, set the tile range, tune the randomization rows (click a row label to enable/disable it) and Apply — one undo step.\n\n<b>Keys</b>\n6 — toggle (no tile selected).\n\n<b>Credits</b>\nMappingHelper (Sprout34).");
+@"<b>What it does</b>
+Track VFX generators: FADE IN/OUT (randomized MoveTrack animations), EXPLODE (rippling shockwave), SIZE (eased scale ramps), MULTI (decoration copies of the track ± fake planets, and animating tagged copies), GENERATE (append tiles from an angle string, T = twirl, with ghost preview).
+
+<b>How to use</b>
+Pick a tab, set the tile range, tune the randomization rows (click a row label to enable/disable it) and Apply — one undo step.
+
+<b>Keys</b>
+6 — toggle (no tile selected).
+
+<b>Credits</b>
+MappingHelper (Sprout34).");
 
             Add(d, "ToolDeco", "Deco tools",
-"<b>What it does</b>\nDecoration generators: FLIPBOOK (image-sequence folder → animated decoration), EXTRACT (video → frame folder), 3D STACK (N lerped decoration copies with a color gradient), LYRICS (text parts as game text or font-rendered PNGs, with appear/disappear moves).\n\n<b>How to use</b>\nSave the level first — file paths are relative to the level folder. Pick a tab, fill the fields and Apply.\n\n<b>Keys</b>\n7 — toggle (no tile selected).\n\n<b>Credits</b>\nMappingHelper (Sprout34).");
+@"<b>What it does</b>
+Decoration generators: FLIPBOOK (image-sequence folder → animated decoration), EXTRACT (video → frame folder), 3D STACK (N lerped decoration copies with a color gradient), LYRICS (text parts as game text or font-rendered PNGs, with appear/disappear moves).
+
+<b>How to use</b>
+Save the level first — file paths are relative to the level folder. Pick a tab, fill the fields and Apply.
+
+<b>Keys</b>
+7 — toggle (no tile selected).
+
+<b>Credits</b>
+MappingHelper (Sprout34).");
+
+            Add(d, "ToolInspector", "Inspector",
+@"<b>What it does</b>
+Event format-painter: copy one tile's events, paste onto others.
+
+<b>How to use</b>
+With the tool on, click the selected tile again to CAPTURE its events. Right-click any tile to PASTE. The panel that appears is the paste filter — untick types you don't want pasted.
+
+<b>Keys</b>
+8 — toggle (no tile selected).");
+
+            Add(d, "ToolCamera", "Camera path",
+@"<b>What it does</b>
+Overlays every MoveCamera keyframe: cyan dots (orange = player-relative) joined by dotted lines.
+
+<b>How to use</b>
+Click a dot for its details card and the framed-area box. ▶ on the card previews that move with its real duration and ease.
+
+<b>Submenu</b>
+▶ Play all — run the whole sequence. ▶ Sel — from the selected keyframe. Gaps — wait out the real beat gaps between events.
+
+<b>Keys</b>
+9 — toggle (no tile selected).");
+
+            Add(d, "ToolVfx", "VFX preview",
+@"<b>What it does</b>
+Hides ALL UI — Sapphire and the game's — for a clean view of the level. Stays hidden through play-testing.
+
+<b>Keys</b>
+0 — toggle (no tile selected). ESC — exit (the only way out; the toolbar is hidden too).");
 
             Add(d, "ToolBar", "Toolbox",
-"<b>What it does</b>\nThe Sapphire tool strip, grouped by function: build (curved path, free angle, pseudo, zip, magic shape) · generate (track tools, deco tools) · events (inspector) · view (camera path, VFX preview). Hover a tool for a hint below the bar; click a tool's icon here in help mode for its full docs.\n\n<b>Keys</b>\nDigits 1–0 select tools when no tile is selected.");
+@"<b>What it does</b>
+The Sapphire tool strip, grouped by function: build (curved path, free angle, pseudo, zip, magic shape) · generate (track tools, deco tools) · events (inspector) · view (camera path, VFX preview). Hover a tool for a hint below the bar; click a tool's icon here in help mode for its full docs.
+
+<b>Keys</b>
+Digits 1–0 select tools when no tile is selected.");
 
             Add(d, "PseudoMenu", "Pseudo submenu",
-"<b>What it does</b>\nSettings for the pseudo tool.\n\n<b>Rows</b>\nKeys — hit count (buttons, or type any N). Midspin — interleaved tap+midspin construction (exact return to course). Angle — tap angle presets + free field. Custom — space-separated per-tile angles (overrides Keys).");
+@"<b>What it does</b>
+Settings for the pseudo tool.
+
+<b>Rows</b>
+Keys — hit count (buttons, or type any N). Midspin — interleaved tap+midspin construction (exact return to course). Angle — tap angle presets + free field. Custom — space-separated per-tile angles (overrides Keys).");
 
             Add(d, "ZipMenu", "Zip submenu",
-"<b>What it does</b>\nParameters for the zip tool.\n\n<b>Keys</b> — hit count, minimum 4.\n<b>Beats</b> — total sweep duration; 2 beats = 360° (the default). Each tile's charter = beats×180/N (2-beat 8k = 45°).");
+@"<b>What it does</b>
+Parameters for the zip tool.
 
-            Add(d, "CameraMenu", "Camera playback",
-"<b>What it does</b>\nPlays the camera keyframe sequence on the overlay.\n\n<b>Buttons</b>\n▶ Play all — from the first keyframe. ▶ Sel — from the selected one. Gaps — hold each keyframe until the next event's real song time (cutting long tweens short, like the game would).");
+<b>Keys</b> — hit count, minimum 4.
+<b>Beats</b> — total sweep duration; 2 beats = 360° (the default). Each tile's charter = beats×180/N (2-beat 8k = 45°).");
 
-            Add(d, "ToolLabel", "Current tool",
-"<b>What it does</b>\nShows the active tool (pseudo key count, event tool name, …). The ? beside it opens help mode.");
+            // ── Panels ────────────────────────────────────────────────────
 
-            Add(d, "Help", "Help button",
-"<b>What it does</b>\nOpens this interactive help mode.");
+            Add(d, "AnglePad", "Angle pad",
+@"<b>What it does</b>
+Appends a whole run of tiles from a line of RELATIVE angles (the charter convention: 180 = straight, 90 = quarter turn, 0 = U-turn). Quick chart keeps one pad open at all times.
 
-            Add(d, "FileChip", "File menu",
-"<b>What it does</b>\nReplaces the game's file bar: level name + unsaved dot; click for New / Open / Open Recent / Save / …\n\n<b>Note</b>\nAll entries proxy the game's own buttons — shortcuts still work.");
+<b>Syntax</b>
+Space-separated angles. Maths works per value — 180-30, 360/8, 2*45. A trailing <b>t</b> twirls that tile: 30t 30t 180. Parenthesised groups repeat with *: (30t 150 180)*4, and groups can nest.
 
-            Add(d, "SettingsChip", "Editor preferences",
-"<b>What it does</b>\nOpens ADOFAI's editor preferences panel.");
+<b>Buttons</b>
+Swirl — invert the very first tile's twirl, for the FIRST repetition only. It does not touch what you typed: a twirl in the expression is part of the SHAPE, so rewriting it would change every repetition and the run would stop being that shape. What this says is narrower — the path already enters turning the right way, so the leading twirl is redundant this once. It lights up while it is on.
++ — duplicate this pad, carrying its text and repeat count (each pad is a scratch preset).
+× n — lay the expression down n times. Separate from (…)*n on purpose: as a count the expression stays one UNIT, so flipping its leading twirl costs only the FIRST pass, and the spin carries into the rest.
+Add to Shape Library — save the run (repeats included) under From Angle Pad.
+Place — build it onto the selected tile, in one undo.
 
-            Add(d, "LevelSettingsChip", "Level settings",
-"<b>What it does</b>\nOpens the level settings (song, level, track, background, camera, …) in a wide popup with a labeled tab rail.\n\n<b>Keys</b>\nESC closes (background clicks don't).");
-
-            Add(d, "GameSettingsChip", "Game settings",
-"<b>What it does</b>\nOpens the game's own settings screen (the pause-menu settings) from the editor.");
-
-            Add(d, "LeaveChip", "Leave editor",
-"<b>What it does</b>\nExits the editor (proxies the game's exit button).");
-
-            Add(d, "HelpChip", "Help",
-"<b>What it does</b>\nOpens this interactive help mode.");
+<b>Keys</b>
+Shift+G — new pad. Enter — Place (with several pads open, Enter arms a pick and the digit keys choose one).");
 
             Add(d, "EventDock", "Event palette",
-"<b>What it does</b>\nThe event palette as persistent TOOLS: pick an event, then stamp it on tiles repeatedly.\n\n<b>How to use</b>\nLeft column switches category. Click an event to select it as the tool. RIGHT-click tiles to stamp rapidly; LEFT-click selects a tile first, a second click stamps.\n\n<b>Keys</b>\nWith a tile selected: digits 1–9 pick the nth event of the current category, Enter stamps it. ESC deselects the tool.");
+@"<b>What it does</b>
+The event palette as persistent TOOLS: pick an event, then stamp it on tiles repeatedly.
 
-            Add(d, "SapphireEditorChrome", "Editor chrome",
-"<b>What it does</b>\nThe file header strip and event palette — Sapphire replacements for the game's editor chrome. Click a specific control for details.");
+<b>How to use</b>
+Left column switches category. Click an event to select it as the tool. RIGHT-click tiles to stamp rapidly; LEFT-click selects a tile first, a second click stamps.
 
-            Add(d, "SapphireToolbar", "Toolbox",
-"<b>What it does</b>\nThe Sapphire tool strip and its submenus. Click a specific tool icon for details.\n\n<b>Keys</b>\nDigits 1–0 select tools when no tile is selected.");
-
-            Add(d, "SapphireEditorEvents", "Timeline",
-"<b>What it does</b>\nEvent timeline on real song time: markers by category, playhead, zoom, transport (play/rewind · clock · BPM), mode cluster (EDITOR / difficulty / NO FAIL / AUTO).\n\n<b>How to use</b>\nClick a marker — jumps to its tile and opens that exact event. Click empty strip — moves the playhead (drag to scrub). Wheel pans when zoomed.\n\n<b>Modes</b>\nThe mode button under the zoom controls switches between NORMAL / CAM / DECO / FILTER — the CDF workspaces. In help mode, click that button for details; the CAM workspace guide covers keyframe editing.\n\n<b>Keys</b>\nThe centre-bottom arrow folds/expands the strip; drag the strip's TOP EDGE to resize lane height.");
-
-            Add(d, "SapphireTimelineFold", "Timeline fold",
-"<b>What it does</b>\nFolds the timeline away / brings it back. Points down when open, up when folded.");
-
-            Add(d, "SapphireEventTabs", "Event tab rail",
-"<b>What it does</b>\nThe selected tile's events as icon tabs.\n\n<b>How to use</b>\nClick a tab to open that event; right-click deletes it. With several events of one type, numbered chips appear — click a number to jump straight to that instance.");
-
-            Add(d, "SapphireCopyPanel", "Mirror & selective copy",
-"<b>What it does</b>\nAppears with 2+ tiles selected.\n\n<b>Mirror</b>\nFlips the selection AND mirrors decoration/event positions (the vanilla flip doesn't). Preserve beats adds a twirl on the first tile.\n\n<b>Copy</b>\nPer-category / per-type checkboxes choose what a copy carries. Copy, then paste normally.\n\n<b>Inspector mode</b>\nWhile the Inspector tool holds a capture, this panel becomes its paste filter.");
-
-            Add(d, "SapphirePitch", "Practice pitch",
-"<b>What it does</b>\nPractice-only playback speed — song and hitsounds together. Never touches the saved level.\n\n<b>How to use</b>\nSet a % (or ±10 with ‹ ›). Takes effect when playback starts. Reset returns to normal.");
-
-            Add(d, "SapphireMasterSwitch", "Master switch",
-"<b>What it does</b>\nTurns the whole Sapphire editor suite on/off. Off restores all vanilla UI; the switch itself stays so you can come back.");
+<b>Keys</b>
+With a tile selected: digits 1–9 pick the nth event of the current category, Enter stamps it. ESC deselects the tool.");
 
             Add(d, "SapphireLevelMenu", "Level settings popup",
-"<b>What it does</b>\nThe game's level-settings panel, hosted wide with a labeled tab rail. The game owns every field — Sapphire only hosts it.\n\n<b>Keys</b>\nESC closes.");
+@"<b>What it does</b>
+The game's level-settings panel, hosted wide with a labeled tab rail. The game owns every field — Sapphire only hosts it.
 
-            Add(d, "SapphireCameraCard", "Camera keyframe card",
-"<b>What it does</b>\nDetails for the selected camera keyframe: floor, relativeTo, offset, zoom, rotation, duration, ease. ▶ previews the move on the overlay box.");
+<b>Keys</b>
+ESC closes.");
 
-            Add(d, "SapphireTileMenu", "Tile menu",
-"<b>What it does</b>\nRight-click a tile: Copy / Cut / Paste / Delete / Rotate.\n\n<b>Note</b>\nWhile an event or Inspector tool is active, right-click belongs to that tool instead.");
+            Add(d, "SapphireCopyPanel", "Mirror & selective copy",
+@"<b>What it does</b>
+Appears with 2+ tiles selected.
+
+<b>Mirror</b>
+Flips the selection AND mirrors decoration/event positions (the vanilla flip doesn't). Preserve beats adds a twirl on the first tile.
+
+<b>Copy</b>
+Per-category / per-type checkboxes choose what a copy carries. Copy, then paste normally.
+
+<b>Inspector mode</b>
+While the Inspector tool holds a capture, this panel becomes its paste filter.");
 
             Add(d, "SapphirePresets", "Event presets",
-"<b>What it does</b>\nNamed bundles of events, applied per tile via the Inspector tool.\n\n<b>How to use</b>\nCapture a tile (Inspector), then + Save capture. Click a preset to load it as the capture — stamp tiles as usual. Right-click a row to rename, × deletes.\n\n<b>Note</b>\nPresets persist across sessions.");
+@"<b>What it does</b>
+Named bundles of events, applied per tile via the Inspector tool.
+
+<b>How to use</b>
+Capture a tile (Inspector), then + Save capture. Click a preset to load it as the capture — stamp tiles as usual. Right-click a row to rename, × deletes.
+
+<b>Note</b>
+Presets persist across sessions.");
+
+            Add(d, "SapphireCameraCard", "Camera keyframe card",
+@"<b>What it does</b>
+Details for the selected camera keyframe: floor, relativeTo, offset, zoom, rotation, duration, ease. ▶ previews the move on the overlay box.");
 
             Add(d, "SapphireEasePicker", "Ease picker",
-"<b>What it does</b>\nPicks an ease with VISUAL curve previews — every curve is plotted from the game's own runtime easing, overshoots included.\n\n<b>How to use</b>\nRight-click a keyframe in the timeline's CAM mode. The current ease is highlighted; click a cell to apply (undo works). The Custom cell opens the bezier editor. ESC or clicking outside closes.");
+@"<b>What it does</b>
+Picks an ease with VISUAL curve previews — every curve is plotted from the game's own runtime easing, overshoots included.
 
-            Add(d, "CamMode", "Timeline mode menu",
-"<b>What it does</b>\nSwitches the strip between the CDF workspaces: NORMAL (all events by category), CAM (camera keyframes), DECO (decoration events, lanes = the tags visible in the current view, top 8 by use), FILTER (SetFilter events, lanes per filter).\n\n<b>Deco / Filter</b>\nSame bar view as CAM: tweens as duration bars, whole bar clickable, right-click = ease picker. Lanes follow the view — pan to see other tags.");
+<b>How to use</b>
+Right-click a keyframe in the timeline's CAM mode. The current ease is highlighted; click a cell to apply (undo works). The Custom cell opens the bezier editor. ESC or clicking outside closes.");
 
-            Add(d, "Lane", "CAM mode — camera keyframe workspace",
-"<b>Layout</b>\nOne layer per property: Position / Rotation / Zoom. Tweens draw as duration bars (head, body to the end beat, cap); duration-0 SET keyframes are thin ticks. A set tick and a tween starting together are a pair.\n\n<b>Selecting</b>\nClick anywhere on a bar (whole body counts) — the keyframe turns white, its tile is selected, and an inline row of editable fields opens at the top of the strip.\n\n<b>Retiming</b>\nClick a LANE LABEL (e.g. Zoom) to expand its diamond sub-row — dragging happens only there. Pairs fan apart so each diamond stays clickable; a ghost diamond follows the cursor. Retiming one property of an event that carries several SPLITS it into its own event (one undo).\n\n<b>Creating</b>\nRIGHT-click EMPTY lane space = new set keyframe for that property at that tile, carrying the current value.\n\n<b>More</b>\nRIGHT-click a keyframe = visual ease picker. GRAPH button (or the row's Graph button) = AE-style graph editor. ESC deselects.");
+            Add(d, "SapphireTileMenu", "Tile menu",
+@"<b>What it does</b>
+Right-click a tile: Copy / Cut / Paste / Delete / Rotate.
 
-            Add(d, "CamInspector", "Inline keyframe fields",
-"<b>What it does</b>\nEditable fields for the selected keyframe: duration (beats), position X/Y, rotation, zoom — plus Ease and Graph buttons.\n\n<b>How to use</b>\nType a value to set AND enable that property; CLEAR a field to disable it (the panel's on/off toggle equivalent). Every commit is one undo step.");
-
-            Add(d, "GraphBtn", "GRAPH button",
-"<b>What it does</b>\nOpens the AE-style graph editor on the current view — no selection needed. With a keyframe selected it focuses on that tween instead.");
-
-            Add(d, "SapphireGraph", "Graph editor",
-"<b>What it does</b>\nAn After-Effects-style value graph for camera properties: the property's value over song time, drawn through each tween's REAL runtime easing, keyframes as diamonds.\n\n<b>How to use</b>\nOpen from the GRAPH button under the timeline's zoom controls (whole level view) or from a keyframe's inline row (focused on that keyframe). Tabs: Position (X and Y overlaid), X, Y, Rotation, Zoom; axes show values with units and beats. WHEEL over the plot zooms time; over the LEFT margin it zooms the value axis. Dragging empty plot pans in BOTH directions (vertical pan switches the value axis to manual scale). In the Position tab the X·Y button links the coordinate pair: linked (default) retimes both together on one event; unlinked, components split into their own events when retimed. Click a diamond to select (the view focuses on it), DRAG vertically to change the value, horizontally to retime — one undo per drag. Right-click a diamond for the ease picker.\n\n<b>Window</b>\nDrag the Graph View header to move the window; drag any edge or corner to resize.\n\n<b>Keys</b>\nESC or × closes.");
-
-            Add(d, "SapphireBezier", "Custom bezier",
-"<b>What it does</b>\nA fully custom easing curve for a camera tween. The game can't play one natively, so Apply DECOMPOSES the tween into short Linear segments (default 10) sampling your curve — one undo reverts it.\n\n<b>How to use</b>\nDrag the two control points; baselines mark 0 and 1 (overshoot allowed). Needs an EARLIER keyframe of the same property to read the start value from — the duration-0 set partner of a pair works.");
+<b>Note</b>
+While an event or Inspector tool is active, right-click belongs to that tool instead.");
 
             Add(d, "SapphireFilterPicker", "Filter manager",
-"<b>What it does</b>\nManages a filter event end to end: search + category rail + card grid for ~300 advanced filters (legacy SetFilter events get the game's localized filter list instead), a parameter editor for the active filter, and delete.\n\n<b>How to use</b>\nOpen a SetFilter/SetFilterAdvanced event — a Filters… chip appears by the panel. Clicking a card APPLIES it immediately (undo works) and keeps the manager open for auditioning. The right column edits the active filter's parameters — empty field = not overridden — and Delete event removes the event (undoable). Hovering a card previews its parameters in the bottom bar.\n\n<b>Keys</b>\nESC or × closes; background clicks do NOT close.");
+@"<b>What it does</b>
+Manages a filter event end to end: search + category rail + card grid for ~300 advanced filters (legacy SetFilter events get the game's localized filter list instead), a parameter editor for the active filter, and delete.
+
+<b>How to use</b>
+Open a SetFilter/SetFilterAdvanced event — a Filters… chip appears by the panel. Clicking a card APPLIES it immediately (undo works) and keeps the manager open for auditioning. The right column edits the active filter's parameters — empty field = not overridden — and Delete event removes the event (undoable). Hovering a card previews its parameters in the bottom bar.
+
+<b>Keys</b>
+ESC or × closes; background clicks do NOT close.");
 
             Add(d, "SapphirePopup", "Message box",
-"<b>What it does</b>\nSapphire-styled version of the editor's popups; buttons proxy the game's own.");
+@"<b>What it does</b>
+Sapphire-styled version of the editor's popups; buttons proxy the game's own.");
+
+            // ── Timeline & camera ─────────────────────────────────────────
+
+            Add(d, "SapphireEditorEvents", "Timeline",
+@"<b>What it does</b>
+Event timeline on real song time: markers by category, playhead, zoom, transport (play/rewind · clock · BPM), mode chip (EDIT/PLAY toggle · difficulty · NO FAIL · AUTO).
+
+<b>How to use</b>
+Click a marker — jumps to its tile and opens that exact event. Click empty strip — moves the playhead (drag to scrub). Wheel pans when zoomed.
+
+<b>Modes</b>
+The mode button under the zoom controls switches between NORMAL / CAM / DECO / FILTER — the CDF workspaces. In help mode, click that button for details; the CAM workspace guide covers keyframe editing.
+
+<b>Keys</b>
+The centre-bottom arrow folds/expands the strip; drag the strip's TOP EDGE to resize lane height.");
+
+            Add(d, "SapphireTimelineFold", "Timeline fold",
+@"<b>What it does</b>
+Folds the timeline away / brings it back. Points down when open, up when folded.");
+
+            Add(d, "SapphireEventTabs", "Event tab rail",
+@"<b>What it does</b>
+The selected tile's events as icon tabs.
+
+<b>How to use</b>
+Click a tab to open that event; right-click deletes it. With several events of one type, numbered chips appear — click a number to jump straight to that instance.");
+
+            Add(d, "CamMode", "Timeline mode menu",
+@"<b>What it does</b>
+Switches the strip between the CDF workspaces: NORMAL (all events by category), CAM (camera keyframes), DECO (decoration events, lanes = the tags visible in the current view, top 8 by use), FILTER (SetFilter events, lanes per filter).
+
+<b>Deco / Filter</b>
+Same bar view as CAM: tweens as duration bars, whole bar clickable, right-click = ease picker. Lanes follow the view — pan to see other tags.");
+
+            Add(d, "Lane", "CAM mode — camera keyframe workspace",
+@"<b>Layout</b>
+One layer per property: Position / Rotation / Zoom. Tweens draw as duration bars (head, body to the end beat, cap); duration-0 SET keyframes are thin ticks. A set tick and a tween starting together are a pair.
+
+<b>Selecting</b>
+Click anywhere on a bar (whole body counts) — the keyframe turns white, its tile is selected, and an inline row of editable fields opens at the top of the strip.
+
+<b>Retiming</b>
+Click a LANE LABEL (e.g. Zoom) to expand its diamond sub-row — dragging happens only there. Pairs fan apart so each diamond stays clickable; a ghost diamond follows the cursor. Retiming one property of an event that carries several SPLITS it into its own event (one undo).
+
+<b>Creating</b>
+RIGHT-click EMPTY lane space = new set keyframe for that property at that tile, carrying the current value.
+
+<b>More</b>
+RIGHT-click a keyframe = visual ease picker. GRAPH button (or the row's Graph button) = AE-style graph editor. ESC deselects.");
+
+            Add(d, "CamInspector", "Inline keyframe fields",
+@"<b>What it does</b>
+Editable fields for the selected keyframe: duration (beats), position X/Y, rotation, zoom — plus Ease and Graph buttons.
+
+<b>How to use</b>
+Type a value to set AND enable that property; CLEAR a field to disable it (the panel's on/off toggle equivalent). Every commit is one undo step.");
+
+            Add(d, "CameraMenu", "Camera playback",
+@"<b>What it does</b>
+Plays the camera keyframe sequence on the overlay.
+
+<b>Buttons</b>
+▶ Play all — from the first keyframe. ▶ Sel — from the selected one. Gaps — hold each keyframe until the next event's real song time (cutting long tweens short, like the game would).");
+
+            Add(d, "GraphBtn", "GRAPH button",
+@"<b>What it does</b>
+Opens the AE-style graph editor on the current view — no selection needed. With a keyframe selected it focuses on that tween instead.");
+
+            Add(d, "SapphireGraph", "Graph editor",
+@"<b>What it does</b>
+An After-Effects-style value graph for camera properties: the property's value over song time, drawn through each tween's REAL runtime easing, keyframes as diamonds.
+
+<b>How to use</b>
+Open from the GRAPH button under the timeline's zoom controls (whole level view) or from a keyframe's inline row (focused on that keyframe). Tabs: Position (X and Y overlaid), X, Y, Rotation, Zoom; axes show values with units and beats. WHEEL over the plot zooms time; over the LEFT margin it zooms the value axis. Dragging empty plot pans in BOTH directions (vertical pan switches the value axis to manual scale). In the Position tab the X·Y button links the coordinate pair: linked (default) retimes both together on one event; unlinked, components split into their own events when retimed. Click a diamond to select (the view focuses on it), DRAG vertically to change the value, horizontally to retime — one undo per drag. Right-click a diamond for the ease picker.
+
+<b>Window</b>
+Drag the Graph View header to move the window; drag any edge or corner to resize.
+
+<b>Keys</b>
+ESC or × closes.");
+
+            Add(d, "SapphireBezier", "Custom bezier",
+@"<b>What it does</b>
+A fully custom easing curve for a camera tween. The game can't play one natively, so Apply DECOMPOSES the tween into short Linear segments (default 10) sampling your curve — one undo reverts it.
+
+<b>How to use</b>
+Drag the two control points; baselines mark 0 and 1 (overshoot allowed). Needs an EARLIER keyframe of the same property to read the start value from — the duration-0 set partner of a pair works.");
+
+            Add(d, "SapphirePitch", "Practice pitch",
+@"<b>What it does</b>
+Practice-only playback speed — song and hitsounds together. Never touches the saved level.
+
+<b>How to use</b>
+Set a % (or ±10 with ‹ ›). Takes effect when playback starts. Reset returns to normal.");
+
+            // ── Chrome ────────────────────────────────────────────────────
+
+            Add(d, "FileChip", "File menu",
+@"<b>What it does</b>
+Replaces the game's file bar: level name + unsaved dot; click for New / Open / Open Recent / Save / …
+
+<b>Note</b>
+All entries proxy the game's own buttons — shortcuts still work.");
+
+            Add(d, "SettingsChip", "Editor preferences",
+@"<b>What it does</b>
+Opens ADOFAI's editor preferences panel.");
+
+            Add(d, "GameSettingsChip", "Game settings",
+@"<b>What it does</b>
+Opens the game's own settings screen (the pause-menu settings) from the editor.");
+
+            Add(d, "LeaveChip", "Leave editor",
+@"<b>What it does</b>
+Exits the editor (proxies the game's exit button).");
+
+            Add(d, "HelpChip", "Help",
+@"<b>What it does</b>
+Opens this interactive help mode.");
+
+            Add(d, "SapphireMasterSwitch", "Master switch",
+@"<b>What it does</b>
+Turns the whole Sapphire editor suite on/off. Off restores all vanilla UI; the switch itself stays so you can come back.");
+
+            Add(d, "SapphireEditorChrome", "Editor chrome",
+@"<b>What it does</b>
+The file header strip and event palette — Sapphire replacements for the game's editor chrome. Click a specific control for details.");
+
+            Add(d, "SapphireToolbar", "Toolbox",
+@"<b>What it does</b>
+The Sapphire tool strip and its submenus. Click a specific tool icon for details.
+
+<b>Keys</b>
+Digits 1–0 select tools when no tile is selected.");
+
+            // ── Unlisted (reachable by pointing, not from Contents) ─────
+
+            Add(d, "ToolLabel", "Current tool",
+@"<b>What it does</b>
+Shows the active tool (pseudo key count, event tool name, …). The ? beside it opens help mode.");
+
+            Add(d, "Help", "Help button",
+@"<b>What it does</b>
+Opens this interactive help mode.");
+
             return d;
         }
     }
