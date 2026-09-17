@@ -19,7 +19,13 @@ namespace Sapphire.UI
         private static RectTransform _dropRoot;
         private static RectTransform _trigger;   // the cell it dropped from; drives auto-close
 
-        internal static bool IsOpen => _rootGo != null;
+        /* A dropdown is destroyed when it closes, so fading it out needs the destroy deferred
+           until the fade finishes. _closing says "on the way out": it stops counting as open for
+           everyone else immediately, while Tick keeps painting it until there is nothing left. */
+        private static float _anim;
+        private static bool _closing;
+
+        internal static bool IsOpen => _rootGo != null && !_closing;
 
         // The blocker is full-screen and raycast-catching (order 957), so a stranded dropdown eats
         // the next world/tile click. It self-closes only on pick or blocker-click — so also close it
@@ -29,20 +35,43 @@ namespace Sapphire.UI
         internal static void Tick()
         {
             if (_rootGo == null) return;
-            bool gone = _trigger == null || !_trigger.gameObject.activeInHierarchy;
-            if (gone || Input.GetKeyDown(KeyCode.Escape)) Close();
+            if (!_closing)
+            {
+                bool gone = _trigger == null || !_trigger.gameObject.activeInHierarchy;
+                if (gone || Input.GetKeyDown(KeyCode.Escape)) Close();
+            }
+            if (!UiAnim.Step(_rootGo, !_closing, ref _anim)) CloseNow();
         }
 
+        // Begins the fade. The trigger is released at once so nothing keeps driving it.
         internal static void Close()
+        {
+            if (_rootGo == null) return;
+            _closing = true;
+            _trigger = null;
+            /* Stop catching clicks the instant it starts leaving. The full-screen blocker lives
+               under this root, and a dropdown that is merely fading would otherwise swallow the
+               next click for the length of the fade — the one place where animating something
+               can cost an input. */
+            var cg = _rootGo.GetComponent<CanvasGroup>() ?? _rootGo.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+            cg.interactable = false;
+            if (!UiAnim.Enabled) CloseNow();
+        }
+
+        // No fade: the dropdown is being replaced, or the whole module is going away.
+        private static void CloseNow()
         {
             if (_rootGo != null) UnityEngine.Object.Destroy(_rootGo);
             _rootGo = null;
             _trigger = null;
+            _closing = false;
+            _anim = 0f;
         }
 
         internal static void Dispose()
         {
-            Close();
+            CloseNow();
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _dropRoot = null;
         }
@@ -50,12 +79,15 @@ namespace Sapphire.UI
         // trigger = the value cell the dropdown drops from. options/optionLabels are 1:1.
         internal static void Open(RectTransform trigger, IList<string> options, int current, Action<int> onPick)
         {
-            Close();
+            CloseNow();
             if (trigger == null || options == null || options.Count == 0) return;
             EnsureCanvas();
             _trigger = trigger;
 
+            _anim = 0f; _closing = false;
             _rootGo = new GameObject("Dropdown", typeof(RectTransform));
+            var openCg = _rootGo.AddComponent<CanvasGroup>();
+            openCg.blocksRaycasts = true; openCg.interactable = true;
             _rootGo.transform.SetParent(_dropRoot, false);
             var rr = (RectTransform)_rootGo.transform;
             rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one;

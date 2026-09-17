@@ -13,6 +13,8 @@ namespace Sapphire.UI
     internal class PanelKit
     {
         internal const float RowH = 24f, Gap = 5f, Pad = 10f;
+        // Docked panels are square-edged; floating ones stay in the same family.
+        internal const float PanelRadius = 4f;
 
         /* Shared TOOL-PALETTE geometry. Magic Shape, Track, Deco and the Hz tool were built at
            different times and drifted apart — 292 / 306 / 332 wide with 92 or 104 label columns —
@@ -33,13 +35,13 @@ namespace Sapphire.UI
         internal float W;
         private bool _wDirty;   // width moved; rebuild owed once the drag releases
         internal GameObject CanvasGo, PanelGo;
+        internal bool ChipAlive;   // a collapse chip outlives the panel on the same canvas
         private Canvas _canvas;
         private GraphicRaycaster _raycaster;
 
         /* Set by owners that keep a widget (e.g. the selector's reopen chip) parented to the
            canvas while the panel itself is hidden — keeps the canvas rendering/raycasting for
            that widget even though PanelGo is inactive. */
-        internal bool ChipAlive;
 
         // Focusable panels take part in DE-style window z-ordering (see the focus block below).
         internal readonly bool Focusable;
@@ -77,6 +79,14 @@ namespace Sapphire.UI
         }
         internal bool Visible => PanelGo != null && PanelGo.activeSelf;
 
+        /* Still on screen, but on its way out. The open/close fade keeps the GameObject alive
+           until its alpha reaches zero, and the dock layout counts visible panels to split the
+           sidebar between them — so for the length of a tab switch BOTH tabs counted, the side
+           split in two, each panel drew at half height, and then it snapped back. A panel that is
+           leaving should keep the rect it had and take no part in the layout. */
+        internal bool FadingOut => !_animWant && _anim > 0f;
+        internal bool LaidOut => Visible && !FadingOut;
+
         // fired when a header drag releases — hook SnapDockOnDragEnd for edge docking
         internal Action OnDragEnd;
 
@@ -105,7 +115,13 @@ namespace Sapphire.UI
             if (p.x <= threshold) side = 1;
             else if (p.x + w >= cw - threshold) side = 2;
             else side = 0;
+            /* Dropped ON a rail → a tab. Dropped on a sidebar BODY → the usual split. An empty
+               sidebar has no body, so a drop there joins its rail instead. */
+            if (PointerOverRail(1) && JoinRail(this, 1)) return;
+            if (PointerOverRail(2) && JoinRail(this, 2)) return;
+            if (side != 0 && !SideHasVisiblePanel(side) && JoinRail(this, side)) return;
             SetDock(side);
+            ClampSelf();   // a window dropped past the edge must stay reachable
         }
 
         /* DE-style window z-ordering. Focusable panels split into two sub-bands: DOCKED panels
@@ -193,6 +209,263 @@ namespace Sapphire.UI
            A central tick (MainClass) lays this out AFTER the modules' own Show/clamp, so docked
            geometry always wins. All dock chrome shares one overlay canvas whose full-screen
            DockRoot uses the SAME top-left coordinate space as the panels' own canvases. */
+        /* SIDEBAR TAB RAILS. Either sidebar is a tab rail: the panels listed on it are its tabs
+           and the user switches between them instead of stacking them. Drop a window ON a rail to
+           add a tab; drag the tab off to float it again; drop on the sidebar BODY to split it the
+           way docking always did.
+
+           A tab has to survive its panel being closed AND never-built — the rail is the only way
+           to open one — so the roster is a registry with its own Side flag rather than a read of
+           the dock lists, which only ever contain built panels.
+
+           Switching flips each panel's own open flag, so LayoutSide keeps seeing at most one
+           visible tab per side and its existing "a lone panel takes the full height" path does
+           the layout unchanged. */
+        internal class DockTab
+        {
+            internal PanelKit Kit;
+            internal string Label;
+            internal System.Func<bool> Available;   // the owning feature is enabled
+            internal System.Func<bool> IsOpen;
+            internal System.Action<bool> SetOpen;
+            internal int Side;                      // 0 = off the rails · 1 = left rail · 2 = right
+        }
+
+        private static readonly System.Collections.Generic.List<DockTab> _tabbable = new System.Collections.Generic.List<DockTab>();
+        // index 0 = left, 1 = right. Everything about a rail is per-side.
+        private static readonly System.Collections.Generic.List<DockTab>[] _tabs =
+        {
+            new System.Collections.Generic.List<DockTab>(), new System.Collections.Generic.List<DockTab>(),
+        };
+        private static readonly GameObject[] _stripGo = new GameObject[2];
+        private static readonly System.Collections.Generic.List<RoundedRectGraphic>[] _tabBgs =
+        {
+            new System.Collections.Generic.List<RoundedRectGraphic>(), new System.Collections.Generic.List<RoundedRectGraphic>(),
+        };
+        private static readonly System.Collections.Generic.List<TMPro.TextMeshProUGUI>[] _tabLabels =
+        {
+            new System.Collections.Generic.List<TMPro.TextMeshProUGUI>(), new System.Collections.Generic.List<TMPro.TextMeshProUGUI>(),
+        };
+        private static readonly bool[][] _tabOpenTmp = { new bool[16], new bool[16] };
+        private static GameObject _tabCanvasGo;
+        private static Canvas _tabCanvas;
+        private static RectTransform _tabRoot;
+        internal const float DockTabH = 26f;
+        private const float RailW = 26f, RailTabLen = 104f;
+
+        private static int Ix(int side) => side == 2 ? 1 : 0;
+
+        /* A panel can only be a tab if something can open it while it is closed — that is the
+           module's own open flag, not anything PanelKit owns. Panels absent from this table
+           still dock to a sidebar the old way (stacked). */
+        internal static void RegisterTabbable(PanelKit kit, string label, System.Func<bool> available,
+            System.Func<bool> isOpen, System.Action<bool> setOpen, bool defaultTab = false)
+        {
+            if (kit == null) return;
+            foreach (var t in _tabbable) if (t.Kit == kit) return;   // idempotent across rebuilds
+            _tabbable.Add(new DockTab
+            {
+                Kit = kit, Label = label, Available = available, IsOpen = isOpen, SetOpen = setOpen,
+                Side = defaultTab ? 1 : 0,
+            });
+        }
+
+        private static DockTab TabFor(PanelKit kit)
+        {
+            for (int i = 0; i < _tabbable.Count; i++) if (_tabbable[i].Kit == kit) return _tabbable[i];
+            return null;
+        }
+
+        /* SetDock reports here so dragging a tab OUT of a sidebar takes it off that rail.
+           Docking does NOT by itself put a panel on a rail — only JoinRail does. */
+        private static void OnDockChanged(PanelKit kit, int side)
+        {
+            var t = TabFor(kit);
+            if (t == null || t.Side == 0) return;
+            if (t.Side != side) t.Side = 0;
+        }
+
+        /* A rail is a thin strip — 26px once collapsed — so the drop test is the POINTER over the
+           strip, padded, rather than the dragged window's own edge. */
+        internal static bool PointerOverRail(int side)
+        {
+            var go = _stripGo[Ix(side)];
+            if (go == null || !go.activeSelf || _tabRoot == null) return false;
+            Vector2 lp;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_tabRoot, Input.mousePosition, null, out lp))
+                return false;
+            var sr = (RectTransform)go.transform;
+            Vector2 p = sr.anchoredPosition, sz = sr.sizeDelta;
+            const float grow = 24f;
+            return lp.x >= p.x - grow && lp.x <= p.x + sz.x + grow
+                && lp.y <= p.y + grow && lp.y >= p.y - sz.y - grow;
+        }
+
+        /* An EMPTY sidebar has no body to split, so a drop there joins its rail. This is also
+           what bootstraps a side that has no rail yet — the right one starts with no tabs, and
+           without this its first drop could only ever stack. */
+        internal static bool SideHasVisiblePanel(int side)
+        {
+            var list = SideList(side);
+            for (int i = 0; i < list.Count; i++)
+                if (list[i] != null && list[i].LaidOut && !list[i].HeaderDragging) return true;
+            return false;
+        }
+
+        /* A window dropped on a rail is FILED there, not opened: the rail keeps showing whatever
+           it was showing (nothing, if it was collapsed) and the newcomer becomes a closed tab.
+           Opening it would expand a sidebar the user had deliberately folded away. */
+        internal static bool JoinRail(PanelKit kit, int side)
+        {
+            var t = TabFor(kit);
+            if (t == null) return false;      // no open flag to drive: it can only stack
+            t.Side = side;
+            kit.SetDock(side);
+            try { t.SetOpen(false); } catch { }
+            return true;
+        }
+
+        /* Tear-off. The panel may not be built yet (a closed tab is just a roster entry), so this
+           opens it and the drag poll positions it from whichever frame its module builds it in.
+
+           The poll is why this is not driven by the tab button's own drag events: tearing shrinks
+           the roster, LayoutRail deactivates the pooled button that lost its slot, and a
+           deactivated GameObject stops receiving OnDrag — the window froze where it was torn. */
+        private static PanelKit _tearKit;
+        private static int _tearSide;
+
+        /* Pulling a window out of a sidebar should not shut the sidebar: if tabs remain and the
+           one that was showing is the one that left, fall back to the first of them. */
+        private static void KeepRailOpen(int side)
+        {
+            if (side == 0) return;
+            var list = _tabs[Ix(side)];
+            if (list.Count == 0) return;
+            for (int i = 0; i < list.Count; i++)
+            {
+                bool on = false;
+                try { on = list[i].IsOpen(); } catch { }
+                if (on) return;
+            }
+            try { list[0].SetOpen(true); } catch { }
+        }
+
+        internal static void BeginTear(int side, int slot)
+        {
+            var list = _tabs[Ix(side)];
+            if (slot < 0 || slot >= list.Count) return;
+            var t = list[slot];
+            if (t.Kit == null) return;
+            try { t.SetOpen(true); } catch { }
+            t.Side = 0;
+            t.Kit.SetDock(0);
+            t.Kit.BringToFront();
+            _tearKit = t.Kit;
+            _tearSide = side;
+            TabDragFrame = Time.frameCount;
+        }
+
+        private static void TickTear()
+        {
+            if (_tearKit == null) return;
+            TabDragFrame = Time.frameCount;
+            if (Input.GetMouseButton(0)) { DragTornPanel(_tearKit, Input.mousePosition); return; }
+            // released: back over a rail means "never mind"
+            if (PointerOverRail(1)) JoinRail(_tearKit, 1);
+            else if (PointerOverRail(2)) JoinRail(_tearKit, 2);
+            else _tearKit.ClampSelf();
+            _tearKit = null;
+            KeepRailOpen(_tearSide);
+            _tearSide = 0;
+        }
+
+        /* Carry a torn-off panel under the cursor, grabbed by the middle of its title bar, and
+           trim a sidebar-tall panel to something window-shaped on the way out.
+
+           ScreenPointToLocalPointInRectangle answers in the CANVAS rect's local space, whose
+           origin is the canvas pivot (centre), while anchoredPosition is measured from the
+           panel's ANCHOR (top-left). Treating one as the other put the window half a screen away
+           from the cursor — hence the conversion through anchor and pivot rather than a raw
+           assignment. DragHandle sidesteps all of this by capturing a delta at pointer-down,
+           which a tear cannot do: the panel may not exist yet when the drag starts. */
+        private static void DragTornPanel(PanelKit kit, Vector2 screenPos)
+        {
+            if (kit == null || kit.PanelGo == null || kit.CanvasGo == null) return;
+            var r = (RectTransform)kit.PanelGo.transform;
+            var parent = (RectTransform)kit.CanvasGo.transform;
+            Vector2 lp;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, screenPos, null, out lp)) return;
+            float maxH = parent.rect.height * 0.7f;
+            if (r.sizeDelta.y > maxH) r.sizeDelta = new Vector2(r.sizeDelta.x, maxH);
+
+            Vector2 psize = parent.rect.size;
+            Vector2 anchorLocal = new Vector2((r.anchorMin.x - parent.pivot.x) * psize.x,
+                                              (r.anchorMin.y - parent.pivot.y) * psize.y);
+            Vector2 topCentre = new Vector2(lp.x, lp.y + 10f);
+            Vector2 pivotPos = topCentre + new Vector2((r.pivot.x - 0.5f) * r.rect.width,
+                                                       (r.pivot.y - 1f) * r.rect.height);
+            r.anchoredPosition = pivotPos - anchorLocal;
+        }
+
+        /* A tear must not also toggle the tab. Stamped rather than a plain flag: uGUI does not
+           promise a PointerClick after a drag, and a sticky flag would then eat the next real
+           click — and the roster has already shifted under that slot. */
+        internal static int TabDragFrame = -10;
+
+        // Exactly one tab open per side; clicking the open one collapses that sidebar.
+        private static void SelectTab(DockTab pick, int side)
+        {
+            for (int i = 0; i < _tabbable.Count; i++)
+            {
+                var t = _tabbable[i];
+                if (t.Side != side) continue;
+                bool on = false;
+                try { on = t.IsOpen(); } catch { }
+                bool want = t == pick && !(on && t == pick && _selecting);
+                try { t.SetOpen(want); } catch { }
+            }
+        }
+
+        private static bool _selecting;   // true only for a rail click, where re-clicking collapses
+
+        private static void ClickTab(int side, int slot)
+        {
+            if (Time.frameCount - TabDragFrame <= 1) return;
+            var list = _tabs[Ix(side)];
+            if (slot < 0 || slot >= list.Count) return;
+            _selecting = true;
+            SelectTab(list[slot], side);
+            _selecting = false;
+        }
+
+        /* Rebuilt every frame: cheap (a handful of entries) and it means a panel dragged in or
+           out of a sidebar is reflected without any invalidation plumbing. */
+        /* Rails follow the suite: a play test (or the master switch) takes them down like every
+           other Sapphire surface. Per-tab Available predicates cover the panels registered with
+           one, but a window dropped on a rail has none — so the gate lives here, once. */
+        internal static bool RailsEnabled = true;
+
+        private static int CollectTabs(int side)
+        {
+            var list = _tabs[Ix(side)];
+            list.Clear();
+            if (!RailsEnabled) return 0;
+            for (int i = 0; i < _tabbable.Count; i++)
+            {
+                var t = _tabbable[i];
+                if (t.Side != side) continue;
+                bool ok = false;
+                try { ok = t.Available == null || t.Available(); } catch { }
+                if (!ok) continue;
+                // A tab opened from the rail may be built floating (its module never docks
+                // itself); pull it into the sidebar it is listed in.
+                if (t.Kit != null && t.Kit != _tearKit && t.Kit.Built && t.Kit.DockSide != side) t.Kit.SetDock(side);
+                list.Add(t);
+                if (list.Count >= _tabOpenTmp[Ix(side)].Length) break;
+            }
+            return list.Count;
+        }
+
         private static readonly System.Collections.Generic.List<PanelKit> _dockL = new System.Collections.Generic.List<PanelKit>();
         private static readonly System.Collections.Generic.List<PanelKit> _dockR = new System.Collections.Generic.List<PanelKit>();
         private static readonly System.Collections.Generic.List<PanelKit> _dockTmp = new System.Collections.Generic.List<PanelKit>();
@@ -204,7 +477,7 @@ namespace Sapphire.UI
         private const float SideMin = 220f, DockGap = 0f, DockMargin = 0f, DockPanelMinH = 120f, EdgeSnap = 28f;
         private const float DividerHit = 10f; // grab strip height on the flush seam (independent of DockGap)
         private static float _lastTop, _lastBottom, _lastCh, _lastCw; // for divider-drag geometry
-        private static int _lastScreenW, _lastScreenH;                // ClampFloating runs only on resize
+        private static int _lastScreenW, _lastScreenH, _clampCd;                // ClampFloating runs only on resize
         // Divider components resolved once — GetComponent per divider per frame was pure overhead.
         private static DockDivider _wDivCompL, _wDivCompR;
 
@@ -229,28 +502,58 @@ namespace Sapphire.UI
             for (int i = 0; i < _focusReg.Count; i++)
             {
                 var p = _focusReg[i];
-                if (p.DockSide != 0 || !p.Visible || p.PanelGo == null || p.CanvasGo == null || p.HeaderDragging) continue;
-                var c = (RectTransform)p.CanvasGo.transform;
-                float cw = c.rect.width, ch = c.rect.height;
-                if (cw < 1f || ch < 1f) continue;
-                var r = (RectTransform)p.PanelGo.transform;
-                float w = r.sizeDelta.x;
-                var pos = r.anchoredPosition;
-                float nx = Mathf.Clamp(pos.x, -w + 80f, cw - 80f);
-                float ny = Mathf.Clamp(pos.y, -(ch - 28f), 0f); // keep the 28px header on-screen
-                if (!Mathf.Approximately(nx, pos.x) || !Mathf.Approximately(ny, pos.y))
-                    r.anchoredPosition = new Vector2(nx, ny);
+                if (p.HeaderDragging || p == _tearKit) continue;
+                p.ClampSelf();
             }
         }
 
+        /* Keeps a floating window grabbable: enough of it stays on screen to have a header to
+           drag back. Called on a screen resize, and at the END of every drag — a window dropped
+           past the edge used to stay there until the resolution changed, which is to say never. */
+        internal void ClampSelf()
+        {
+            if (DockSide != 0 || !Visible || PanelGo == null || CanvasGo == null) return;
+            var c = (RectTransform)CanvasGo.transform;
+            float cw = c.rect.width, ch = c.rect.height;
+            if (cw < 1f || ch < 1f) return;
+            var r = (RectTransform)PanelGo.transform;
+            float w = r.sizeDelta.x;
+            var pos = r.anchoredPosition;
+            float nx = Mathf.Clamp(pos.x, -w + 80f, cw - 80f);
+            float ny = Mathf.Clamp(pos.y, -(ch - 28f), 0f); // keep the 28px header on-screen
+            if (!Mathf.Approximately(nx, pos.x) || !Mathf.Approximately(ny, pos.y))
+                r.anchoredPosition = new Vector2(nx, ny);
+        }
+
+        /* A docked panel is resized to the sidebar, and the modules track that size as their own
+           (TickResize syncs _size from the rect), so undocking used to leave a window still
+           shaped like a sidebar. Remember the rect it had as a window and give it back. */
+        private Rect _floatRect;
+        private bool _hasFloatRect;
+
         internal void SetDock(int side)
         {
+            if (DockSide == 0 && side != 0 && PanelGo != null)
+            {
+                var fr = (RectTransform)PanelGo.transform;
+                _floatRect = new Rect(fr.anchoredPosition.x, fr.anchoredPosition.y, fr.sizeDelta.x, fr.sizeDelta.y);
+                _hasFloatRect = _floatRect.width > 40f && _floatRect.height > 40f;
+            }
+            bool wasDocked = DockSide != 0;
             _dockL.Remove(this); _dockR.Remove(this);
             DockSide = side;
             if (side == 1) _dockL.Add(this);
             else if (side == 2) _dockR.Add(this);
             ReRankFocus();
             EnsureDockVisuals();
+            if (wasDocked && side == 0 && _hasFloatRect && PanelGo != null)
+            {
+                var fr = (RectTransform)PanelGo.transform;
+                fr.sizeDelta = new Vector2(_floatRect.width, _floatRect.height);
+                fr.anchoredPosition = new Vector2(_floatRect.x, _floatRect.y);
+                W = _floatRect.width;
+            }
+            OnDockChanged(this, side);
         }
 
         /* Docked panels sit FLUSH to the screen edge, so square their corners and drop the
@@ -262,7 +565,7 @@ namespace Sapphire.UI
             if (_dockAppliedGo == PanelGo && _dockAppliedSide == DockSide) return;
             _dockAppliedGo = PanelGo; _dockAppliedSide = DockSide;
             bool docked = DockSide != 0;
-            float rad = docked ? 0f : 10f;
+            float rad = docked ? 0f : PanelRadius;
             if (_panelBg != null && _panelBg.Radius != rad) _panelBg.Radius = rad;
             if (_headBg != null && _headBg.Radius != rad) _headBg.Radius = rad;
             if (PanelGo != null)
@@ -288,13 +591,19 @@ namespace Sapphire.UI
                 _lastScreenW = Screen.width; _lastScreenH = Screen.height;
                 ClampFloating();
             }
+            // Safety net for every other way a window can end up unreachable (a restored layout
+            // from a bigger screen, a resize while hidden). Twice a second over ~12 panels.
+            else if (--_clampCd <= 0) { _clampCd = 30; ClampFloating(); }
             /* EnsureDockChrome creates _dockChromeGo once and never destroys it, so keying the
                early-out on it meant that after ANY panel had ever docked, the whole layout path
                ran every frame forever — even with nothing docked. Key on the dock lists and
                idle the chrome canvas instead. */
-            if (_dockL.Count == 0 && _dockR.Count == 0 && !AnyHeaderDragging())
+            TickTear();
+            int nTabsL = CollectTabs(1), nTabsR = CollectTabs(2);
+            if (_dockL.Count == 0 && _dockR.Count == 0 && nTabsL == 0 && nTabsR == 0 && !AnyHeaderDragging())
             {
                 if (_dockCanvas != null && _dockCanvas.enabled) _dockCanvas.enabled = false;
+                if (_tabCanvas != null && _tabCanvas.enabled) _tabCanvas.enabled = false;
                 return;
             }
             EnsureDockChrome();
@@ -302,16 +611,165 @@ namespace Sapphire.UI
             float cw = _dockRoot.rect.width, ch = _dockRoot.rect.height;
             _lastTop = topMargin; _lastBottom = bottomInset; _lastCh = ch; _lastCw = cw;
             _hDivUsed = 0;
-            LayoutSide(_dockL, 1, ref _sideWL, cw, ch, topMargin, bottomInset);
-            LayoutSide(_dockR, 2, ref _sideWR, cw, ch, topMargin, bottomInset);
+            float stripL = LayoutRail(1, nTabsL, cw, topMargin);
+            float stripR = LayoutRail(2, nTabsR, cw, topMargin);
+            LayoutSide(_dockL, 1, ref _sideWL, cw, ch, topMargin + stripL, bottomInset);
+            LayoutSide(_dockR, 2, ref _sideWR, cw, ch, topMargin + stripR, bottomInset);
             for (int i = _hDivUsed; i < _hDivPool.Count; i++)
                 if (_hDivPool[i].gameObject.activeSelf) _hDivPool[i].gameObject.SetActive(false);
             UpdateDropIndicator(cw, ch, topMargin, bottomInset);
             // Idle the chrome canvas (its raycaster) whenever nothing on it is showing.
             bool need = _hDivUsed > 0
                         || (_wDivL != null && _wDivL.activeSelf) || (_wDivR != null && _wDivR.activeSelf)
-                        || (_dropInd != null && _dropInd.activeSelf);
+                        || (_dropInd != null && _dropInd.activeSelf);   // the rail has its own canvas
             if (_dockCanvas != null && _dockCanvas.enabled != need) _dockCanvas.enabled = need;
+        }
+
+        /* The rails live on their OWN canvas, one order below the docked-window band, so they sit
+           under every panel rather than painting over one. A rail survives its panels closing —
+           it is the only way to reopen them. */
+        private static float LayoutRail(int side, int nTabs, float cw, float topMargin)
+        {
+            int ix = Ix(side);
+            if (nTabs == 0)
+            {
+                var g = _stripGo[ix];
+                if (g != null && g.activeSelf) g.SetActive(false);
+                return 0f;
+            }
+            EnsureRail(side, nTabs);
+            var strip = _stripGo[ix];
+            if (strip == null) return 0f;
+            if (!strip.activeSelf) strip.SetActive(true);
+            if (_tabCanvas != null && !_tabCanvas.enabled) _tabCanvas.enabled = true;
+
+            /* A restored panel layout can bring two up at once; the rail is the invariant, so the
+               open state is resolved here, before anything is laid out. */
+            var list = _tabs[ix];
+            var opens = _tabOpenTmp[ix];
+            bool seenOpen = false;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var t = list[i];
+                bool on = false;
+                try { on = t.IsOpen(); } catch { }
+                if (on && seenOpen) { try { t.SetOpen(false); } catch { } on = false; }
+                seenOpen |= on;
+                opens[i] = on;
+            }
+
+            /* Collapsed, a full-width horizontal tab bar with nothing under it reads as a broken
+               panel. So the strip becomes an edge rail with the labels turned on their side —
+               the shape itself says "the sidebar is folded away", the way an activity bar does. */
+            bool collapsed = !seenOpen;
+            float sideW = side == 1 ? _sideWL : _sideWR;
+            float w = collapsed ? RailW : Mathf.Clamp(sideW, SideMin, cw * 0.6f);
+            float stripH = collapsed ? nTabs * RailTabLen : DockTabH;
+            float x = side == 1 ? DockMargin : cw - w - DockMargin;
+
+            var stripBg = strip.GetComponent<RoundedRectGraphic>();
+            if (stripBg != null)
+            {
+                var ac = Theme.Accent;
+                bool armed = AnyHeaderDragging() && PointerOverRail(side);
+                var sc = armed ? new Color(ac.r, ac.g, ac.b, 0.35f) : Theme.TitleBar;
+                if (stripBg.color != sc) stripBg.color = sc;
+            }
+            var sr = (RectTransform)strip.transform;
+            var wantPos = new Vector2(x, -topMargin);
+            var wantSize = new Vector2(w, stripH);
+            if ((sr.anchoredPosition - wantPos).sqrMagnitude > 1f) sr.anchoredPosition = wantPos;
+            if ((sr.sizeDelta - wantSize).sqrMagnitude > 1f) sr.sizeDelta = wantSize;
+
+            var bgs = _tabBgs[ix]; var labels = _tabLabels[ix];
+            float tw = w / nTabs;
+            for (int i = 0; i < bgs.Count; i++)
+            {
+                var bg = bgs[i];
+                if (i >= nTabs) { if (bg.gameObject.activeSelf) bg.gameObject.SetActive(false); continue; }
+                if (!bg.gameObject.activeSelf) bg.gameObject.SetActive(true);
+                var r = (RectTransform)bg.transform;
+                var bp = collapsed ? new Vector2(0f, -i * RailTabLen) : new Vector2(i * tw, 0f);
+                var bs = collapsed ? new Vector2(RailW, RailTabLen - 1f) : new Vector2(tw - 1f, DockTabH);
+                if ((r.anchoredPosition - bp).sqrMagnitude > 1f) r.anchoredPosition = bp;
+                if ((r.sizeDelta - bs).sqrMagnitude > 1f) r.sizeDelta = bs;
+
+                bool on = opens[i];
+                var want = on ? Theme.TabActive : Theme.TabRail;
+                if (bg.color != want) bg.color = want;
+
+                var lbl = labels[i];
+                if (lbl.text != list[i].Label) lbl.text = list[i].Label;
+                var lc = on ? Theme.Text : Theme.TextMuted;
+                if (lbl.color != lc) lbl.color = lc;
+                // The label rect is the tab's long axis either way; collapsed it is turned 90°.
+                var lr = lbl.rectTransform;   // the TMP sits on the label object itself
+                var ls = collapsed ? new Vector2(RailTabLen, RailW) : bs;
+                if ((lr.sizeDelta - ls).sqrMagnitude > 1f) lr.sizeDelta = ls;
+                var rot = collapsed ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.identity;
+                if (lr.localRotation != rot) lr.localRotation = rot;
+            }
+            return collapsed ? 0f : DockTabH;
+        }
+
+        private static void EnsureRail(int side, int nTabs)
+        {
+            if (_tabCanvasGo == null)
+            {
+                _tabCanvasGo = new GameObject("SapphireDockTabs", typeof(RectTransform));
+                UnityEngine.Object.DontDestroyOnLoad(_tabCanvasGo);
+                _tabCanvas = _tabCanvasGo.AddComponent<Canvas>();
+                _tabCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                _tabCanvas.sortingOrder = DockedZBase - 1;   // the rails belong UNDER every window
+                var scaler = _tabCanvasGo.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;   // same as the panels'
+                scaler.referenceResolution = new Vector2(1920, 1080);
+                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+                scaler.matchWidthOrHeight = 0.5f;
+                _tabCanvasGo.AddComponent<GraphicRaycaster>();
+
+                var rootGo = new GameObject("Root", typeof(RectTransform));
+                rootGo.transform.SetParent(_tabCanvasGo.transform, false);
+                _tabRoot = (RectTransform)rootGo.transform;
+                _tabRoot.anchorMin = Vector2.zero; _tabRoot.anchorMax = Vector2.one;
+                _tabRoot.offsetMin = Vector2.zero; _tabRoot.offsetMax = Vector2.zero;
+                _tabRoot.pivot = new Vector2(0f, 1f);
+            }
+            int ix = Ix(side);
+            if (_stripGo[ix] == null)
+            {
+                var go = new GameObject(side == 1 ? "LeftTabs" : "RightTabs", typeof(RectTransform));
+                go.transform.SetParent(_tabRoot, false);
+                var sr = (RectTransform)go.transform;
+                sr.anchorMin = sr.anchorMax = new Vector2(0f, 1f);
+                sr.pivot = new Vector2(0f, 1f);
+                var sbg = go.AddComponent<RoundedRectGraphic>();
+                sbg.Radius = 0f; sbg.color = Theme.TitleBar; sbg.raycastTarget = true;
+                _stripGo[ix] = go;
+            }
+            // Buttons are a pool indexed by SLOT, not by panel: the roster changes whenever a
+            // window is dragged into or out of the sidebar.
+            var bgs = _tabBgs[ix]; var labels = _tabLabels[ix];
+            while (bgs.Count < nTabs)
+            {
+                int slot = bgs.Count, sd = side;
+                var go = new GameObject("Tab" + slot, typeof(RectTransform));
+                go.transform.SetParent(_stripGo[ix].transform, false);
+                var r = (RectTransform)go.transform;
+                r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
+                r.pivot = new Vector2(0f, 1f);
+                var bg = go.AddComponent<RoundedRectGraphic>();
+                bg.Radius = 0f; bg.color = Theme.TabRail; bg.raycastTarget = true;
+                var lGo = new GameObject("L", typeof(RectTransform));
+                lGo.transform.SetParent(go.transform, false);
+                var lr = (RectTransform)lGo.transform;
+                lr.anchorMin = lr.anchorMax = lr.pivot = new Vector2(0.5f, 0.5f);
+                var lt = UIBuilder.Tmp(lGo, "", 11.5f, TextAnchor.MiddleCenter, Theme.TextMuted);
+                lt.raycastTarget = false;
+                ClickHandler.Attach(go, () => ClickTab(sd, slot));
+                var drag = go.AddComponent<RailTabDrag>(); drag.Side = sd; drag.Slot = slot;
+                bgs.Add(bg); labels.Add(lt);
+            }
         }
 
         private static void LayoutSide(System.Collections.Generic.List<PanelKit> list, int side,
@@ -327,7 +785,7 @@ namespace Sapphire.UI
             }
             _dockTmp.Clear();
             for (int i = 0; i < list.Count; i++)
-                if (list[i].Visible && !list[i].HeaderDragging) _dockTmp.Add(list[i]);
+                if (list[i].LaidOut && !list[i].HeaderDragging) _dockTmp.Add(list[i]);
             int n = _dockTmp.Count;
             var wDiv = side == 1 ? _wDivL : _wDivR;
             if (wDiv != null && wDiv.activeSelf != (n > 0)) wDiv.SetActive(n > 0);
@@ -391,7 +849,7 @@ namespace Sapphire.UI
             _dockTmp2.Clear();
             var list = SideList(side);
             for (int i = 0; i < list.Count; i++)
-                if (list[i].Visible && !list[i].HeaderDragging) _dockTmp2.Add(list[i]);
+                if (list[i].LaidOut && !list[i].HeaderDragging) _dockTmp2.Add(list[i]);
             int n = _dockTmp2.Count;
             if (index < 0 || index + 1 >= n) return;
             var a = _dockTmp2[index]; var b = _dockTmp2[index + 1];
@@ -425,7 +883,9 @@ namespace Sapphire.UI
                 if (pos.x <= EdgeSnap) side = 1;
                 else if (pos.x + w >= cw - EdgeSnap) side = 2;
             }
-            if (side == 0)
+            // Over a rail the strip itself lights up (LayoutRail), so the full-height sidebar
+            // preview would just be a second, much louder highlight for the same drop.
+            if (side == 0 || PointerOverRail(1) || PointerOverRail(2))
             {
                 if (_dropInd != null && _dropInd.activeSelf) _dropInd.SetActive(false);
                 return;
@@ -453,6 +913,12 @@ namespace Sapphire.UI
             if (_dockChromeGo != null) UnityEngine.Object.Destroy(_dockChromeGo);
             _dockChromeGo = null; _dockRoot = null; _dockCanvas = null;
             _dropInd = null; _wDivL = null; _wDivR = null;
+            if (_tabCanvasGo != null) UnityEngine.Object.Destroy(_tabCanvasGo);
+            _tabCanvasGo = null; _tabCanvas = null; _tabRoot = null;
+            _tabCanvasGo = null; _tabCanvas = null; _tabRoot = null;
+            for (int i = 0; i < 2; i++)
+            { _stripGo[i] = null; _tabBgs[i].Clear(); _tabLabels[i].Clear(); _tabs[i].Clear(); }
+            _tearKit = null;
             _hDivPool.Clear(); _hDivUsed = 0;
             _dockL.Clear(); _dockR.Clear(); _focusReg.Clear();
             _sideWL = 360f; _sideWR = 360f; DockDragActive = false;
@@ -540,13 +1006,67 @@ namespace Sapphire.UI
             return div;
         }
 
+        /* Open/close motion.
+
+           Show is called every frame by the owning module, which makes it the natural clock for
+           this — no extra tick, and a panel that stops being shown stops animating by definition.
+           The GameObject stays active through a fade-OUT, or there would be nothing left to fade;
+           it deactivates when the alpha reaches zero.
+
+           Scale is on localScale rather than the rect, because the dock layout writes sizeDelta
+           and anchoredPosition every frame and would fight anything that touched them. */
+        private const float AnimSec = 0.11f;      // fast enough to feel immediate, not instant
+        private float _anim = 1f;                 // 0 hidden, 1 shown
+        private bool _animWant = true;
+
         internal void Show(bool on)
         {
-            bool was = PanelGo != null && PanelGo.activeSelf;
-            if (PanelGo != null && PanelGo.activeSelf != on) PanelGo.SetActive(on);
+            if (PanelGo == null) return;
+            bool was = PanelGo.activeSelf;
+            var st = MainClass.Settings;
+            bool animate = st == null || st.UiAnimations;
+
+            if (!animate)
+            {
+                _anim = on ? 1f : 0f; _animWant = on;
+                ApplyAnim(1f);
+                if (PanelGo.activeSelf != on) PanelGo.SetActive(on);
+                SyncCanvasActive();
+                if (on && !was && Focusable) BringToFront();
+                return;
+            }
+
+            if (on != _animWant) { _animWant = on; if (on) _anim = Mathf.Min(_anim, 0.001f); }
+            if (on && !PanelGo.activeSelf) PanelGo.SetActive(true);
+
+            float step = Time.unscaledDeltaTime / AnimSec;
+            _anim = Mathf.Clamp01(_anim + (on ? step : -step));
+            // Ease-out on the way in, ease-in on the way out: the arrival is what reads as fluid.
+            ApplyAnim(on ? 1f - (1f - _anim) * (1f - _anim) : _anim * _anim);
+
+            if (!on && _anim <= 0f && PanelGo.activeSelf) PanelGo.SetActive(false);
             SyncCanvasActive();
             if (on && !was && Focusable) BringToFront(); // newly shown → raise to front
         }
+
+        private void ApplyAnim(float k)
+        {
+            if (PanelGo == null) return;
+            var cg = _animCg;
+            if (cg == null)
+            {
+                cg = PanelGo.GetComponent<CanvasGroup>() ?? PanelGo.AddComponent<CanvasGroup>();
+                _animCg = cg;
+            }
+            if (!Mathf.Approximately(cg.alpha, k)) cg.alpha = k;
+            // Interactable must not be driven by alpha — a mid-fade panel that stops taking
+            // clicks is worse than one that is briefly translucent.
+            var t = (RectTransform)PanelGo.transform;
+            float sc = 0.985f + 0.015f * k;
+            if (!Mathf.Approximately(t.localScale.x, sc)) t.localScale = new Vector3(sc, sc, 1f);
+        }
+
+        private CanvasGroup _animCg;
 
         /* Disable the Canvas + GraphicRaycaster while nothing on this canvas is visible: an
            idle-but-active overlay canvas is still a render batch and a raycaster the EventSystem
@@ -565,7 +1085,7 @@ namespace Sapphire.UI
             _focusReg.Remove(this);
             _dockL.Remove(this); _dockR.Remove(this);
             if (CanvasGo != null) UnityEngine.Object.Destroy(CanvasGo);
-            CanvasGo = null; PanelGo = null;
+            CanvasGo = null; PanelGo = null; _animCg = null; _anim = 1f; _animWant = true;
         }
 
         /* Rebuild REUSES PanelGo, clearing its children instead of destroying it. Destroying it
@@ -581,6 +1101,9 @@ namespace Sapphire.UI
             {
                 PanelGo = new GameObject("Panel", typeof(RectTransform));
                 PanelGo.transform.SetParent(CanvasGo.transform, false);
+                // A panel built on the frame it is first shown has no transition to detect, so
+                // seed it closed and let the first Show play it open.
+                _anim = 0f; _animWant = false; _animCg = null;
             }
             else
             {
@@ -609,7 +1132,7 @@ namespace Sapphire.UI
                 _pendingRect = null;
             }
             var bg = PanelGo.GetComponent<RoundedRectGraphic>() ?? PanelGo.AddComponent<RoundedRectGraphic>();
-            bg.Radius = 10f;
+            bg.Radius = PanelRadius;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.94f);
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
@@ -626,7 +1149,7 @@ namespace Sapphire.UI
             hr.anchoredPosition = Vector2.zero;
             hr.sizeDelta = new Vector2(0f, 28f);
             var headBg = headGo.AddComponent<RoundedRectGraphic>();
-            headBg.Radius = 10f;
+            headBg.Radius = PanelRadius;
             headBg.color = new Color(1f, 1f, 1f, 0.04f);
             headBg.raycastTarget = true;
             _headBg = headBg;
@@ -679,7 +1202,7 @@ namespace Sapphire.UI
         private float _scroll;
 
         // Rows parent here, so the same row helpers serve scrolling and content-sized panels.
-        private Transform RowParent => _content != null ? (Transform)_content : PanelGo.transform;
+        internal Transform RowParent => _content != null ? (Transform)_content : PanelGo.transform;
 
         private void BuildViewport()
         {
@@ -793,7 +1316,8 @@ namespace Sapphire.UI
             return tmp;
         }
 
-        internal void InputField(float x, float y, float w, string value, Action<string> commit)
+        internal RectTransform InputField(float x, float y, float w, string value, Action<string> commit,
+                                          TextAnchor align = TextAnchor.MiddleLeft)
         {
             var go = new GameObject("F", typeof(RectTransform));
             go.transform.SetParent(RowParent, false);
@@ -811,12 +1335,13 @@ namespace Sapphire.UI
             var tr = (RectTransform)txtGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(7f, 0f); tr.offsetMax = new Vector2(-7f, 0f);
-            var txt = UIBuilder.Tmp(txtGo, value, 12.5f, TextAnchor.MiddleLeft, Theme.Text);
+            var txt = UIBuilder.Tmp(txtGo, value, 12.5f, align, Theme.Text);
             txt.richText = false;
             var field = UIBuilder.BuildInputField(go, txt);
             field.lineType = TMP_InputField.LineType.SingleLine;
             field.text = value;
             field.onEndEdit.AddListener(v => commit(v));
+            return (RectTransform)go.transform;
         }
 
         // muted multi-line status block; caller keeps the returned TMP to update it live
@@ -1163,6 +1688,27 @@ namespace Sapphire.UI
             _raycaster = CanvasGo.AddComponent<GraphicRaycaster>();
             if (Focusable && !_focusReg.Contains(this)) { _focusReg.Add(this); ReRankFocus(); }
         }
+    }
+
+    /* Starts a tear; PanelKit.TickTear carries it from there. The button cannot own the whole
+       gesture: tearing shrinks the roster, the pooled button that lost its slot is deactivated,
+       and a deactivated GameObject stops receiving OnDrag. */
+    internal class RailTabDrag : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+    {
+        internal int Slot, Side;
+        private bool _armed;
+
+        public void OnBeginDrag(PointerEventData e) { _armed = true; }
+
+        public void OnDrag(PointerEventData e)
+        {
+            if (!_armed) return;
+            if ((e.position - e.pressPosition).sqrMagnitude < 36f) return;   // 6px slop
+            _armed = false;
+            PanelKit.BeginTear(Side, Slot);
+        }
+
+        public void OnEndDrag(PointerEventData e) { _armed = false; }
     }
 
     /* Drag handle for the dock dividers. Reports the pointer in DockRoot's top-left space

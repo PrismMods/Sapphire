@@ -1979,6 +1979,29 @@ namespace Sapphire.UI
                 });
             }
 
+            // Custom: the presets are a shortlist, not the palette. This chip shows the colour
+            // in use and opens the HSV/RGB wheel on it.
+            var cur = current;
+            var cusGo = Rect("Custom", rightGo.transform);
+            var cusRect = (RectTransform)cusGo.transform;
+            cusRect.anchorMin = cusRect.anchorMax = new Vector2(0, 0.5f);
+            cusRect.pivot = new Vector2(0, 0.5f);
+            cusRect.sizeDelta = new Vector2(swatchSize, swatchSize);
+            cusRect.anchoredPosition = new Vector2(options.Length * (swatchSize + gap) + gap, 0);
+            var cusImg = cusGo.AddComponent<RoundedRectGraphic>();
+            cusImg.Radius = swatchSize * 0.5f;
+            cusImg.color = cur;
+            cusImg.BorderWidth = 1.5f;
+            cusImg.BorderColor = Theme.Text;
+            cusImg.raycastTarget = true;
+            ClickHandler.Attach(cusGo, () => ColorWheel.Open(label, cur, false, c =>
+            {
+                cur = c;
+                cusImg.color = c;
+                for (int j = 0; j < ringObjs.Length; j++) ringObjs[j].SetActive(false);
+                onChange?.Invoke(c);
+            }));
+
             return row;
         }
 
