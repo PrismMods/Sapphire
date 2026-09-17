@@ -67,7 +67,7 @@ namespace Sapphire
                 if (!present)
                 {
                     Close();
-                    EditorLevelMenu.ClearDecoSelection();
+                    EditorDecoMenu.ClearDecoSelection();
                     K.Show(false);
                     return;
                 }
@@ -112,9 +112,9 @@ namespace Sapphire
         private static string Title()
         {
             string type = "?";
-            try { type = EditorLevelMenu.DecoTypeName(_evt.eventType); } catch { }
+            try { type = EditorDecoMenu.DecoTypeName(_evt.eventType); } catch { }
             string tag = "";
-            try { tag = EditorLevelMenu.DecoTagOf(_evt); } catch { }
+            try { tag = EditorDecoMenu.DecoTagOf(_evt); } catch { }
             return Loc.T("Decoration") + " · " + type + (tag.Length > 0 ? " · " + tag : "");
         }
 
@@ -125,7 +125,7 @@ namespace Sapphire
             {
                 Close();
                 try { scnEditor.instance.DeselectAllDecorations(); } catch { }
-                EditorLevelMenu.ClearDecoSelection();
+                EditorDecoMenu.ClearDecoSelection();
             }, new Vector2(1120f, -80f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = _size;
