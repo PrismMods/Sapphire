@@ -18,7 +18,7 @@ namespace Sapphire
     internal static class EditorKeyHints
     {
         // context bits
-        private const int Always = 0, NoSel = 1, Sel = 2, ToolNum = 4, Quick = 8;
+        private const int Always = 0, NoSel = 1, Sel = 2, Quick = 8;
         // Exactly one tile selected AND tile actions enabled — TickFreeAngle's real Alt gate
         // (plain Sel overclaimed for 2+ selected tiles or Sapphire-tools-off).
         private const int FreeAngle = 16;
@@ -49,7 +49,7 @@ namespace Sapphire
             // TickToolHotkeys is the only one of these three gated on selection; TickToolSwap
             // (the tool-swap + quick-chart binds) has no selection check at all — tagging it
             // NoSel hid live hotkeys the instant a tile was selected, the commonest edit state.
-            new Hint(NoSel,  "1-0",     "Select tool", not: ToolNum),
+            new Hint(NoSel,  "1-0",     "Select tool"),
             // Tweaks.PanEligible bails once anything is selected, so this is NoSel too.
             new Hint(NoSel,  "WASD",     "Pan camera"),
             new Hint(Always, Bind.QuickChart,   "Quick chart mode"),
@@ -60,7 +60,6 @@ namespace Sapphire
             new Hint(FreeAngle, "Alt",  "Hold: free-angle aim"),
             new Hint(Sel,    "Ctrl+click",  "Add/remove event row"),
             new Hint(Sel,    "Shift+click", "Select event range"),
-            new Hint(ToolNum,"Digits",  "Set key count"),
             new Hint(Quick,  Bind.QcSwirl,     "Swirl on/off"),
             new Hint(Quick,  Bind.QcSetSpeed,  "Set speed"),
             new Hint(Quick,  Bind.QcSpeedDown, "Halve / double speed", key2: Bind.QcSpeedUp),
@@ -116,7 +115,6 @@ namespace Sapphire
             int sel = 0;
             try { sel = ed.selectedFloors != null ? ed.selectedFloors.Count : 0; } catch { }
             ctx |= sel == 0 ? NoSel : Sel;
-            try { if (EditorToolbar.PseudoToolOn) ctx |= ToolNum; } catch { }
             try { if (s.FeatQuickChart) ctx |= Quick; } catch { }
             try { if (s.EditorTileActions && ed.SelectionIsSingle()) ctx |= FreeAngle; } catch { }
             return ctx;
@@ -182,7 +180,7 @@ namespace Sapphire
                 new Vector2(Mathf.Clamp(_tmp.preferredWidth, KeyCol + 80f, BoxW), 0f);
         }
 
-        // Sits just above the timeline strip — and above the mode chips (EDITOR / NO FAIL /
+        // Sits just above the timeline strip — and above the mode chips (EDIT / NO FAIL /
         // AUTO), which share this corner and used to sit under the hint text. Only writes when
         // the strip actually moved — an unconditional transform write per frame re-batches the
         // canvas.

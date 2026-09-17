@@ -40,6 +40,17 @@ namespace Sapphire
         private static long _layoutSig = LayoutSigDirty;
         private static bool _inspMode;         // inspector tool active: panel = its PASTE FILTER
         private static int _inspVerSeen = -1;
+        /* One-shot mode: the tile menu's "Copy/Cut (select events)" opens this panel for a
+           selection of ANY size — one tile included — so the type filter is reachable without
+           having to multi-select first. It closes itself once the action runs. */
+        private static bool _oneShot, _oneShotCut;
+
+        internal static void OpenForSelection(bool cut)
+        {
+            _oneShot = true; _oneShotCut = cut;
+            _selSig = long.MinValue;          // re-gather the types for this selection
+            _layoutSig = LayoutSigDirty;
+        }
 
         // The inspector tool pastes only checked types (master off = paste nothing).
         internal static bool TypeChecked(int t) => _eventsMaster && _on.Contains(t);
@@ -54,7 +65,8 @@ namespace Sapphire
             bool inspector = EditorToolbar.InspectorActive;
             bool baseOk = ed != null && !ed.playMode
                         && s != null && MainClass.EditorSuiteOn && s.EditorTileActions;
-            bool want = baseOk && ((sel > 1 && !EditorToolbar.AnyToolActive)
+            if (_oneShot && (sel == 0 || inspector)) _oneShot = false;   // selection gone: nothing to copy
+            bool want = baseOk && (_oneShot || (sel > 1 && !EditorToolbar.AnyToolActive)
                         || (inspector && EditorToolbar.InspectorVersion > 0));
             if (!want) { if (_panelGo != null && _panelGo.activeSelf) _panelGo.SetActive(false); _inspMode = inspector; return; }
 
@@ -116,6 +128,7 @@ namespace Sapphire
         {
             long h = 17;
             h = h * 31 + (_inspMode ? 1 : 0);
+            h = h * 31 + (_oneShot ? (_oneShotCut ? 3 : 2) : 0);
             h = h * 31 + (_eventsMaster ? 1 : 0);
             if (_eventsMaster) foreach (var t in _types) h = h * 31 + (t + 1);
             return h;
@@ -205,6 +218,33 @@ namespace Sapphire
                 }
             }
             catch (Exception ex) { SapphireLog.Log("CopyPanel: copy failed: " + ex.Message); }
+        }
+
+        /* Cut = the filtered copy, then remove exactly what was copied. The game's MultiCutFloors
+           deletes the TILES, which is not what "cut these events" means — the tiles stay, their
+           checked-type events go. One SaveStateScope, so it is one undo. */
+        private static void DoCut()
+        {
+            DoCopy();
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            if (ed == null || !_eventsMaster) return;
+            var sel = new HashSet<int>();
+            try { foreach (var f in ed.selectedFloors) if (f != null) sel.Add(f.seqID); } catch { }
+            if (sel.Count == 0) return;
+            try
+            {
+                using (new SaveStateScope(ed))
+                {
+                    var doomed = new List<ADOFAI.LevelEvent>();
+                    foreach (var e in ed.events)
+                        if (e != null && sel.Contains(e.floor) && _on.Contains((int)e.eventType)) doomed.Add(e);
+                    foreach (var e in doomed) ed.events.Remove(e);
+                    ed.ApplyEventsToFloors();
+                    ed.RemakePath(true, true);
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("CopyPanel: cut failed: " + ex.Message); }
         }
 
         private static readonly string[] PosKeys = { "position", "positionOffset" };
@@ -334,7 +374,16 @@ namespace Sapphire
             if (!_inspMode)
             {
                 const float copyW = 90f;
-                Cell(Loc.T("Copy"), (PanelW - copyW) * 0.5f, y, copyW, RowH + 2f, DoCopy, true);
+                if (_oneShot)
+                {
+                    bool cut = _oneShotCut;
+                    float w2 = (PanelW - Pad * 2f - Gap) * 0.5f;
+                    Cell(cut ? Loc.T("Cut") : Loc.T("Copy"), Pad, y, w2, RowH + 2f,
+                        () => { if (cut) DoCut(); else DoCopy(); _oneShot = false; }, true);
+                    Cell(Loc.T("Cancel"), Pad + w2 + Gap, y, w2, RowH + 2f,
+                        () => { _oneShot = false; }, false);
+                }
+                else Cell(Loc.T("Copy"), (PanelW - copyW) * 0.5f, y, copyW, RowH + 2f, DoCopy, true);
                 y -= RowH + 2f + Pad;
             }
             else

@@ -659,7 +659,6 @@ namespace Sapphire
             TrackFieldFocus(ed);
             try
             {
-                if (EditorToolbar.PseudoToolOn) return;         // pseudo owns the digits
                 if (ed.userIsEditingAnInputField) return;
                 if (ed.selectedFloors == null || ed.selectedFloors.Count == 0) return;
             }
@@ -1076,7 +1075,7 @@ namespace Sapphire
                Settings drives the public ShowPreferences() (the game wires
                buttonPreferences to it, but the button reference can be flaky — the menu
                row used to vanish); leave proxies the game's exit button. */
-            var settingsGo = MakeSideChip("SettingsChip", 42f);
+            var settingsGo = MakeSideChip("SettingsChip", 6f);
             for (int i = 0; i < 3; i++) // no ⚙ in the user fonts — procedural slider bars
             {
                 var barGo = new GameObject("Bar", typeof(RectTransform));
@@ -1104,44 +1103,8 @@ namespace Sapphire
                 catch (Exception ex) { SapphireLog.Log("EditorChrome: settings failed: " + ex.Message); }
             });
 
-            // Level settings — toggles the game's song/level settings inspector
-            // (scnEditor.buttonSettings), reskinned by the dark theme + panel rail.
-            var levelSetGo = MakeSideChip("LevelSettingsChip", 6f);
-            var docGo = new GameObject("Doc", typeof(RectTransform));
-            docGo.transform.SetParent(levelSetGo.transform, false);
-            var docR = (RectTransform)docGo.transform;
-            docR.anchorMin = docR.anchorMax = new Vector2(0.5f, 0.5f);
-            docR.pivot = new Vector2(0.5f, 0.5f);
-            docR.sizeDelta = new Vector2(12f, 15f);
-            var doc = docGo.AddComponent<RoundedRectGraphic>();
-            doc.Radius = 2.5f; // card outline = the settings panel
-            doc.color = new Color(0f, 0f, 0f, 0f);
-            doc.BorderWidth = 1.6f;
-            doc.BorderColor = new Color(0.8f, 0.8f, 0.84f, 1f);
-            doc.raycastTarget = false;
-            for (int i = 0; i < 2; i++) // two title lines inside the card
-            {
-                var lineGo = new GameObject("Line", typeof(RectTransform));
-                lineGo.transform.SetParent(levelSetGo.transform, false);
-                var lnR = (RectTransform)lineGo.transform;
-                lnR.anchorMin = lnR.anchorMax = new Vector2(0.5f, 0.5f);
-                lnR.pivot = new Vector2(0.5f, 0.5f);
-                lnR.anchoredPosition = new Vector2(0f, 2f - i * 4f);
-                lnR.sizeDelta = new Vector2(6f, 1.6f);
-                var ln = lineGo.AddComponent<RoundedRectGraphic>();
-                ln.Radius = 0.8f;
-                ln.color = new Color(0.8f, 0.8f, 0.84f, 1f);
-                ln.raycastTarget = false;
-            }
-            UI.ClickHandler.Attach(levelSetGo, () =>
-            {
-                CloseMenu();
-                try { EditorLevelMenu.Toggle(); } // hosts the game panel in a Sapphire popup
-                catch (Exception ex) { SapphireLog.Log("EditorChrome: level settings failed: " + ex.Message); }
-            });
-
             // Game settings (the shared SettingsMenu the pause menu drives; public Show()).
-            var gameSetGo = MakeSideChip("GameSettingsChip", 78f);
+            var gameSetGo = MakeSideChip("GameSettingsChip", 42f);
             // Procedural gear (no ⚙ in the user fonts): a ring with 8 rim teeth.
             var iconCol = new Color(0.8f, 0.8f, 0.84f, 1f);
             for (int i = 0; i < 8; i++)
@@ -1183,7 +1146,7 @@ namespace Sapphire
             });
 
             // Help — interactive help mode (hover-highlight + click-for-docs).
-            var helpGo = MakeSideChip("HelpChip", 150f);
+            var helpGo = MakeSideChip("HelpChip", 114f);
             var hGlyphGo = new GameObject("Glyph", typeof(RectTransform));
             hGlyphGo.transform.SetParent(helpGo.transform, false);
             var hgr = (RectTransform)hGlyphGo.transform;
@@ -1198,7 +1161,7 @@ namespace Sapphire
             hGlyph.text = "?";
             UI.ClickHandler.Attach(helpGo, () => { CloseMenu(); EditorHelp.Toggle(); });
 
-            var leaveGo = MakeSideChip("LeaveChip", 114f);
+            var leaveGo = MakeSideChip("LeaveChip", 78f);
             var xGo = new GameObject("Glyph", typeof(RectTransform));
             xGo.transform.SetParent(leaveGo.transform, false);
             var xr = (RectTransform)xGo.transform;

@@ -372,7 +372,12 @@ namespace Sapphire
                 if (slot == 1) g.color1 = h; else g.color2 = h;
                 EventRows.Commit(c, ed, evt, pi, key, g);
             });
-            EventRows.Swatch(c.Content, hex, x + fw + Gap, y);
+            EventRows.Swatch(c.Content, hex, x + fw + Gap, y, null, nv =>
+            {
+                var g = Grad(evt, key, val);
+                if (slot == 1) g.color1 = nv; else g.color2 = nv;
+                EventRows.Commit(c, ed, evt, pi, key, g);
+            });
             return y - (RowH + Gap);
         }
 

@@ -10,8 +10,7 @@ namespace Sapphire
 {
     /* Right-click a tile → a Sapphire context menu. Right-click is only free for this
        because the FreeAngleRebindPatch moved free-angle placement onto right-Alt (see
-       Patches.cs). On right-mouse-down over a tile we select that tile
-       (RDUtils.GetFloorAtPosition = Physics2D.OverlapPoint on the floor layer) and open a
+       Patches.cs). On right-mouse-down over a tile we select that tile and open a
        menu whose rows PROXY the editor's own selection ops (copy/cut/paste/delete/flip/
        rotate), so undo and game logic come free. Gated on Settings.EditorTileActions. */
     internal static class EditorTileMenu
@@ -31,13 +30,21 @@ namespace Sapphire
                 want = ed != null && !ed.playMode && s != null && MainClass.EditorSuiteOn && s.EditorTileActions;
             }
             catch { }
-            if (!want) { if (_menuGo != null) CloseMenu(); return; }
+            if (!want)
+            {
+                if (_menuGo != null) CloseMenu();
+                return;
+            }
 
             // Close an open menu on Escape.
             if (_menuGo != null && Input.GetKeyDown(KeyCode.Escape)) { CloseMenu(); return; }
 
             // An active event-palette tool claims right-click to stamp its event; yield the menu.
-            if (EditorToolbar.EventTool >= 0) { if (_menuGo != null) CloseMenu(); return; }
+            if (EditorToolbar.EventTool >= 0)
+            {
+                if (_menuGo != null) CloseMenu();
+                return;
+            }
 
             if (Input.GetMouseButtonDown(1))
             {
@@ -49,13 +56,17 @@ namespace Sapphire
                 if (EditorEvents.TimelineHovered) return;
 
                 CloseMenu(); // a fresh right-click reopens at the new spot
-                // Gate on a real tile under the cursor (Physics2D, independent of the
-                // editor's fullscreen UI canvas — IsPointerOverGameObject is true across the
-                // whole play area, so it can't be used to reject right-clicks here).
+                /* Gate on a real tile under the cursor. Can't use IsPointerOverGameObject to
+                   reject clicks on empty space: the editor's canvas covers the whole play
+                   area, so it is true everywhere. */
                 scrFloor floor = FloorUnderCursor(ed);
                 if (floor == null) return;
-                try { ed.SelectFloor(floor, false); } catch { }
-                OpenMenu(Input.mousePosition);
+                /* Right-clicking INSIDE a multi-selection must not collapse it to one tile —
+                   that is the selection the menu is about to act on. Only a click outside the
+                   selection re-selects. */
+                bool multi = InSelection(ed, floor) && SelectedCount(ed) >= 2;
+                if (!multi) { try { ed.SelectFloor(floor, false); } catch { } }
+                OpenMenu(Input.mousePosition, multi);
             }
         }
 
@@ -66,23 +77,55 @@ namespace Sapphire
             _canvasGo = null; _canvasRect = null;
         }
 
-        private static scrFloor FloorUnderCursor(scnEditor ed)
+        private static int SelectedCount(scnEditor ed)
+        {
+            try { return ed.selectedFloors != null ? ed.selectedFloors.Count : 0; }
+            catch { return 0; }
+        }
+
+        private static bool InSelection(scnEditor ed, scrFloor f)
         {
             try
             {
-                Camera cam = null;
-                try { cam = ed.camera; } catch { }
-                if (cam == null) cam = Camera.main;
-                if (cam == null) return null;
-                Vector2 world = cam.ScreenToWorldPoint(Input.mousePosition);
-                return RDUtils.GetFloorAtPosition(world);
+                var sel = ed.selectedFloors;
+                if (sel == null || f == null) return false;
+                for (int i = 0; i < sel.Count; i++) if (sel[i] == f) return true;
+                return false;
             }
-            catch { return null; }
+            catch { return false; }
+        }
+
+        /* Nearest tile to the cursor within ~a tile radius. RDUtils.GetFloorAtPosition
+           (Physics2D.OverlapPoint on the "Floor" layer) never hits editor tiles here — it
+           returned null on every right-click — so match the toolbar's world-distance pick. */
+        private static scrFloor FloorUnderCursor(scnEditor ed)
+        {
+            Camera cam = null;
+            try { cam = ed.camera; } catch { }
+            if (cam == null) cam = Camera.main;
+            if (cam == null) return null;
+            Vector2 w = cam.ScreenToWorldPoint(Input.mousePosition);
+            scrFloor best = null;
+            float bestSqr = 0.7f * 0.7f; // squared: this walks every tile in the level
+            try
+            {
+                var floors = ed.floors;
+                if (floors != null)
+                    for (int i = 0; i < floors.Count; i++)
+                    {
+                        var f = floors[i];
+                        if (f == null) continue;
+                        float d = ((Vector2)f.transform.position - w).sqrMagnitude;
+                        if (d < bestSqr) { bestSqr = d; best = f; }
+                    }
+            }
+            catch { }
+            return best;
         }
 
         // ── menu ────────────────────────────────────────────────────────────
 
-        private static void OpenMenu(Vector3 screenPos)
+        private static void OpenMenu(Vector3 screenPos, bool multi = false)
         {
             if (_canvasGo == null) BuildCanvas();
             else if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
@@ -100,8 +143,11 @@ namespace Sapphire
             var panelGo = new GameObject("Panel", typeof(RectTransform));
             panelGo.transform.SetParent(_menuGo.transform, false);
             var panel = (RectTransform)panelGo.transform;
-            panel.anchorMin = panel.anchorMax = new Vector2(0f, 0f);
-            panel.pivot = new Vector2(0f, 1f); // grows downward from the cursor
+            /* Anchored at the canvas CENTRE, not a corner: ScreenPointToLocalPointInRectangle
+               returns a point relative to the rect's PIVOT, and the canvas pivot is (0.5, 0.5).
+               A corner anchor put every menu half a screen down and left. */
+            panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0.5f);
+            panel.pivot = new Vector2(0f, 1f); // grows down-right from the cursor
             var bg = panelGo.AddComponent<RoundedRectGraphic>();
             bg.Radius = 10f;
             bg.color = new Color(0.07f, 0.07f, 0.09f, 0.97f);
@@ -109,15 +155,32 @@ namespace Sapphire
             bg.BorderColor = new Color(1f, 1f, 1f, 0.14f);
             bg.raycastTarget = true;
 
-            var entries = new List<KeyValuePair<string, Action>>
-            {
-                Row(Loc.T("Copy"),      ed => ed.MultiCopyFloors(false)),
-                Row(Loc.T("Cut"),       ed => ed.MultiCutFloors()),
-                Row(Loc.T("Paste"),     ed => ed.PasteFloors(false)),
-                Row(Loc.T("Delete"),    ed => ed.DeleteSingleSelection(false)),
-                Row(Loc.T("Rotate CW"),  ed => ed.RotateSelection(true)),
-                Row(Loc.T("Rotate CCW"), ed => ed.RotateSelection(false)),
-            };
+            /* Two menus. The single-tile one proxies the editor's own verbs; the multi-selection
+               one is Sapphire's, and its items are deliberately unwired — each is a distinct
+               decision about what "repeat" or "safe delete" should mean across a span of tiles,
+               and guessing at those would be worse than saying so. */
+            var entries = multi
+                ? new List<KeyValuePair<string, Action>>
+                {
+                    Row(Loc.T("Copy"),        NotYet("copy")),
+                    Row(Loc.T("Cut"),         NotYet("cut")),
+                    Row(Loc.T("Delete (safe)"), NotYet("delete")),
+                    Row(Loc.T("Add twirls"),  NotYet("twirls")),
+                    Row(Loc.T("Repeat"),      NotYet("repeat")),
+                    Row(Loc.T("Duplicate"),   NotYet("duplicate")),
+                    Row(Loc.T("Move"),        NotYet("move")),
+                }
+                : new List<KeyValuePair<string, Action>>
+                {
+                    Row(Loc.T("Copy"),      ed => ed.MultiCopyFloors(false)),
+                    Row(Loc.T("Cut"),       ed => ed.MultiCutFloors()),
+                    // The type filter the multi-selection overlay already owns, reachable for
+                    // one tile: pick which events ride along, then Copy/Cut there.
+                    Row(Loc.T("Copy (select events)"), _ => EditorCopyPanel.OpenForSelection(false)),
+                    Row(Loc.T("Cut (select events)"),  _ => EditorCopyPanel.OpenForSelection(true)),
+                    Row(Loc.T("Paste"),     ed => ed.PasteFloors(false)),
+                    Row(Loc.T("Delete"),    ed => ed.DeleteSingleSelection(false)),
+                };
 
             const float rowH = 30f, padY = 6f, width = 190f;
             float y = -padY;
@@ -133,12 +196,21 @@ namespace Sapphire
             if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvasRect, screenPos, null, out local))
             {
                 var half = _canvasRect.rect.size * 0.5f;
-                float maxX = half.x - width;
-                float minY = -half.y + (-y + padY);
-                local.x = Mathf.Min(local.x, maxX);
-                local.y = Mathf.Max(local.y, minY);
+                float h = -y + padY;
+                local.x = Mathf.Clamp(local.x, -half.x, half.x - width);
+                local.y = Mathf.Clamp(local.y, -half.y + h, half.y);
                 panel.anchoredPosition = local;
             }
+        }
+
+        // A placeholder that SAYS it is one, rather than a row that silently does nothing.
+        private static Action<scnEditor> NotYet(string what)
+        {
+            return ed =>
+            {
+                try { ed.ShowNotification(Loc.T("Not wired up yet") + " — " + what); } catch { }
+                SapphireLog.Log("TileMenu: multi '" + what + "' is a stub");
+            };
         }
 
         // (label, action) — the action runs against the current scnEditor.

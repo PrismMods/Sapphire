@@ -30,6 +30,12 @@ namespace Sapphire
         private static int _floor = -1;
         private static readonly HashSet<int> _expandedTypes = new HashSet<int>();   // tree: type nodes
         private static readonly HashSet<long> _expandedInst = new HashSet<long>();   // type*1000+instance
+        /* Expanding a node rebuilds the whole tree, so there is no element to slide — every row
+           below the node moves at once. A short fade over the rebuilt list is what hides that
+           jump; anything that animates position would have to animate rows that no longer
+           exist. */
+        private static float _listAnim = 1f;
+        private static bool _animList;
         private static long _sig;
         private const long EmptySig = -1L;     // _sig marker: scanned, tile has no events
         private static bool _empty;            // last scan found nothing on this floor
@@ -125,12 +131,14 @@ namespace Sapphire
                 long sig = Sig(ed, floor, events);
                 if (sig != _sig) { _sig = sig; rebuildContent = true; }
                 if (rebuildContent) BuildContent(ed, events);
+                if (_animList) { _animList = false; _listAnim = 0f; }
             }
             // Nothing to show until the first scan, or when the latch says the tile is empty
             // (K may still be built from a previously selected tile).
             else if (!K.Built || _empty) { K.Show(false); return; }
 
             SyncGameSelection(ed);
+            if (_content != null) UI.UiAnim.Step(_content.gameObject, true, ref _listAnim, false);
             K.Show(true);
             ClampIntoView();
             TickScroll();
@@ -447,7 +455,7 @@ namespace Sapphire
                 _gameSel = list[0];   // hand the game's hotkeys this type's first event
                 if (SelectClick(list)) return;
                 if (!_expandedTypes.Add(type)) _expandedTypes.Remove(type);
-                _sig = 0;
+                _sig = 0; _animList = true;
             });
             // Collapsed folders sit brighter than leaf rows so the two tiers separate at a glance.
             head.color = RowTint(list, tExp, 0.4f, single ? 0.06f : 0.11f);
@@ -478,7 +486,7 @@ namespace Sapphire
                     _gameSel = evt;
                     if (SelectClickOne(evt)) return;
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
-                    _sig = 0;
+                    _sig = 0; _animList = true;
                 });
                 sub.color = _sel.Contains(evt) ? SelTint
                     : iExp ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)

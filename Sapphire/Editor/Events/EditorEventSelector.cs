@@ -38,7 +38,6 @@ namespace Sapphire
         private static int _lastArmed = int.MinValue;
         private static bool _listDirty = true;
         private static CanvasGroup _barCg;
-        private static GameObject _chipGo;
 
         private static readonly List<int> _catIds = new List<int>();
         private static readonly List<List<int>> _catTypes = new List<List<int>>();
@@ -58,6 +57,17 @@ namespace Sapphire
             }
         }
 
+        // The left-dock tab strip owns open/close now — there is no chip to click back.
+        internal static bool IsOpen => !_userHidden;
+        internal static PanelKit Kit => K;
+        internal static void SetOpen(bool v) { _userHidden = !v; }
+        internal static bool TabAvailable()
+        {
+            var s = MainClass.Settings;
+            if (s == null || !MainClass.EditorSuiteOn || !s.EditorEventDock) return false;
+            try { var ed = scnEditor.instance; return ed != null && !ed.playMode; } catch { return false; }
+        }
+
         internal static void Tick()
         {
             var s = MainClass.Settings;
@@ -68,7 +78,6 @@ namespace Sapphire
             bool want = baseWant && !_userHidden;
 
             SyncGameBar(ed, want);      // hidden palette hands the vanilla bar back
-            ShowChip(baseWant && _userHidden);
             if (!want)
             {
                 K.Show(false);
@@ -112,49 +121,9 @@ namespace Sapphire
         {
             RestoreGameBar();
             K.Dispose();
-            if (_chipGo != null) UnityEngine.Object.Destroy(_chipGo);
-            _chipGo = null;
             _viewport = null; _content = null; _searchField = null;
             _catIds.Clear(); _catTypes.Clear(); _visible.Clear(); _railBgs.Clear();
             _listDirty = true; _lastArmed = int.MinValue;
-        }
-
-        // ── collapse chip (the way back after ×) ─────────────────────────────
-
-        private static void ShowChip(bool show)
-        {
-            K.ChipAlive = show; // keeps the panel's canvas alive for the chip while the panel is hidden
-            if (!show)
-            {
-                if (_chipGo != null && _chipGo.activeSelf) _chipGo.SetActive(false);
-                return;
-            }
-            if (_chipGo == null)
-            {
-                if (K.CanvasGo == null) return; // canvas exists once the shell was ever built
-                _chipGo = new GameObject("Chip", typeof(RectTransform));
-                _chipGo.transform.SetParent(K.CanvasGo.transform, false);
-                var r = (RectTransform)_chipGo.transform;
-                r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
-                r.pivot = new Vector2(0f, 1f);
-                r.anchoredPosition = new Vector2(10f, -64f);
-                r.sizeDelta = new Vector2(84f, 24f);
-                var bg = _chipGo.AddComponent<RoundedRectGraphic>();
-                bg.Radius = 7f;
-                bg.color = new Color(0.10f, 0.10f, 0.12f, 0.94f);
-                bg.BorderWidth = 1f;
-                bg.BorderColor = new Color(1f, 1f, 1f, 0.12f);
-                bg.raycastTarget = true;
-                var lGo = new GameObject("L", typeof(RectTransform));
-                lGo.transform.SetParent(_chipGo.transform, false);
-                var lr = (RectTransform)lGo.transform;
-                lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
-                lr.offsetMin = lr.offsetMax = Vector2.zero;
-                var lt = UIBuilder.Tmp(lGo, "› " + Loc.T("Events"), 11.5f, TextAnchor.MiddleCenter, Theme.Text);
-                lt.raycastTarget = false;
-                UI.ClickHandler.Attach(_chipGo, () => { _userHidden = false; });
-            }
-            if (!_chipGo.activeSelf) _chipGo.SetActive(true);
         }
 
         // ── the game's own bottom event bar is redundant while we're up ─────
@@ -497,7 +466,6 @@ namespace Sapphire
 
             try
             {
-                if (EditorToolbar.PseudoToolOn) return;   // pseudo/zip own the digits
                 if (ed.selectedFloors == null || ed.selectedFloors.Count == 0) return;
             }
             catch { return; }

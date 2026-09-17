@@ -84,6 +84,10 @@ namespace Sapphire
         private static RoundedRectGraphic _cameraCellBg;   // camera-path overlay toggle (passive)
         private static RoundedRectGraphic _shapeLibCellBg; // shape library panel toggle (passive)
         private static GameObject _cameraMenuGo;           // camera submenu (Play all)
+        /* Submenu motion. These are persistent objects toggled with SetActive, so the animation
+           needs a clock — Tick already runs every frame, which is the one it gets. */
+        private static float _pseudoMenuAnim = 1f, _cameraMenuAnim = 1f;
+        private static bool _pseudoMenuWant, _cameraMenuWant;
         private static GameObject _pseudoMenuGo;
         private static readonly int[] PseudoNumbers = { 2, 3, 4, 5, 6, 8, 10, 12, 16 };
         private static readonly string[] PseudoAngles = { "1", "15", "22.5", "30", "90" };
@@ -120,6 +124,7 @@ namespace Sapphire
 
         internal static void Tick()
         {
+            TickSubmenus();
             var s = MainClass.Settings;
             scnEditor ed = null;
             bool want = false;
@@ -283,16 +288,10 @@ namespace Sapphire
             _faActive = active;
         }
 
-        // Keyboard select (single-digit numbers) + left-click a tile to convert it.
+        // Left-click a tile to convert it. The key count comes from the submenu only: binding
+        // it to the digits trapped the user in the tool, since digits also switch tools.
         private static void TickPseudoTool(scnEditor ed)
         {
-            if (Input.anyKeyDown)   // GetKeyDown can't be true otherwise; skips 9 ICalls/frame
-                for (int i = 0; i < PseudoNumbers.Length; i++)
-                {
-                    int num = PseudoNumbers[i];
-                    if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
-                    { _pseudoN = num; SyncPseudoMenuHighlight(); }
-                }
             int selCount = 0;
             try { selCount = ed.selectedFloors != null ? ed.selectedFloors.Count : 0; } catch { }
 
@@ -369,6 +368,7 @@ namespace Sapphire
             _canvasGo = null; _canvasRect = null; _barGo = null; _dialogGo = null; _hzCellBg = null;
             _fPerRound = _fInterval = _fPseudoAngle = null; _freeAngleCellBg = null;
             _pseudoCellBg = null; _cameraCellBg = null; _quickChartCellBg = null; _cameraMenuGo = null; _cameraGapsBg = null; _pseudoMenuGo = null; _pseudoMidspinBg = null;
+            _pseudoMenuAnim = _cameraMenuAnim = 1f; _pseudoMenuWant = _cameraMenuWant = false;
             _pseudoCounterLbl = null; _fPseudoTap = null; _fPseudoCustom = null;
             _pseudoCustomBg = null; _pseudoCustomFieldGo = null; _pseudoPresetObjs.Clear(); _fPseudoN = null;
             _toolLabelGo = null; _toolLabelText = null; _tipGo = null; _tipText = null;
@@ -477,9 +477,6 @@ namespace Sapphire
             if (!Input.anyKeyDown) return;
             try
             {
-                if (_pseudoTool || _zipTool) return; // their digits set the key count; every other tool can be
-                                         // switched away directly (gating on AnyToolActive made
-                                         // the digits "work once, then die")
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return;
                 if (ed.userIsEditingAnInputField) return;
             }
@@ -768,7 +765,7 @@ namespace Sapphire
         {
             if (EditorCameraPath.IsOn) EditorCameraPath.Toggle();
             SyncCameraHighlight();
-            if (_cameraMenuGo != null) _cameraMenuGo.SetActive(false);
+            _cameraMenuWant = false;
         }
 
         // VFX preview entry point: hide-everything must not leave a click-owning tool armed.
@@ -785,6 +782,7 @@ namespace Sapphire
 
         private static void ShowCameraMenu()
         {
+            _cameraMenuWant = true;
             if (_cameraMenuGo != null) { _cameraMenuGo.SetActive(true); SyncCameraGaps(); return; }
             const float pad = 7f, bh = 34f, gap = 5f, playW = 96f, selW = 92f, gapsW = 100f;
             _cameraMenuGo = new GameObject("CameraMenu", typeof(RectTransform));
@@ -1367,15 +1365,6 @@ namespace Sapphire
 
         private static void TickZipTool(scnEditor ed)
         {
-            // digits set the key count (zips start at 4)
-            if (Input.anyKeyDown)   // GetKeyDown can't be true otherwise; skips 7 ICalls/frame
-                for (int i = 0; i < ZipNumbers.Length; i++)
-                {
-                    int num = ZipNumbers[i];
-                    if (num < 10 && Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha0 + num)))
-                    { _zipN = num; SyncZipMenuHighlight(); }
-                }
-
             // two-click guard: re-click the selected tile to zip it
             int curSel = -1;
             try { if (ed.SelectionIsSingle()) curSel = ed.selectedFloors[0].seqID; } catch { }
@@ -1449,7 +1438,6 @@ namespace Sapphire
         private static Vector3 _inspClickWorld;
 
         internal static bool InspectorActive => _inspectorTool;
-        internal static bool PseudoToolOn => _pseudoTool || _zipTool;   // their digits set the key count
         internal static int CurrentEventTool => _eventTool;             // -1 = none (selector highlight)
 
         // ESC is "owned" by the toolbar while any of these are up: it disarms the tool, and the
@@ -1714,8 +1702,19 @@ namespace Sapphire
             if (hover != null) hover.Base = rest;
         }
 
+        private static void TickSubmenus()
+        {
+            if (_pseudoMenuGo != null
+                && !UI.UiAnim.Step(_pseudoMenuGo, _pseudoMenuWant, ref _pseudoMenuAnim)
+                && _pseudoMenuGo.activeSelf) _pseudoMenuGo.SetActive(false);
+            if (_cameraMenuGo != null
+                && !UI.UiAnim.Step(_cameraMenuGo, _cameraMenuWant, ref _cameraMenuAnim)
+                && _cameraMenuGo.activeSelf) _cameraMenuGo.SetActive(false);
+        }
+
         private static void ShowPseudoMenu()
         {
+            _pseudoMenuWant = true;
             if (_pseudoMenuGo != null) { _pseudoMenuGo.SetActive(true); SyncPseudoMenuHighlight(); SyncPseudoMidspin(); return; }
             const float bw = 30f, bgap = 5f, bpad = 7f, bh = 28f, rowGap = 6f;
             const float labW = 42f, mspinW = 62f, cntW = 64f, presetW = 46f, presetGap = 5f;
@@ -1944,7 +1943,7 @@ namespace Sapphire
 
         private static void HidePseudoMenu()
         {
-            if (_pseudoMenuGo != null) _pseudoMenuGo.SetActive(false);
+            _pseudoMenuWant = false;   // Tick fades it out and deactivates it when it lands
         }
 
         private static void SyncPseudoMenuHighlight()

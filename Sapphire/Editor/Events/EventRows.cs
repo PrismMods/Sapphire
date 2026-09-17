@@ -253,7 +253,10 @@ namespace Sapphire
                 Label(content, FormatVal(val), x, y, w, RowH, new Color(0.45f, 0.45f, 0.5f, 1f));
                 return y - (RowH + Gap);
             }
-            float rightW = isFile ? 30f : (isColor ? RowH : 0f);
+            // The song offset gets a Suggest button: the value is measurable from the audio, and
+            // typing a number, playtesting, and typing another is the alternative.
+            bool isOffset = k == "offset" && e2.eventType == ADOFAI.LevelEventType.SongSettings;
+            float rightW = isFile ? 30f : (isColor ? RowH : (isOffset ? 64f : 0f));
             float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
             var field = InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
             // The artist field gets the game's verified-artist autocomplete (name + approval badge).
@@ -267,7 +270,15 @@ namespace Sapphire
             }
             else if (isColor)
             {
-                Swatch(content, FormatVal(val), x + inputW + Gap, y);
+                Swatch(content, FormatVal(val), x + inputW + Gap, y, lbl,
+                    nv => CommitText(c, ed, e2, p2, k, nv, val));
+            }
+            else if (isOffset)
+            {
+                // The waveform window owns this now: suggesting blind was a number with no way
+                // to check it, and the same window scrubs the audio the offset is measured from.
+                Cell(content, Loc.T("Audio"), x + inputW + Gap, y, rightW, RowH,
+                    () => { EditorVisualizer.Open(); EditorVisualizer.Kit.BringToFront(); }, true);
             }
             return y - (RowH + Gap);
         }
@@ -420,7 +431,9 @@ namespace Sapphire
         }
 
         // RowH-square colour chip for a hex string; magenta marks an unparseable value.
-        internal static void Swatch(RectTransform content, string hex, float x, float y)
+        // With `pick`, the chip is the button that opens the HSV/RGB wheel for that value.
+        internal static void Swatch(RectTransform content, string hex, float x, float y,
+            string title = null, Action<string> pick = null)
         {
             var go = new GameObject("Sw", typeof(RectTransform));
             go.transform.SetParent(content, false);
@@ -436,7 +449,9 @@ namespace Sapphire
                 ? col : Color.magenta;
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.2f);
-            bg.raycastTarget = false;
+            bg.raycastTarget = pick != null;
+            if (pick != null)
+                UI.ClickHandler.Attach(go, () => UI.ColorWheel.OpenHex(title, hex, pick));
         }
 
         internal static void Label(RectTransform content, string text, float x, float y, float w, float h, Color color)
