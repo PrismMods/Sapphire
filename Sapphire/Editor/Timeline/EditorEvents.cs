@@ -40,9 +40,19 @@ namespace Sapphire
 
         // ── timeline ──
         private static RectTransform _stripRect;
+        private static float _stripAnim = 1f;   // fold/unfold motion, see UiAnim
         private static RectTransform _markerArea;
         private static RawImage _markerImage;
         private static Texture2D _markerTex;
+        private static RectTransform _waveRect, _waveTrack;
+        private static RawImage _waveImage;
+        // Resizable by its own grip — see WaveTrackGrip.
+        private static float _waveTrackH = 24f;
+        internal static float WaveTrackH { get { return _waveTrackH; } }
+        private static Texture2D _waveTex;
+        private static string _waveClip;      // which song the texture was built from
+        private static float _waveLen;        // that song's length, for the uv mapping
+        private static bool _waveFailed;      // unreadable clip: do not retry every frame
         private static RectTransform _playhead;
         private static RectTransform _laneLabelHost;
         private const float HeaderW = 96f;   // lane-label column
@@ -55,11 +65,89 @@ namespace Sapphire
         private static float _laneHExtra;
         private static float LaneHEff => (KeyframeMode ? 44f : LaneH) + _laneHExtra;
         private static int TexLaneHEff => Mathf.Max(12, Mathf.RoundToInt(LaneHEff));
+
+        /* PER-LANE height on top of the shared one, keyed by the lane's IDENTITY rather than
+           its index: lanes appear and vanish as events are added and removed, so an index-keyed
+           height would silently migrate to whichever lane took that slot. Categories key on
+           their enum value; the tag modes have no stable id, so they key on position. */
+        private static readonly Dictionary<int, float> _laneExtra = new Dictionary<int, float>();
+        private static bool _laneDragging;
+        // Any live height drag: the marker texture must not be reallocated per frame.
+        private static bool HeightDragging => StripHeightGrip.Dragging || _laneDragging;
+
+        private static int LaneKey(int i) =>
+            TlMode >= 2 ? -1000 - i : (i >= 0 && i < _lanes.Count ? (int)_lanes[i] : -1);
+
+        internal static float LaneHOf(int i)
+        {
+            float e;
+            return Mathf.Max(12f, LaneHEff + (_laneExtra.TryGetValue(LaneKey(i), out e) ? e : 0f));
+        }
+
+        // Top of lane i measured from the top of the lane column, expanded sub-row included.
+        private static float LaneTop(int i)
+        {
+            float y = 0f;
+            for (int k = 0; k < i && k < _lanes.Count; k++) y += LaneHOf(k);
+            if (CamMode && _expandedLane >= 0 && i > _expandedLane) y += SubRowH;
+            return y;
+        }
+
+        private static float LanesTotalH()
+        {
+            float y = 0f;
+            for (int k = 0; k < _lanes.Count; k++) y += LaneHOf(k);
+            return Mathf.Max(y, LaneHEff);   // an empty lane list still needs one lane of room
+        }
+
+        private static int TexRowsOf(int i) => Mathf.Max(12, Mathf.RoundToInt(LaneHOf(i)));
+
+        private static int TexLaneTop(int i)
+        {
+            int y = 0;
+            for (int k = 0; k < i && k < _lanes.Count; k++) y += TexRowsOf(k);
+            if (CamMode && _expandedLane >= 0 && i > _expandedLane) y += (int)SubRowH;
+            return y;
+        }
+
+        private static int TexLanesTotal()
+        {
+            int y = 0;
+            for (int k = 0; k < _lanes.Count; k++) y += TexRowsOf(k);
+            return Mathf.Max(y, TexLaneHEff);
+        }
+
+        /* Which lane is at `yFromTop` in the lane column. A scan, not a division: heights differ
+           per lane now, so there is no single divisor. Lane counts are single digits. */
+        private static int LaneAtY(float yFromTop, out bool inSubRow)
+        {
+            inSubRow = false;
+            if (yFromTop < 0f) return -1;
+            float y = 0f;
+            for (int i = 0; i < _lanes.Count; i++)
+            {
+                float h = LaneHOf(i);
+                if (yFromTop < y + h) return i;
+                y += h;
+                if (CamMode && _expandedLane == i)
+                {
+                    if (yFromTop < y + SubRowH) { inSubRow = true; return i; }
+                    y += SubRowH;
+                }
+            }
+            return -1;
+        }
         private const float TransBandH = 44f; // keyframe modes park the transport up top
         private const float SubRowH = 32f;   // expanded keyframe sub-row (label click)
         internal static int _expandedLane = -1;
         private const float StripPad = 7f;
+        // The bottom edge carries more: the lowest lane (or the audio track) used to sit flush
+        // against it, which reads as clipped the way the button column did.
+        private const float StripPadBottom = 16f;
         private const float ZoomW = 60f;     // zoom-button column on the right
+        // Breathing room between that column and the strip's right edge — the buttons used to
+        // sit 2px off it, which reads as clipped rather than as an edge.
+        private const float ZoomPad = 10f;
         // Marker texture is PADDED: it covers TEXPAD× the visible span so pure view movement
         // (pan / scrub / playback paging) just scrolls the RawImage's uvRect — no texture repaint.
         // Width scales with the pad so pixel DENSITY (px per frac) matches the old 1792-over-view,
@@ -94,14 +182,15 @@ namespace Sapphire
         private static string _tipCache;
         private static CanvasGroup _fadedPlayCluster;
 
-        // ── mode cluster: Editor Mode / difficulty / no-fail chips above the strip ──
+        // ── mode cluster: EDIT/PLAY · difficulty · no-fail chips above the strip ──
         private static RectTransform _modeCluster;
         private static RoundedRectGraphic _emBg;
         private static TextMeshProUGUI _emLabel;
+        private static bool _pmShown;
         private static TextMeshProUGUI _diffLabel;
         private static RoundedRectGraphic _nfBg;
         private static TextMeshProUGUI _nfLabel;
-        private static bool _emShown, _nfShown;
+        private static bool _nfShown;
         private static int _diffShown = -1;
 
         // View window: [_viewStart, _viewStart + 1/_zoom] in beat-fraction space. Markers
@@ -188,6 +277,8 @@ namespace Sapphire
         private static RoundedRectGraphic _camBtnBg;
         private static GameObject _graphBtnGo;
         private static RoundedRectGraphic _graphBtnBg;
+        private static RoundedRectGraphic _waveBtnBg;
+        private static RectTransform _diffRect;      // the difficulty chip the menu drops from
         private static RectTransform _camInspHost;
         private const int CamLanePos = -2, CamLaneRot = -3, CamLaneZoom = -4;
 
@@ -413,9 +504,14 @@ namespace Sapphire
             var s = MainClass.Settings;
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
-            bool wantChips = false, wantTl = false, wantFold = false;
+            bool wantChips = false, wantTl = false, wantFold = false, wantModes = false;
             try
             {
+                /* Play mode turns EditorSuiteOn off, which used to take the mode cluster down with
+                   everything else — and the PLAY chip is the only way back out. So the cluster
+                   follows the RAW master switch, and in play mode it is the one thing left up. */
+                if (s != null && MainClass.MasterSwitchOn && ed != null && s.PlayModeActive)
+                    wantModes = true;
                 if (s != null && MainClass.EditorSuiteOn && (s.EditorShowEvents || s.EditorTimeline))
                 {
                     bool editing = ed != null && !ed.playMode && !EditorPanelOpen(ed);
@@ -430,6 +526,7 @@ namespace Sapphire
                     bool qc = s.FeatQuickChart;
                     wantTl = (inEditor || playing) && s.EditorTimeline && !_tlUserHidden && !qc;
                     wantFold = (inEditor || playing) && s.EditorTimeline && !qc;
+                    wantModes = wantFold;
                 }
             }
             catch { }
@@ -446,6 +543,17 @@ namespace Sapphire
             // Runs before the early-out below so the fold handle keeps the cursor alive even
             // when the strip itself is folded away.
             TickCursor(ed != null && ed.playMode, Input.mousePosition);
+            if (_waveBtnBg != null)
+            {
+                var ws = MainClass.Settings;
+                bool on = ws != null && ws.EditorWaveform;
+                var ac2 = UI.Theme.Accent;
+                // Dim while the song is still being read, so an on-but-blank track explains itself.
+                float al = on ? (WaveTrackShown ? 0.5f : 0.25f) : 0.12f;
+                var wc = on ? new Color(ac2.r, ac2.g, ac2.b, al) : new Color(1f, 1f, 1f, 0.12f);
+                if (_waveBtnBg.color != wc) _waveBtnBg.color = wc;
+            }
+
             // graph view opens/closes independently of the mode — mirror its state per frame
             if (_graphBtnBg != null)
             {
@@ -457,7 +565,7 @@ namespace Sapphire
 
             // The mode chips are state toggles, not timeline furniture — they follow the fold
             // arrow's gate, so folding the strip away leaves them (and it) on screen.
-            if (!wantChips && !wantTl && !wantFold)
+            if (!wantChips && !wantTl && !wantFold && !wantModes)
             {
                 if (_canvasGo != null && _canvasGo.activeSelf) _canvasGo.SetActive(false);
                 _chipFloor = -2; // force chip rebuild on return
@@ -469,7 +577,7 @@ namespace Sapphire
             }
             if (_canvasGo == null) BuildCanvas();
             if (!_canvasGo.activeSelf) _canvasGo.SetActive(true);
-            TickModeCluster(wantFold);
+            TickModeCluster(wantModes);
 
             string tip = null;
             Vector2 tipAt = default;
@@ -505,11 +613,13 @@ namespace Sapphire
             if (_foldCanvasGo != null) Object.Destroy(_foldCanvasGo);
             _foldCanvasGo = null; _foldRect = null; _foldGlyph = null;
             if (_markerTex != null) Object.Destroy(_markerTex);
+            if (_waveTex != null) Object.Destroy(_waveTex);
+            _waveRect = null; _waveTrack = null; _waveImage = null; _waveTex = null; _waveClip = null; _waveFailed = false;
             _canvasGo = null; _canvasRect = null; _canvas = null; _chipsRow = null;
-            _stripRect = null; _markerArea = null; _markerImage = null; _markerTex = null; _graphBtnGo = null; _graphBtnBg = null; _dragGhostGo = null; _modeMenuGo = null; _modeBtnLabel = null;
+            _stripRect = null; _stripAnim = 1f; _markerArea = null; _markerImage = null; _markerTex = null; _graphBtnGo = null; _graphBtnBg = null; _waveBtnBg = null; _dragGhostGo = null; _modeMenuGo = null; _modeBtnLabel = null;
             _playhead = null; _laneLabelHost = null;
             _tooltipGo = null; _tooltipRect = null; _tooltipText = null;
-            _chipRects.Clear(); _chipEvents.Clear(); _lanes.Clear(); _laneEvents = null;
+            _chipRects.Clear(); _chipEvents.Clear(); _lanes.Clear(); _laneEvents = null; _laneExtra.Clear();
             _timePrefix = null; _beatPrefix = null; _bpmPrefix = null; _tileBpmPrefix = null; _baseBpmPrefix = null; _tempo.Clear(); _chipFloor = -2; _tlSig = int.MinValue;
             _zoom = 1f; _viewStart = 0f; _lastSelSeq = -1; _userZoomed = false; _draggingHead = false;
             _cursorForced = false;
@@ -517,8 +627,10 @@ namespace Sapphire
             _transportGo = null; _playGlyph = null; _pauseBars = null; _clockText = null; _bpmText = null;
             _autoBg = null; _autoLabel = null; _autoShown = false; _diffMenuGo = null;
             _transportOn = false;
-            _modeCluster = null; _emBg = null; _emLabel = null; _diffLabel = null;
-            _nfBg = null; _nfLabel = null; _emShown = false; _nfShown = false; _diffShown = -1;
+            _modeCluster = null; _emBg = null; _emLabel = null; _diffLabel = null; _diffRect = null;
+            _pmShown = false;
+            _nfBg = null; _nfLabel = null; _nfShown = false; _diffShown = -1;
+            _diffClosing = false; _diffAnim = 0f;
         }
 
         // ── selected-tile chips ─────────────────────────────────────────────
@@ -669,19 +781,26 @@ namespace Sapphire
 
         private static void TickTimeline(scnEditor ed, bool want, ref string tip, ref Vector2 tipAt)
         {
+            /* The strip folds rather than blinking out. It keeps being laid out while it fades,
+               so the fold reads as the strip leaving rather than the contents rearranging on the
+               way. */
             if (!want)
             {
-                if (_stripRect != null && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
+                if (_stripRect != null
+                    && !UI.UiAnim.Step(_stripRect.gameObject, false, ref _stripAnim, false)
+                    && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
                 return; // cursor + mode chips are ticked from Tick — they outlive the strip
             }
             var events = LevelEventList();
             var floors = ADOBase.lm != null ? ADOBase.lm.listFloors : null;
             if (events == null || floors == null || floors.Count == 0)
             {
-                if (_stripRect != null && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
+                if (_stripRect != null
+                    && !UI.UiAnim.Step(_stripRect.gameObject, false, ref _stripAnim, false)
+                    && _stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(false);
                 return;
             }
-            if (!_stripRect.gameObject.activeSelf) _stripRect.gameObject.SetActive(true);
+            UI.UiAnim.Step(_stripRect.gameObject, true, ref _stripAnim, false);
 
             bool wantTransport = false, dockOn = false;
             try
@@ -719,6 +838,9 @@ namespace Sapphire
                             + (int)(floors[i].extraBeats * 100f);
                 if (TlMode >= 2)
                     sig = sig * 31 + (int)(_viewStart * _zoom * 4f) * 13 + (int)(Mathf.Log(Mathf.Max(1f, _zoom), 1.5f));
+                // The audio track changes the strip's HEIGHT, so toggling it has to invalidate
+                // the layout — otherwise the change waited for an unrelated edit to land.
+                sig = sig * 31 + (WaveTrackShown ? 1 : 0);
                 if (sig != _tlSig)
                 {
                     _tlSig = sig;
@@ -860,6 +982,8 @@ namespace Sapphire
                     _markerImage.uvRect = new Rect(uvX, 0f, uvW, 1f);
             }
 
+            TickWaveform(viewSpanF);
+
             // Playhead placement (hidden when the selection sits outside the view).
             float areaW = _markerArea.rect.width;
             float px = (selFrac - _viewStart) * _zoom * areaW;
@@ -883,12 +1007,8 @@ namespace Sapphire
                 if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_laneLabelHost, mouse, null, out ll))
                 {
                     float fromTop = _laneLabelHost.rect.yMax - ll.y;
-                    int idx = -1;
-                    for (int li = 0; li < _lanes.Count; li++)
-                    {
-                        float top = li * LaneHEff + (_expandedLane >= 0 && li > _expandedLane ? SubRowH : 0f);
-                        if (fromTop >= top && fromTop < top + LaneHEff) { idx = li; break; }
-                    }
+                    bool dummySub;
+                    int idx = LaneAtY(fromTop, out dummySub);
                     if (idx >= 0)
                     {
                         _expandedLane = _expandedLane == idx ? -1 : idx;
@@ -908,16 +1028,9 @@ namespace Sapphire
             var rect = _markerArea.rect;
             float frac = _viewStart + Mathf.Clamp01((local.x - rect.xMin) / Mathf.Max(1f, rect.width)) / _zoom;
             float yFromTop = rect.yMax - local.y;
-            bool inSubRow = false;
-            int lane;
-            if (CamMode && _expandedLane >= 0)
-            {
-                float subTop = (_expandedLane + 1) * LaneHEff;
-                if (yFromTop < subTop) lane = Mathf.FloorToInt(yFromTop / LaneHEff);
-                else if (yFromTop < subTop + SubRowH) { lane = _expandedLane; inSubRow = true; }
-                else lane = Mathf.FloorToInt((yFromTop - SubRowH) / LaneHEff);
-            }
-            else lane = Mathf.FloorToInt(yFromTop / LaneHEff);
+            bool inSubRow;
+            int lane = LaneAtY(yFromTop, out inSubRow);
+            if (!CamMode) inSubRow = false;
             LevelEvent hit = null;
             if (inSubRow)
             {
@@ -1072,7 +1185,7 @@ namespace Sapphire
                 _camInspHost.anchorMax = new Vector2(1f, 1f);
                 _camInspHost.pivot = new Vector2(0.5f, 1f);
                 _camInspHost.offsetMin = new Vector2(12f, -CamInspH); // transport lives in its own band now
-                _camInspHost.offsetMax = new Vector2(-ZoomW - 8f, 0f);
+                _camInspHost.offsetMax = new Vector2(-ZoomW - 8f - ZoomPad, 0f);
             }
             _camInspHost.gameObject.SetActive(true);
             for (int i = _camInspHost.childCount - 1; i >= 0; i--)
@@ -1564,6 +1677,61 @@ namespace Sapphire
         // Lanes, labels, beat table and texture allocation — everything that only changes
         // when the level's structure does. Marker pixels render separately (RenderMarkers)
         // so zoom/pan don't pay for this.
+
+        /* Pure geometry: strip height, marker area, lane-label column, audio track. Split out of
+           the structure rebuild because a HEIGHT DRAG only needs this — the rebuild behind it
+           recomputes floor entry times, the tempo map, time-signature detection and every lane's
+           sort, none of which depends on lane height. Running the whole thing per drag frame cost
+           10-30ms on a big level, so it was throttled to every sixth frame, which is what made
+           dragging look like it ran at ten frames a second. Now the geometry moves every frame
+           and only the rebuild waits. */
+        private static float _lastTransH, _lastInspH;
+
+        private static void ApplyStripGeometry(int laneCount, float transH, float inspH)
+        {
+            _lastTransH = transH; _lastInspH = inspH;
+            float subH = CamMode && _expandedLane >= 0 ? SubRowH : 0f;
+            float waveH = WaveTrackShown ? WaveTrackH : 0f;
+            _stripRect.sizeDelta = new Vector2(0f,
+                Mathf.Max(66f, StripPad + StripPadBottom + LanesTotalH() + subH + transH + waveH) + inspH);
+            if (_markerArea != null)
+            {
+                _markerArea.offsetMax = new Vector2(-ZoomW - 8f - ZoomPad, -StripPad - inspH - transH);
+                _markerArea.offsetMin = new Vector2(HeaderW, StripPadBottom + waveH);
+            }
+            if (_laneLabelHost != null)
+            {
+                _laneLabelHost.offsetMax = new Vector2(HeaderW - 6f, -StripPad - inspH - transH);
+                _laneLabelHost.offsetMin = new Vector2(4f, StripPadBottom + waveH);
+            }
+            if (_waveTrack != null)
+            {
+                if (_waveTrack.gameObject.activeSelf != WaveTrackShown) _waveTrack.gameObject.SetActive(WaveTrackShown);
+                if (WaveTrackShown)
+                {
+                    // Same x-range as the marker area, so a moment lines up vertically.
+                    _waveTrack.offsetMin = new Vector2(HeaderW, StripPadBottom);
+                    _waveTrack.offsetMax = new Vector2(-ZoomW - 8f - ZoomPad, StripPadBottom + WaveTrackH);
+                }
+            }
+
+            /* A fresh Texture2D holds UNINITIALISED memory, and it was handed to the RawImage
+               before anything rendered into it — which is the white flash while dragging the
+               strip taller. Clear it on creation, and force the re-render this same frame.
+
+               Reallocating is also skipped while the height is actually being dragged: the height
+               changes every frame of a drag, so this was allocating a full-width texture per
+               frame. The old one is simply stretched until the drag ends, which is invisible next
+               to the cost of not doing it. */
+        }
+
+        // Re-runs the geometry with the counts the last rebuild established.
+        private static void RefreshGeometryNow()
+        {
+            if (_stripRect == null) return;
+            try { ApplyStripGeometry(Mathf.Max(1, _lanes.Count), _lastTransH, _lastInspH); } catch { }
+        }
+
         private static void RebuildStructure(List<LevelEvent> events, List<scrFloor> floors)
         {
             // The axis is real song time, straight from the game: CalculateFloorEntryTimes
@@ -1698,19 +1866,20 @@ namespace Sapphire
                 trr.sizeDelta = new Vector2(TransportW + 160f, TransBandH);
                 trr.anchoredPosition = new Vector2(8f, -inspH);
             }
-            float subH = CamMode && _expandedLane >= 0 ? SubRowH : 0f;
-            _stripRect.sizeDelta = new Vector2(0f,
-                Mathf.Max(66f, StripPad * 2f + laneCount * LaneHEff + subH + transH) + inspH);
-            if (_markerArea != null) _markerArea.offsetMax = new Vector2(-ZoomW - 8f, -StripPad - inspH - transH);
-            if (_laneLabelHost != null) _laneLabelHost.offsetMax = new Vector2(HeaderW - 6f, -StripPad - inspH - transH);
+            ApplyStripGeometry(laneCount, transH, inspH);
 
-            int texH = laneCount * TexLaneHEff + (CamMode && _expandedLane >= 0 ? (int)SubRowH : 0);
-            if (_markerTex == null || _markerTex.height != texH)
+            int texH = TexLanesTotal() + (CamMode && _expandedLane >= 0 ? (int)SubRowH : 0);
+            if ((_markerTex == null || _markerTex.height != texH)
+                && !(HeightDragging && _markerTex != null))
             {
                 if (_markerTex != null) Object.Destroy(_markerTex);
                 _markerTex = new Texture2D(TexW, texH, TextureFormat.RGBA32, false);
                 _markerTex.filterMode = FilterMode.Point;
+                var clear = new Color32[TexW * texH];
+                _markerTex.SetPixels32(clear);
+                _markerTex.Apply(false);
                 _markerImage.texture = _markerTex;
+                _texStart = -999f;      // forces the out-of-range re-render below, this frame
             }
 
             var laneIndex = new Dictionary<LevelEventCategory, int>();
@@ -1762,9 +1931,9 @@ namespace Sapphire
                 var r = (RectTransform)go.transform;
                 r.anchorMin = new Vector2(0f, 1f); r.anchorMax = new Vector2(1f, 1f);
                 r.pivot = new Vector2(0.5f, 1f);
-                r.sizeDelta = new Vector2(0f, LaneHEff);
-                float shift = CamMode && _expandedLane >= 0 && i > _expandedLane ? SubRowH : 0f;
-                r.anchoredPosition = new Vector2(0f, -i * LaneHEff - shift);
+                r.sizeDelta = new Vector2(0f, LaneHOf(i));
+                r.anchoredPosition = new Vector2(0f, -LaneTop(i));
+                MakeLaneGrip(go.transform, LaneKey(i));
                 var t = go.AddComponent<TextMeshProUGUI>();
                 t.font = UI.Theme.TmpFont;
                 t.fontSize = CamMode ? 16 : 13;
@@ -1880,14 +2049,103 @@ namespace Sapphire
 
         // Paint the events inside the current view window (3×9 blocks, category-colored,
         // dim when off). Called on structure change, zoom, pan and selection auto-scroll.
+        /* Song waveform behind the timeline.
+
+           The texture is the WHOLE song at a fixed bucket count, built once per clip, and the
+           view is expressed as a uvRect — so panning and zooming cost two floats rather than a
+           re-render. The axis conversion is the offset relation from the game's own timing:
+           audio time = chart time + offset/1000, so a chart fraction f maps to
+           (f * totalTime + offset) / clipLength. */
+        /* Whether the track has anything to show — the layout pass reserves its band on this, so
+           a level with an unreadable song loses no strip height to an empty row. */
+        private static bool _waveReady;
+        internal static bool WaveTrackShown
+        {
+            get
+            {
+                var s = MainClass.Settings;
+                return s != null && s.EditorWaveform && _waveReady;
+            }
+        }
+
+        private static void TickWaveform(float viewSpanF)
+        {
+            var s = MainClass.Settings;
+            bool want = s != null && s.EditorWaveform && _waveImage != null;
+            if (!want) { _waveReady = false; return; }
+            _waveReady = EnsureWaveTex();
+            if (!_waveReady) return;
+
+            double off = 0.0;
+            try
+            {
+                var ld = scnGame.instance != null ? scnGame.instance.levelData : null;
+                if (ld != null) off = ld.offset / 1000.0;
+            }
+            catch { }
+            double t0 = _viewStart * _totalTime + off;
+            double span = viewSpanF * _totalTime;
+            float uvX = (float)(t0 / _waveLen);
+            float uvW = (float)(span / _waveLen);
+            var uv = _waveImage.uvRect;
+            if (Mathf.Abs(uv.x - uvX) > 1e-5f || Mathf.Abs(uv.width - uvW) > 1e-5f)
+                _waveImage.uvRect = new Rect(uvX, 0f, uvW, 1f);
+            var ac = UI.Theme.Accent;
+            var wc = new Color(ac.r, ac.g, ac.b, 0.45f);
+            if (_waveImage.color != wc) _waveImage.color = wc;
+        }
+
+        private static bool EnsureWaveTex()
+        {
+            // AudioAnalysis decodes the song file on a coroutine, so a null here usually means
+            // "not yet" — only a Failed status is worth remembering.
+            var res = AudioAnalysis.Get();
+            if (res == null || res.Peak == null)
+            {
+                _waveFailed = AudioAnalysis.Status == AudioAnalysis.State.Failed;
+                return false;
+            }
+            if (_waveTex != null && _waveClip == res.ClipName) return true;
+            _waveClip = res.ClipName;
+            _waveFailed = false;
+            _waveLen = Mathf.Max(0.001f, res.Length);
+
+            const int H = 64;
+            int w = res.Peak.Length;
+            if (_waveTex == null || _waveTex.width != w)
+            {
+                if (_waveTex != null) Object.Destroy(_waveTex);
+                // Point filtering: the strip magnifies this by uvRect, and bilinear turns the
+                // envelope into a smear at any real zoom.
+                _waveTex = new Texture2D(w, H, TextureFormat.RGBA32, false)
+                { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point };
+            }
+            var px = new Color32[w * H];
+            var body = new Color32(255, 255, 255, 255);
+            var quiet = new Color32(255, 255, 255, 40);
+            for (int x = 0; x < w; x++)
+            {
+                // sqrt curve: a linear envelope leaves everything but the loudest bar invisible
+                int half = Mathf.Clamp(Mathf.RoundToInt(Mathf.Sqrt(Mathf.Clamp01(res.Peak[x])) * (H * 0.5f)), 1, H / 2);
+                for (int y = 0; y < H; y++)
+                {
+                    int d = y - H / 2; if (d < 0) d = -d;
+                    px[y * w + x] = d <= half ? body : quiet;
+                }
+            }
+            _waveTex.SetPixels32(px);
+            _waveTex.Apply(false);
+            _waveImage.texture = _waveTex;
+            return true;
+        }
+
         private static void RenderMarkers()
         {
             if (_markerTex == null || _laneEvents == null) return;
             _tipEvent = null; // markers repaint on edits/pans → force the hover tooltip to refresh
             int laneCount = _laneEvents.Length;
-            int tlh = TexLaneHEff;
             int subH = CamMode && _expandedLane >= 0 ? (int)SubRowH : 0;
-            int texH = laneCount * tlh + subH;
+            int texH = TexLanesTotal() + subH;
             /* ~1 MB per repaint at the default lane height (4.3 MB with the height grip
                maxed), and this runs every frame while wheel-panning or drag-scrubbing —
                Boehm puts anything over 8 KB in the large-object area, so allocating fresh
@@ -1961,7 +2219,8 @@ namespace Sapphire
                 var c = TlMode >= 2 ? StrLaneColor(lane) : CategoryColor(cat);
                 var list = _laneEvents[lane];
                 // texture row 0 = bottom; lanes at/above the expanded one sit above its sub-row
-                int y0 = (laneCount - 1 - lane) * tlh + (subH > 0 && lane <= _expandedLane ? subH : 0) + 1;
+                int tlh = TexRowsOf(lane);
+                int y0 = texH - TexLaneTop(lane) - tlh + 1;
                 for (int i = 0; i < list.Count; i++)
                 {
                     float frac = list[i].Key;
@@ -2020,7 +2279,8 @@ namespace Sapphire
             _subKf.Clear();
             if (subH > 0 && _expandedLane < laneCount)
             {
-                int rowBase = (laneCount - 1 - _expandedLane) * tlh;
+                // The sub-row hangs directly under its lane; rows count up from the bottom.
+                int rowBase = texH - TexLaneTop(_expandedLane) - TexRowsOf(_expandedLane) - subH;
                 int cy = rowBase + subH / 2;
                 var list = _laneEvents[_expandedLane];
                 var rowBg = new Color32(255, 255, 255, 12);
@@ -2498,7 +2758,7 @@ namespace Sapphire
             _stripRect.anchorMax = new Vector2(1f, 0f);
             _stripRect.pivot = new Vector2(0.5f, 0f);
             _stripRect.anchoredPosition = new Vector2(0f, BottomGap);
-            _stripRect.sizeDelta = new Vector2(0f, Mathf.Max(66f, StripPad * 2f + LaneH));
+            _stripRect.sizeDelta = new Vector2(0f, Mathf.Max(66f, StripPad + StripPadBottom + LaneH));
             var stripBg = stripGo.AddComponent<Image>();
             stripBg.color = new Color(0f, 0f, 0f, 0.55f);
             // The strip acts like a toolbar: it swallows clicks/wheel over itself so the
@@ -2511,7 +2771,7 @@ namespace Sapphire
             _laneLabelHost.anchorMin = new Vector2(0f, 0f);
             _laneLabelHost.anchorMax = new Vector2(0f, 1f);
             _laneLabelHost.pivot = new Vector2(0f, 0.5f);
-            _laneLabelHost.offsetMin = new Vector2(4f, StripPad);
+            _laneLabelHost.offsetMin = new Vector2(4f, StripPadBottom);
             _laneLabelHost.offsetMax = new Vector2(HeaderW - 6f, -StripPad);
             // Something in the strip stack outraces the labels for pointer raycasts (the cam
             // lane expand chevrons read dead) — give the label column its own sorting layer
@@ -2526,11 +2786,57 @@ namespace Sapphire
             _markerArea = (RectTransform)areaGo.transform;
             _markerArea.anchorMin = new Vector2(0f, 0f);
             _markerArea.anchorMax = new Vector2(1f, 1f);
-            _markerArea.offsetMin = new Vector2(HeaderW, StripPad);
-            _markerArea.offsetMax = new Vector2(-ZoomW - 8f, -StripPad);
+            _markerArea.offsetMin = new Vector2(HeaderW, StripPadBottom);
+            _markerArea.offsetMax = new Vector2(-ZoomW - 8f - ZoomPad, -StripPad);
             _markerImage = areaGo.AddComponent<RawImage>();
             _markerImage.color = Color.white;
             _markerImage.raycastTarget = false;
+
+            /* The song gets its own TRACK rather than a wash behind the markers: it is a
+               different kind of information (continuous audio, not discrete events) and it reads
+               on a different clock — markers are a padded window in CHART fraction, the waveform
+               is the whole song in AUDIO time, which the level offset shifts. */
+            var trackGo = new GameObject("WaveTrack", typeof(RectTransform));
+            trackGo.transform.SetParent(stripGo.transform, false);
+            _waveTrack = (RectTransform)trackGo.transform;
+            _waveTrack.anchorMin = new Vector2(0f, 0f);
+            _waveTrack.anchorMax = new Vector2(1f, 0f);
+            _waveTrack.pivot = new Vector2(0f, 0f);
+            var trackBg = trackGo.AddComponent<RoundedRectGraphic>();
+            trackBg.Radius = 0f;
+            trackBg.color = new Color(1f, 1f, 1f, 0.03f);
+            trackBg.raycastTarget = false;
+
+            var wgGo = new GameObject("WaveGrip", typeof(RectTransform));
+            wgGo.transform.SetParent(trackGo.transform, false);
+            var wgr = (RectTransform)wgGo.transform;
+            wgr.anchorMin = new Vector2(0f, 1f); wgr.anchorMax = new Vector2(1f, 1f);
+            wgr.pivot = new Vector2(0.5f, 1f);
+            wgr.offsetMin = new Vector2(0f, -7f); wgr.offsetMax = new Vector2(0f, 3f);
+            var wgImg = wgGo.AddComponent<Image>();
+            wgImg.color = new Color(1f, 1f, 1f, 0.05f);
+            wgImg.raycastTarget = true;
+            wgGo.AddComponent<WaveTrackGrip>();
+
+            var waveGo = new GameObject("Wave", typeof(RectTransform));
+            waveGo.transform.SetParent(trackGo.transform, false);
+            _waveRect = (RectTransform)waveGo.transform;
+            _waveRect.anchorMin = Vector2.zero; _waveRect.anchorMax = Vector2.one;
+            _waveRect.offsetMin = new Vector2(0f, 1f); _waveRect.offsetMax = new Vector2(0f, -1f);
+            _waveImage = waveGo.AddComponent<RawImage>();
+            _waveImage.raycastTarget = false;
+            _waveImage.color = new Color(1f, 1f, 1f, 0.5f);
+
+            var wlGo = new GameObject("L", typeof(RectTransform));
+            wlGo.transform.SetParent(trackGo.transform, false);
+            var wlr = (RectTransform)wlGo.transform;
+            wlr.anchorMin = new Vector2(0f, 0f); wlr.anchorMax = new Vector2(0f, 1f);
+            wlr.pivot = new Vector2(0f, 0.5f);
+            wlr.anchoredPosition = new Vector2(4f, 0f);
+            wlr.sizeDelta = new Vector2(HeaderW - 10f, 0f);
+            var wl = UI.UIBuilder.Tmp(wlGo, Loc.T("AUDIO"), 10f, TextAnchor.MiddleLeft, new Color(0.62f, 0.62f, 0.68f, 1f));
+            wl.raycastTarget = false;
+            trackGo.SetActive(false);
 
             // Playhead: line + a small handle at the top, tracking the selected tile.
             var headGo = new GameObject("Playhead", typeof(RectTransform));
@@ -2569,10 +2875,11 @@ namespace Sapphire
             gripImg.raycastTarget = true;
             gripGo.AddComponent<StripHeightGrip>();
 
-            MakeZoomButton(stripGo.transform, "-", -ZoomW + 2f, () => Zoom(1f / 1.5f));
-            MakeZoomButton(stripGo.transform, "+", -ZoomW / 2f + 3f, () => Zoom(1.5f));
+            MakeZoomButton(stripGo.transform, "-", -ZoomW + 2f - ZoomPad, () => Zoom(1f / 1.5f));
+            MakeZoomButton(stripGo.transform, "+", -ZoomW / 2f + 3f - ZoomPad, () => Zoom(1.5f));
             BuildCamButton(stripGo.transform);
             BuildGraphButton(stripGo.transform);
+            BuildWaveButton(stripGo.transform);
             BuildTransport(stripGo.transform);
             BuildModeCluster();
             _stripRect.gameObject.SetActive(false);
@@ -2744,7 +3051,7 @@ namespace Sapphire
         }
 
         // Quick-access state chips the charter flips constantly, parked above the strip's
-        // right end. Editor Mode toggles the Sapphire setting; difficulty opens a small
+        // right end. The mode chip swaps EDIT/PLAY; difficulty opens a small
         // dropdown (GCS.difficulty); no-fail flips GCS.useNoFail (and the live controller
         // flag mid-run); AUTO flips RDC.auto.
         private static void BuildModeCluster()
@@ -2754,20 +3061,28 @@ namespace Sapphire
             _modeCluster = (RectTransform)go.transform;
             _modeCluster.anchorMin = _modeCluster.anchorMax = new Vector2(1f, 0f);
             _modeCluster.pivot = new Vector2(1f, 0f);
+            // MODE 64 · NORMAL 78 · NO FAIL 64 · AUTO 46, with 6px between each.
             _modeCluster.sizeDelta = new Vector2(64f + 78f + 64f + 46f + 18f, 24f);
 
-            _emBg = MakeModeChip(0f, 64f, "EDITOR", out _emLabel, () =>
+            /* One chip, not two. EDIT and PLAY are the only modes and they are mutually
+               exclusive, so a pair of switches could express a third state — neither — that
+               means nothing. The chip reads as the mode you are IN and clicking swaps it. */
+            _emBg = MakeModeChip(0f, 64f, "EDIT", out _emLabel, () =>
             {
                 try
                 {
                     var s = MainClass.Settings;
                     if (s == null) return;
-                    s.EditorModeEnabled = !s.EditorModeEnabled;
+                    bool toPlay = !s.PlayModeEnabled;
+                    s.PlayModeEnabled = toPlay;
+                    s.EditorModeEnabled = !toPlay;
                     UI.UICore.OnSettingsChanged?.Invoke();
                 }
                 catch { }
             });
-            MakeModeChip(70f, 78f, "NORMAL", out _diffLabel, ToggleDiffMenu);
+            // Keep the chip: the menu anchors to it, and a hardcoded offset went stale the
+            // moment the cluster reflowed (EDITOR and PLAY merging left it pointing 58px right).
+            _diffRect = (RectTransform)MakeModeChip(70f, 78f, "NORMAL", out _diffLabel, ToggleDiffMenu).transform;
             _nfBg = MakeModeChip(154f, 64f, "NO FAIL", out _nfLabel, () =>
             {
                 try
@@ -2787,8 +3102,13 @@ namespace Sapphire
         // Small dropdown above the difficulty chip; picking a row sets GCS.difficulty.
         private static void ToggleDiffMenu()
         {
-            if (_diffMenuGo != null) { CloseDiffMenu(); return; }
+            if (_diffMenuGo != null)
+            {
+                // A second click on the chip closes it; one already leaving is simply replaced.
+                if (_diffClosing) DestroyDiffMenu(); else { CloseDiffMenu(); return; }
+            }
 
+            _diffAnim = 0f; _diffClosing = false;
             _diffMenuGo = new GameObject("DiffMenu", typeof(RectTransform));
             _diffMenuGo.transform.SetParent(_canvasGo.transform, false);
             var blocker = (RectTransform)_diffMenuGo.transform;
@@ -2805,9 +3125,10 @@ namespace Sapphire
             var panel = (RectTransform)panelGo.transform;
             panel.anchorMin = panel.anchorMax = new Vector2(1f, 0f);
             panel.pivot = new Vector2(0f, 0f);
-            // Above the difficulty chip (cluster x=70): cluster is right-anchored.
+            // Read the chip's own x inside the right-anchored cluster, so a reflow carries it.
             var cp = _modeCluster.anchoredPosition;
-            panel.anchoredPosition = new Vector2(cp.x - _modeCluster.sizeDelta.x + 70f - 4f,
+            float chipX = _diffRect != null ? _diffRect.anchoredPosition.x : 70f;
+            panel.anchoredPosition = new Vector2(cp.x - _modeCluster.sizeDelta.x + chipX - 4f,
                 cp.y + 24f + 6f);
             panel.sizeDelta = new Vector2(width, rowH * 3f + pad * 2f);
             var bg = panelGo.AddComponent<RoundedRectGraphic>();
@@ -2858,10 +3179,30 @@ namespace Sapphire
             }
         }
 
+        private static float _diffAnim;
+        private static bool _diffClosing;
+
+        // Ticked from UpdateModeCluster, which already runs every frame the cluster is up.
+        private static void TickDiffMenu()
+        {
+            if (_diffMenuGo == null) return;
+            if (!UI.UiAnim.Step(_diffMenuGo, !_diffClosing, ref _diffAnim)) DestroyDiffMenu();
+        }
+
+        // Begins the fade; the blocker stops catching clicks at once so the next one lands.
         private static void CloseDiffMenu()
         {
+            if (_diffMenuGo == null) return;
+            _diffClosing = true;
+            var cg = _diffMenuGo.GetComponent<CanvasGroup>() ?? _diffMenuGo.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false; cg.interactable = false;
+            if (!UI.UiAnim.Enabled) DestroyDiffMenu();
+        }
+
+        private static void DestroyDiffMenu()
+        {
             if (_diffMenuGo != null) Object.Destroy(_diffMenuGo);
-            _diffMenuGo = null;
+            _diffMenuGo = null; _diffClosing = false; _diffAnim = 0f;
         }
 
         private static RoundedRectGraphic MakeModeChip(float x, float w, string label,
@@ -2894,6 +3235,12 @@ namespace Sapphire
             return bg;
         }
 
+        // Tweaks drops the game's corner icons while this is up — it duplicates them.
+        /* activeInHierarchy, not activeSelf: turning the master switch off hides the strip's
+           CANVAS and leaves the cluster's own flag true, so the corner-icon hiding keyed on this
+           never reverted. */
+        internal static bool ModeClusterVisible => _modeCluster != null && _modeCluster.gameObject.activeInHierarchy;
+
         private static void TickModeCluster(bool want)
         {
             if (_modeCluster == null) return;
@@ -2909,6 +3256,7 @@ namespace Sapphire
         {
             if (_modeCluster == null) return;
             if (_diffMenuGo != null && !_modeCluster.gameObject.activeInHierarchy) CloseDiffMenu();
+            TickDiffMenu();
             // Track the strip's top-right corner (lane count changes its height); with the strip
             // folded away, sit on the screen edge like the fold arrow does.
             float top = BottomStripTop;
@@ -2918,14 +3266,16 @@ namespace Sapphire
 
             var accent = UI.Theme.Accent;
             var s = MainClass.Settings;
-            bool em = false;
-            try { em = s != null && s.EditorModeEnabled; } catch { }
-            if (em != _emShown && _emBg != null)
+            bool pm = false;
+            try { pm = s != null && s.PlayModeEnabled; } catch { }
+            if (pm != _pmShown && _emBg != null)
             {
-                _emShown = em;
-                _emBg.color = em ? new Color(accent.r, accent.g, accent.b, 0.45f)
-                                 : new Color(0.08f, 0.08f, 0.1f, 0.85f);
-                if (_emLabel != null) _emLabel.color = em ? Color.white : new Color(0.75f, 0.75f, 0.78f, 1f);
+                _pmShown = pm;
+                // Amber for PLAY: it is the mode where the level runs and edits are refused, so
+                // it should not wear the same accent as every other lit control in the suite.
+                _emBg.color = pm ? new Color(0.95f, 0.6f, 0.25f, 0.5f)
+                                 : new Color(accent.r, accent.g, accent.b, 0.45f);
+                if (_emLabel != null) { _emLabel.text = pm ? "PLAY" : "EDIT"; _emLabel.color = Color.white; }
             }
 
             int diff = -1;
@@ -3024,9 +3374,9 @@ namespace Sapphire
             _transportOn = on;
             if (_transportGo != null) _transportGo.SetActive(on);
             float tw = on ? TransportW : 0f;
-            _laneLabelHost.offsetMin = new Vector2(tw + 4f, StripPad);
+            _laneLabelHost.offsetMin = new Vector2(tw + 4f, StripPadBottom);
             _laneLabelHost.offsetMax = new Vector2(tw + HeaderW - 6f, -StripPad);
-            _markerArea.offsetMin = new Vector2(tw + HeaderW, StripPad);
+            _markerArea.offsetMin = new Vector2(tw + HeaderW, StripPadBottom);
         }
 
         private static void UpdateTransport(scnEditor ed, bool playing, int selSeq)
@@ -3145,7 +3495,7 @@ namespace Sapphire
             r.anchorMax = new Vector2(1f, 0.5f);
             r.pivot = new Vector2(0f, 0.5f);
             r.sizeDelta = new Vector2(ZoomW - 4f, 22f);
-            r.anchoredPosition = new Vector2(-ZoomW + 2f, -26f);
+            r.anchoredPosition = new Vector2(-ZoomW + 2f - ZoomPad, -26f);
             _camBtnBg = go.AddComponent<RoundedRectGraphic>();
             _camBtnBg.Radius = 5f;
             _camBtnBg.color = new Color(1f, 1f, 1f, 0.12f);
@@ -3246,7 +3596,7 @@ namespace Sapphire
             r.anchorMax = new Vector2(1f, 0.5f);
             r.pivot = new Vector2(0f, 0.5f);
             r.sizeDelta = new Vector2(ZoomW - 4f, 22f);
-            r.anchoredPosition = new Vector2(-ZoomW + 2f, -52f);
+            r.anchoredPosition = new Vector2(-ZoomW + 2f - ZoomPad, -52f);
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 5f;
             bg.color = new Color(1f, 1f, 1f, 0.12f);
@@ -3268,8 +3618,118 @@ namespace Sapphire
             go.SetActive(false);
         }
 
+        /* AUDIO toggle, in the same right-hand column as the zoom and mode buttons. The setting
+           it flips lives on the Features tab, but the track it shows is a timeline surface and
+           charters turn it on and off while working — a trip through Ctrl+E for that is a trip
+           away from the thing being looked at. */
+        private static void BuildWaveButton(Transform parent)
+        {
+            var go = new GameObject("WaveBtn", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(1f, 0.5f);
+            r.anchorMax = new Vector2(1f, 0.5f);
+            r.pivot = new Vector2(0f, 0.5f);
+            r.sizeDelta = new Vector2(ZoomW - 4f, 22f);
+            r.anchoredPosition = new Vector2(-ZoomW + 2f - ZoomPad, 26f);
+            _waveBtnBg = go.AddComponent<RoundedRectGraphic>();
+            _waveBtnBg.Radius = 5f;
+            _waveBtnBg.color = new Color(1f, 1f, 1f, 0.12f);
+            _waveBtnBg.raycastTarget = true;
+            var txtGo = new GameObject("Label", typeof(RectTransform));
+            txtGo.transform.SetParent(go.transform, false);
+            var tr = (RectTransform)txtGo.transform;
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = tr.offsetMax = Vector2.zero;
+            var t = txtGo.AddComponent<TextMeshProUGUI>();
+            t.font = UI.Theme.TmpFont;
+            t.fontSize = 11;
+            t.color = Color.white;
+            t.alignment = TextAlignmentOptions.Center;
+            t.raycastTarget = false;
+            t.text = "♪ AUDIO";
+            UI.ClickHandler.Attach(go, () =>
+            {
+                var s = MainClass.Settings;
+                if (s == null) return;
+                s.EditorWaveform = !s.EditorWaveform;
+                // Turning the track on IS the request — nothing analyses a song unasked.
+                if (s.EditorWaveform && !AudioAnalysis.Requested) AudioAnalysis.Request();
+                UI.UICore.OnSettingsChanged?.Invoke();
+            });
+        }
+
         // Dragging the strip's top edge scales lane height; rebuilds throttled to whole
         // pixels so the texture isn't re-allocated every frame of the drag.
+        /* Drag the audio track's top edge to resize just that track. Kept separate from
+           StripHeightGrip, which scales the EVENT lanes: the two are different kinds of content
+           and one control for both means neither can be set. */
+        /* Drag the boundary under a lane's LABEL to resize that lane alone. It lives in the
+           label column rather than over the markers: the marker area is already the scrub and
+           keyframe surface, and a grip there would eat clicks meant for events. */
+        private static void MakeLaneGrip(Transform parent, int key)
+        {
+            var go = new GameObject("LaneGrip", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = new Vector2(0f, 0f); r.anchorMax = new Vector2(1f, 0f);
+            r.pivot = new Vector2(0.5f, 0.5f);
+            r.offsetMin = new Vector2(0f, -3f);
+            r.offsetMax = new Vector2(0f, 3f);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(1f, 1f, 1f, 0.05f);
+            img.raycastTarget = true;
+            go.AddComponent<LaneGrip>().Key = key;
+        }
+
+        private class LaneGrip : MonoBehaviour,
+            UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler,
+            UnityEngine.EventSystems.IPointerUpHandler
+        {
+            public int Key;
+            private float _acc;
+            private int _lastRebuildFrame;
+
+            public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
+            { _acc = 0f; _lastRebuildFrame = 0; _laneDragging = true; }
+
+            public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
+            {
+                var canvas = GetComponentInParent<Canvas>();
+                float scale = canvas != null ? canvas.scaleFactor : 1f;
+                _acc -= e.delta.y / Mathf.Max(0.01f, scale);   // the boundary moving DOWN grows it
+                if (Mathf.Abs(_acc) < 1f) return;
+                float step = Mathf.Round(_acc);
+                _acc -= step;
+                float cur;
+                _laneExtra.TryGetValue(Key, out cur);
+                _laneExtra[Key] = Mathf.Clamp(cur + step, -8f, 400f);
+                _viewDirty = true;
+                RefreshGeometryNow();
+                // Same split as the strip grip: geometry every frame, the structure rebuild
+                // (entry times, tempo map, lane sorts) on a cadence.
+                if (Time.frameCount - _lastRebuildFrame >= 6)
+                { _lastRebuildFrame = Time.frameCount; _tlSig = 0; _scanCooldown = 0; }
+            }
+
+            public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e)
+            { _laneDragging = false; _tlSig = 0; _scanCooldown = 0; _viewDirty = true; }
+        }
+
+        private class WaveTrackGrip : MonoBehaviour,
+            UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerUpHandler
+        {
+            public void OnDrag(UnityEngine.EventSystems.PointerEventData e)
+            {
+                // The track hangs below the lanes, so its top edge moving up is it growing.
+                _waveTrackH = Mathf.Clamp(_waveTrackH - e.delta.y, 14f, 400f);
+                _viewDirty = true;
+            }
+
+            public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e)
+            { _tlSig = 0; _scanCooldown = 0; _viewDirty = true; }
+        }
+
         private class StripHeightGrip : MonoBehaviour,
             UnityEngine.EventSystems.IDragHandler, UnityEngine.EventSystems.IPointerDownHandler,
             UnityEngine.EventSystems.IPointerUpHandler
@@ -3277,6 +3737,8 @@ namespace Sapphire
             // Set on the fold button, which is a grip AND a button — fires only if the press
             // never turned into a real drag.
             public System.Action OnTap;
+            // Read by the marker-texture allocator: a live height drag must not reallocate.
+            internal static bool Dragging { get; private set; }
             private float _acc, _travel;
             private int _lastRebuildFrame;
             /* Over-pull past the lane-height limit folds the strip away, and past the same
@@ -3287,7 +3749,7 @@ namespace Sapphire
             private float _pull;
 
             public void OnPointerDown(UnityEngine.EventSystems.PointerEventData e)
-            { _acc = 0f; _travel = 0f; _pull = 0f; _lastRebuildFrame = 0; }
+            { _acc = 0f; _travel = 0f; _pull = 0f; _lastRebuildFrame = 0; Dragging = true; }
 
             // Committed: reset so one drag can't fold and unfold repeatedly.
             private void Fold(bool hidden)
@@ -3327,8 +3789,13 @@ namespace Sapphire
                 if (Mathf.Abs(_acc) < 1f) return;
                 float step = Mathf.Round(_acc);
                 _acc -= step;
-                _laneHExtra = Mathf.Clamp(_laneHExtra + step, min, 70f);
+                // The old +70 ceiling was arbitrary; the real limit is the screen, and a charter
+                // working one dense lane wants it far taller than that.
+                _laneHExtra = Mathf.Clamp(_laneHExtra + step, min, 400f);
                 _viewDirty = true;
+                // The visible part of a height change is geometry, and that is cheap — do it now
+                // rather than on the rebuild's cadence.
+                RefreshGeometryNow();
                 /* Clearing _tlSig forces the full RebuildStructure — floor entry times, tempo
                    map, time-signature detection, per-lane sorts, lane-label respawn — none of
                    which depends on lane height; only the texture size and label placement do.
@@ -3344,6 +3811,7 @@ namespace Sapphire
 
             public void OnPointerUp(UnityEngine.EventSystems.PointerEventData e)
             {
+                Dragging = false;                 // the texture can size itself properly again
                 _tlSig = 0; _scanCooldown = 0; _viewDirty = true;
                 if (OnTap != null && _travel < 6f) OnTap();
             }
