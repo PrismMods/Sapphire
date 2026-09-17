@@ -31,7 +31,8 @@ namespace Sapphire
         internal const string BuiltInCat = "Built-in";
         // Angle-pad captures land here: the pad's expression is already the WHOLE run (groups are
         // flattened), so repeating it would be wrong.
-        internal const string NonRepeatCat = "Non-repeating shapes";
+        internal const string PadCat = "From Angle Pad";
+        private const string PadCatOld = "Non-repeating shapes";   // pre-1.0.0-a7 name
         // Repeat count a user-made shape starts at. Built-ins keep their curated NOverride /
         // star-closing default; anything captured is taken literally — place what I wrote, once.
         internal const int DefaultN = 1;
@@ -76,13 +77,17 @@ namespace Sapphire
         {
             var s = MainClass.Settings; if (s == null) return;
             if (s.ShapeCategories != null)
-                foreach (var c in s.ShapeCategories)
+                foreach (var c0 in s.ShapeCategories)
+                {
+                    var c = c0 == PadCatOld ? PadCat : c0;   // renamed; keep old saves' shapes together
                     if (!string.IsNullOrEmpty(c) && !_categories.Contains(c)) _categories.Add(c);
+                }
             if (s.CustomShapes != null)
                 foreach (var dto in s.CustomShapes)
                 {
                     if (dto == null) continue;
-                    var e = new ShapeEntry { Id = "c:" + (_customSeq++), Name = dto.Name, Category = dto.Category, Base = dto.Base, BuiltIn = false };
+                    var e = new ShapeEntry { Id = "c:" + (_customSeq++), Name = dto.Name,
+                        Category = dto.Category == PadCatOld ? PadCat : dto.Category, Base = dto.Base, BuiltIn = false };
                     if (dto.Variants != null)
                         foreach (var vd in dto.Variants)
                             e.Variants.Add(new ShapeVariant

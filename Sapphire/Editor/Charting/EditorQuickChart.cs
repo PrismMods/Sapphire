@@ -1176,11 +1176,11 @@ namespace Sapphire
 
             string name = pw.Field.text.Trim();
             if (name.Length > 28) name = name.Substring(0, 27) + "…";
-            var e = ShapeStore.AddShape(name, ShapeStore.NonRepeatCat, sum, v);
+            var e = ShapeStore.AddShape(name, ShapeStore.PadCat, sum, v);
             if (pw.Hint != null)
             {
                 pw.Hint.color = Theme.TextMuted;
-                pw.Hint.text = e != null ? Loc.T("stored in") + " " + Loc.T(ShapeStore.NonRepeatCat)
+                pw.Hint.text = e != null ? Loc.T("stored in") + " " + Loc.T(ShapeStore.PadCat)
                                          : Loc.T("check the expression");
             }
             if (e != null) try { EditorShapeLibrary.Refresh(e.Id); } catch { }

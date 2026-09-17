@@ -128,6 +128,7 @@ namespace Sapphire
             SolveLength();
             long sig = 17;
             sig = sig * 31 + _octave;
+            sig = sig * 31 + Mathf.RoundToInt(K.W);      // width decides how many octaves fit
             sig = sig * 31 + (_baseAuto ? 1 : 0);
             sig = sig * 31 + (long)Math.Round(_baseBpm * 1000.0);
             sig = sig * 31 + _selOct * 128 + _selStep;
@@ -698,8 +699,12 @@ namespace Sapphire
             y -= 4f;
             K.Label(Loc.T("Note"), Pad, y, 46f, RowH, Theme.TextMuted);
             K.Cell("−", Pad + 48f, y, 22f, RowH, () => { _octave = Mathf.Max(-1, _octave - 1); _layoutSig = NoSig; }, true);
-            K.Label("o" + _octave + (Octaves > 1 ? "–" + (_octave + 1) : ""), Pad + 73f, y, 52f, RowH, Theme.Text, 11.5f);
-            K.Cell("+", Pad + 127f, y, 22f, RowH, () => { _octave = Mathf.Min(9, _octave + 1); _layoutSig = NoSig; }, true);
+            // Reads the span actually drawn, which the width decides.
+            int shown = OctavesFor(fullW);
+            K.Label("o" + _octave + (shown > 1 ? "–" + (_octave + shown - 1) : ""),
+                    Pad + 73f, y, 52f, RowH, Theme.Text, 11.5f);
+            K.Cell("+", Pad + 127f, y, 22f, RowH,
+                   () => { _octave = Mathf.Min(10 - shown, _octave + 1); _layoutSig = NoSig; }, true);
             // Tuning is a submenu, not five more rows: almost nobody changes it, and the picker
             // has to stay the thing you see when the panel opens.
             K.Cell(Loc.T("Tuning") + (_tuningOpen ? " −" : " +"), Pad + 153f, y, fullW - 153f, RowH,
@@ -912,17 +917,37 @@ namespace Sapphire
         // white-key index each black key sits after (C#→after C, D#→after D, F#→after F, …)
         private static readonly int[] BlackAfterWhite = { 0, 1, 3, 4, 5 };
 
-        private static int Octaves => _edo <= 24 ? 2 : 1;
+        /* How many octaves the picker shows is a function of how wide the panel is. Two was
+           hard-coded, so widening the window only padded empty space to the right of a fixed
+           keyboard — the one thing a wider picker is for. Keys stay near their natural width and
+           whole octaves are added as room appears; nothing is ever shown at a width too small to
+           hit. */
+        private const float KeyMinW = 13f;
+        private static int _octavesShown = 2;
+
+        private static int OctavesFor(float fullW)
+        {
+            int perOct = _edo == 12 ? 7 : Mathf.Max(1, _edo);      // white keys, or EDO degrees
+            int fit = Mathf.FloorToInt((fullW - 2f) / (KeyMinW * perOct));
+            int want = Mathf.RoundToInt((fullW - 2f) / (WhiteW * perOct));
+            int n = Mathf.Clamp(Mathf.Min(fit, Mathf.Max(want, 1)), 1, 8);
+            // Never run off the top of the pitch range the stepper allows.
+            return Mathf.Clamp(n, 1, Mathf.Max(1, 10 - _octave));
+        }
 
         private static float Keyboard(float y, float fullW)
-            => _edo == 12 ? PianoKeys(y, fullW) : DegreeKeys(y, fullW);
+        {
+            _octavesShown = OctavesFor(fullW);
+            return _edo == 12 ? PianoKeys(y, fullW) : DegreeKeys(y, fullW);
+        }
 
         private static float PianoKeys(float y, float fullW)
         {
-            float w = Mathf.Min(WhiteW, (fullW - 2f) / 14f);   // 14 whites over two octaves
+            int octs = _octavesShown;
+            float w = (fullW - 2f) / (octs * 7f);              // fill the width with whole octaves
             float x0 = Pad;
 
-            for (int oct = 0; oct < 2; oct++)
+            for (int oct = 0; oct < octs; oct++)
                 for (int i = 0; i < WhiteSemis.Length; i++)
                 {
                     int o = _octave + oct, st = WhiteSemis[i];
@@ -936,7 +961,7 @@ namespace Sapphire
                                 new Color(0.15f, 0.15f, 0.18f, 1f), 9f);
                 }
 
-            for (int oct = 0; oct < 2; oct++)
+            for (int oct = 0; oct < octs; oct++)
                 for (int i = 0; i < BlackSemis.Length; i++)
                 {
                     int o = _octave + oct, st = BlackSemis[i];
@@ -952,7 +977,7 @@ namespace Sapphire
 
         private static float DegreeKeys(float y, float fullW)
         {
-            int octs = Octaves;
+            int octs = _octavesShown;
             int total = _edo * octs;
             float w = (fullW - 1f) / Mathf.Max(1, total);
             bool label = w >= 13f;                            // below that a number is unreadable
