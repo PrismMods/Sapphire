@@ -155,6 +155,7 @@
         <Compile Include="Editor\Charting\ShapeLibrary.cs" />
         <Compile Include="Editor\Charting\ShapeStore.cs" />
         <Compile Include="Editor\Events\EditorPresets.cs" />
+        <Compile Include="Editor\Events\EditorEventTray.cs" />
         <Compile Include="Editor\Timeline\EditorEasePicker.cs" />
         <Compile Include="Editor\Timeline\EditorBezier.cs" />
         <Compile Include="Editor\Timeline\EditorGraph.cs" />
@@ -176,6 +177,8 @@
         <Compile Include="Editor\Charting\PseudoBuild.cs" />
         <Compile Include="Editor\Charting\GhostPreview.cs" />
         <Compile Include="Editor\Level\EditorLevelMenu.cs" />
+        <Compile Include="Editor\Level\LevelVars.cs" />
+        <Compile Include="Editor\Level\EditorVariables.cs" />
         <Compile Include="Editor\Level\EditorDecoMenu.cs" />
         <Compile Include="Editor\Level\EditorChartAnalysis.cs" />
         <Compile Include="Editor\Level\EditorVisualizer.cs" />

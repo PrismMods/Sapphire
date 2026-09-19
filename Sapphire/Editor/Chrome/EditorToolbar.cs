@@ -1500,43 +1500,49 @@ namespace Sapphire
         {
             if (!_evClip || _inspEvents.Count == 0 || ed == null || !MainClass.EditorSuiteOn) return false;
             if (GameClipStamp(ed) != _evClipStamp) { _evClip = false; return false; }
-            System.Collections.Generic.List<scrFloor> targets = null;
-            try { targets = ed.playMode ? null : new System.Collections.Generic.List<scrFloor>(ed.selectedFloors); } catch { }
-            if (targets == null || targets.Count == 0) return false;
+            var seqs = new System.Collections.Generic.List<int>();
+            try { if (!ed.playMode) foreach (var f in ed.selectedFloors) if (f != null) seqs.Add(f.seqID); } catch { }
+            if (seqs.Count == 0) return false;
+            PasteEventsOnto(ed, _inspEvents, seqs, replace);
+            return true;
+        }
+
+        /* Detached copies of `events` onto each floor in `seqs`, one undo step. replace clears
+           those floors' own events first. Shared by Ctrl+V / Ctrl+Shift+V and the event tray. */
+        internal static int PasteEventsOnto(scnEditor ed, System.Collections.Generic.IList<ADOFAI.LevelEvent> events,
+            System.Collections.Generic.IList<int> seqs, bool replace)
+        {
             int n = 0;
+            if (ed == null || events == null || seqs == null || seqs.Count == 0) return 0;
             try
             {
                 using (new SaveStateScope(ed))
                 {
                     if (replace)
                     {
-                        var seqs = new System.Collections.Generic.HashSet<int>();
-                        foreach (var f in targets) if (f != null) seqs.Add(f.seqID);
+                        var set = new System.Collections.Generic.HashSet<int>(seqs);
                         for (int i = ed.events.Count - 1; i >= 0; i--)
                         {
                             var ev = ed.events[i];
-                            if (ev != null && seqs.Contains(ev.floor)) ed.events.RemoveAt(i);
+                            if (ev != null && set.Contains(ev.floor)) ed.events.RemoveAt(i);
                         }
                     }
-                    foreach (var f in targets)
-                    {
-                        if (f == null) continue;
-                        foreach (var e in _inspEvents)
+                    foreach (int seq in seqs)
+                        foreach (var e in events)
                         {
                             if (e == null) continue;
                             var c = e.Copy();
-                            c.floor = f.seqID;
+                            c.floor = seq;
                             ed.events.Add(c);
                             n++;
                         }
-                    }
                     try { ed.ApplyEventsToFloors(); } catch { }
                     try { ed.RemakePath(true, true); } catch { }
                 }
             }
             catch (Exception ex) { SapphireLog.Log("EventClip: paste failed: " + ex.Message); }
             try { ed.ShowNotification(Loc.T(replace ? "Events replaced" : "Events pasted") + " · " + n, null, 0f); } catch { }
-            return true;
+            return n;
         }
 
         internal static System.Collections.Generic.List<int> InspectorTypes()
@@ -1756,7 +1762,7 @@ namespace Sapphire
 
         // Nearest floor to the cursor within ~a tile radius. GetFloorAtPosition (Physics2D) doesn't
         // hit editor tiles here, so match the pseudo tool's proven world-distance approach.
-        private static scrFloor FloorUnderCursor(scnEditor ed)
+        internal static scrFloor FloorUnderCursor(scnEditor ed)
         {
             Vector2 w = ClickWorld(ed);
             scrFloor best = null;

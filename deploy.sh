@@ -16,7 +16,14 @@ fi
 
 # Release: the Debug config sets <Optimize>false</Optimize>, and nothing in the source is
 # gated on the DEBUG symbol, so shipping Debug bought us nothing but slower IL.
-xbuild /p:Configuration=Release Sapphire.sln > /dev/null
+# Quiet on success, but a failed build must say why — with set -e and the output discarded,
+# a compile error used to end the script with no message at all.
+BUILD_LOG="${TMPDIR:-/tmp}/sapphire-build.log"
+if ! xbuild /p:Configuration=Release Sapphire.sln > "$BUILD_LOG" 2>&1; then
+    grep -E "error" "$BUILD_LOG" | sort -u >&2
+    echo "BUILD FAILED (full log: $BUILD_LOG)" >&2
+    exit 1
+fi
 
 mkdir -p "$MODS_DIR/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$MODS_DIR/"

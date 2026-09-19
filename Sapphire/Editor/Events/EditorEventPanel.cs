@@ -75,6 +75,26 @@ namespace Sapphire
         private static GameObject _chipGo;     // reopen chip while collapsed
         private static TextMeshProUGUI _chipLabel;
 
+        internal static bool PointerOver() =>
+            K.Visible && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)K.PanelGo.transform, Input.mousePosition, null);
+
+        internal static int CurrentFloor => _floor;
+
+        /* What a drag from `row` carries: the whole selection when the row is part of it (every
+           type in it, display order), else just the row — the way a file manager drags. */
+        internal static List<ADOFAI.LevelEvent> DragSet(List<ADOFAI.LevelEvent> row)
+        {
+            bool inSel = false;
+            foreach (var e in row) if (_sel.Contains(e)) { inSel = true; break; }
+            if (!inSel || _sel.Count <= 1) return row;
+            var all = new List<ADOFAI.LevelEvent>();
+            foreach (var e in _flat) if (_sel.Contains(e)) all.Add(e);
+            return all;
+        }
+
+        // Values changed under the panel (a variable edit): redraw so formula fields show them.
+        internal static void Refresh() => _sig = 0;
+
         internal static void Tick()
         {
             var s = MainClass.Settings;
@@ -369,7 +389,7 @@ namespace Sapphire
             _cursorKey = _rowAnchorKey = -1L - (int)first.eventType;
         }
 
-        private static ADOFAI.LevelEventInfo InfoOf(ADOFAI.LevelEvent evt)
+        internal static ADOFAI.LevelEventInfo InfoOf(ADOFAI.LevelEvent evt)
         {
             try
             {
@@ -380,7 +400,7 @@ namespace Sapphire
             return null;
         }
 
-        private static string EventTitle(ADOFAI.LevelEvent evt)
+        internal static string EventTitle(ADOFAI.LevelEvent evt)
         {
             try
             {
@@ -495,6 +515,7 @@ namespace Sapphire
             });
             // Collapsed folders sit brighter than leaf rows so the two tiers separate at a glance.
             head.color = RowTint(list, tExp, 0.4f, single ? 0.06f : 0.11f);
+            head.gameObject.AddComponent<EventDragSource>().Events = () => DragSet(list);   // into the tray / onto a tile
             var group = list;
             var delGroup = EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () =>
             {
@@ -527,6 +548,7 @@ namespace Sapphire
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
                     ArmMotion(key);
                 });
+                sub.gameObject.AddComponent<EventDragSource>().Events = () => DragSet(one);
                 sub.color = _sel.Contains(evt) ? SelTint
                     : iExp ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
                            : new Color(1f, 1f, 1f, 0.04f);
@@ -739,11 +761,14 @@ namespace Sapphire
             foreach (var e in events)
                 if (e.eventType == ADOFAI.LevelEventType.SetFilterAdvanced
                     || e.eventType == ADOFAI.LevelEventType.SetFilter) { filt = e; break; }
-            float half = (w - Gap) * 0.5f;
+            const float trayW = 56f;
+            float half = (w - trayW - Gap * 2f) * 0.5f;
             EventRows.Cell(_content, Loc.T("Filter manager"), Pad, y, half, RowH,
                 () => EditorFilterPicker.Open(filt, _floor), true);
+            UI.HoverTip.Attach(EventRows.Cell(_content, Loc.T("Tray"), Pad + half + Gap, y, trayW, RowH,
+                EditorEventTray.Toggle, true).gameObject, Loc.T("Drag rows into the tray to keep them"));
             EventRows.Cell(_content, Loc.T("Delete all events") + " (" + all.Count + ")",
-                Pad + half + Gap, y, half, RowH,
+                Pad + half + trayW + Gap * 2f, y, half, RowH,
                 () => ConfirmBox.Ask(Loc.T("Delete all events on this tile?") + "\n#" + _floor + " · " + all.Count,
                     Loc.T("Delete"), () => DeleteEvents(ed, all)), true)
                 .color = new Color(0.80f, 0.22f, 0.26f, 0.4f);
@@ -799,7 +824,7 @@ namespace Sapphire
             return "";
         }
 
-        private static string TagSuffix(ADOFAI.LevelEvent evt)
+        internal static string TagSuffix(ADOFAI.LevelEvent evt)
         {
             string t = TargetTag(evt);
             return t.Length > 0 ? "  " + t : "";

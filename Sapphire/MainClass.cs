@@ -273,6 +273,8 @@ namespace Sapphire
                 EditorTrackTools.Tick(); Acc(21);
                 EditorDecoTools.Tick(); Acc(22);
                 EditorEventPanel.Tick(); Acc(24);
+                EditorEventTray.Tick();
+                EditorVariables.Tick();
                 EditorBulkEdit.Tick();
                 EditorEventSelector.Tick(); Acc(25);
                 UI.ColorWheel.Tick();
@@ -321,6 +323,10 @@ namespace Sapphire
                             () => EditorDecoTools.IsOpen, EditorDecoTools.SetOpen);
                         UI.PanelKit.RegisterTabbable(EditorHzTool.Kit, Loc.T("Hz tool"), null,
                             () => EditorHzTool.IsOpen, EditorHzTool.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorEventTray.Kit, Loc.T("Tray"), EditorEventTray.TabAvailable,
+                            () => EditorEventTray.IsOpen, EditorEventTray.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorVariables.Kit, Loc.T("Variables"), EditorVariables.TabAvailable,
+                            () => EditorVariables.IsOpen, EditorVariables.SetOpen);
                     }
                     bool rails = false;
                     try
@@ -458,6 +464,8 @@ namespace Sapphire
             EditorTrackTools.Dispose();
             EditorDecoTools.Dispose();
             EditorEventPanel.Dispose();
+            EditorEventTray.Dispose();
+            EditorVariables.Dispose();
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorHzTool.Dispose();

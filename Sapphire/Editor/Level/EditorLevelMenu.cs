@@ -30,6 +30,7 @@ namespace Sapphire
         private static float _scroll;
         private static int _tab;
         private static long _sig;
+        internal static void Refresh() => _sig = 0;   // values changed under the panel (a variable edit)
         private static int _scanCd;
         private static bool _open;
         private static bool _dockInited;
@@ -297,7 +298,14 @@ namespace Sapphire
 
             float y = -2f;
             if (Tabs[_tab].Type == ADOFAI.LevelEventType.LevelSettings)
+            {
                 y = ArtistApprovalChip(ed, y);
+                var vt = LevelVars.Current;
+                UI.HoverTip.Attach(EventRows.Cell(_content, Loc.T("Variables") + " (" + (vt != null ? vt.Vars.Count : 0) + ")",
+                    Pad, y, _ctx.PanelW - Pad * 2f, RowH, EditorVariables.Toggle, true).gameObject,
+                    Loc.T("Named values you can use as $name in any number field"));
+                y -= RowH + Gap;
+            }
 
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);

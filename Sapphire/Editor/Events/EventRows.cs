@@ -200,10 +200,10 @@ namespace Sapphire
             {
                 Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
                 float fw = (w - Gap) * 0.5f;
-                InputRow(content, x, y, fw, VecComp(v2.x), sv =>
-                    Commit(c, ed, e2, p2, k, new Vector2(ParseComp(sv), ((Vector2)ValOf(e2, k, v2)).y)));
-                InputRow(content, x + fw + Gap, y, fw, VecComp(v2.y), sv =>
-                    Commit(c, ed, e2, p2, k, new Vector2(((Vector2)ValOf(e2, k, v2)).x, ParseComp(sv))));
+                MarkFormula(InputRow(content, x, y, fw, LevelVars.FormulaOf(e2, k + ".x") ?? VecComp(v2.x),
+                    sv => CommitVec(c, ed, e2, p2, k, true, sv, v2)), e2, k + ".x", VecComp(v2.x));
+                MarkFormula(InputRow(content, x + fw + Gap, y, fw, LevelVars.FormulaOf(e2, k + ".y") ?? VecComp(v2.y),
+                    sv => CommitVec(c, ed, e2, p2, k, false, sv, v2)), e2, k + ".y", VecComp(v2.y));
                 return y - (RowH + Gap);
             }
             if (val is Tuple<int, TileRelativeTo> tile)
@@ -268,7 +268,10 @@ namespace Sapphire
             bool isOffset = k == "offset" && e2.eventType == ADOFAI.LevelEventType.SongSettings;
             float rightW = isFile ? 30f : (isColor ? RowH : (isOffset ? 64f : 0f));
             float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
-            var field = InputRow(content, x, y, inputW, FormatVal(val), sv => CommitText(c, ed, e2, p2, k, sv, val));
+            bool numeric = val is int || val is long || val is float || val is double;
+            string shown = numeric ? LevelVars.FormulaOf(e2, k) ?? FormatVal(val) : FormatVal(val);
+            var field = InputRow(content, x, y, inputW, shown, sv => CommitText(c, ed, e2, p2, k, sv, val));
+            if (numeric) MarkFormula(field, e2, k, FormatVal(val));
             // The artist field gets the game's verified-artist autocomplete (name + approval badge).
             if (k == "artist" && e2.eventType == ADOFAI.LevelEventType.LevelSettings)
                 EditorArtistPicker.Bind(field, sv => CommitText(c, ed, e2, p2, k, sv, val));
@@ -306,12 +309,13 @@ namespace Sapphire
 
         // ── commits ──────────────────────────────────────────────────────────
 
-        internal static void Commit(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi, string key, object v)
+        internal static void Commit(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi, string key, object v,
+            Action inScope = null)
         {
             try
             {
-                if (c.Scratch) evt[key] = v;
-                else using (new SaveStateScope(ed)) evt[key] = v;
+                if (c.Scratch) { evt[key] = v; inScope?.Invoke(); }
+                else using (new SaveStateScope(ed)) { evt[key] = v; inScope?.Invoke(); }
                 c.AfterCommit?.Invoke(ed, evt, pi);
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: edit failed: " + ex.Message); }
@@ -342,12 +346,61 @@ namespace Sapphire
         {
             try
             {
-                object v = CoerceLike(raw, oldVal);
-                if (c.Scratch) evt[key] = v;
-                else using (new SaveStateScope(ed)) evt[key] = v;
+                bool numeric = oldVal is float || oldVal is double || oldVal is int || oldVal is long;
+                string formula = null;
+                object v;
+                // A number field given `$name` keeps the formula and stores its current result.
+                if (numeric && LevelVars.IsFormula(raw))
+                {
+                    double d;
+                    formula = raw.Trim();
+                    if (!LevelVars.Eval(formula, out d)) { FormulaError(ed, formula); return; }
+                    v = LevelVars.Coerce(d, oldVal);
+                }
+                else v = CoerceLike(raw, oldVal);
+                if (c.Scratch) { evt[key] = v; if (numeric) LevelVars.SetFormula(evt, key, formula); }
+                else using (new SaveStateScope(ed))
+                {
+                    evt[key] = v;
+                    if (numeric) LevelVars.SetFormula(evt, key, formula);   // after the snapshot, so undo drops it
+                }
                 c.AfterCommit?.Invoke(ed, evt, pi);
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: edit failed: " + ex.Message); }
+        }
+
+        // One Vector2 component, with the same formula rule as a plain number field.
+        private static void CommitVec(Ctx c, scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi,
+            string key, bool isX, string raw, Vector2 fallback)
+        {
+            string formula = null;
+            float f;
+            if (LevelVars.IsFormula(raw))
+            {
+                double d;
+                formula = raw.Trim();
+                if (!LevelVars.Eval(formula, out d)) { FormulaError(ed, formula); return; }
+                f = (float)d;
+            }
+            else f = ParseComp(raw);
+            var cur = (Vector2)ValOf(evt, key, fallback);
+            var nv = isX ? new Vector2(f, cur.y) : new Vector2(cur.x, f);
+            string bk = key + (isX ? ".x" : ".y");
+            Commit(c, ed, evt, pi, key, nv, () => LevelVars.SetFormula(evt, bk, formula));
+        }
+
+        private static void FormulaError(scnEditor ed, string formula)
+        {
+            try { ed.ShowNotification(Loc.T("Formula error") + " · " + formula, null, 0f); } catch { }
+        }
+
+        // A field driven by a formula shows it tinted, with the value it currently produces on hover.
+        private static void MarkFormula(TMP_InputField field, ADOFAI.LevelEvent evt, string bindKey, string value)
+        {
+            if (field == null || LevelVars.FormulaOf(evt, bindKey) == null) return;
+            var bg = field.GetComponent<RoundedRectGraphic>();
+            if (bg != null) bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.22f);
+            UI.HoverTip.Attach(field.gameObject, "= " + value);
         }
 
         private static object CoerceLike(string raw, object oldVal)

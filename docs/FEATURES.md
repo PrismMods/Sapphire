@@ -416,6 +416,23 @@ right sidebar works the same way; it just starts with no tabs on it.
   confirms with a notification. `Ctrl+V` (or `Paste` in the tile menu) REPLACES every selected
   tile's events with them; `Ctrl+Shift+V` adds them on top. Copying tiles afterwards hands both keys
   back to the game.
+- **Event tray** — a visible clipboard (the `Tray` button in the event panel, or dock it as a
+  sidebar tab). Every drop becomes a **folder** of what that drag carried: drag a row, a group
+  header, or — with several rows selected — the whole selection, any mix of types. Dropping onto an
+  existing folder adds to it. Click a folder to list its events; click an event to edit its
+  properties right there (on the tray's copy). Drag a folder, or one event out of it, onto a tile
+  (or onto the event panel, meaning its tile) to add; hold `Shift` while dropping to replace that
+  tile's events. Rows can also be dragged straight from the event panel onto another tile. A card
+  follows the cursor naming the target; `Esc` cancels. Everything in the tray is a copy and lasts
+  for the session.
+- **Level variables** — `Level settings → Level → Variables` opens the level's table of named
+  values (`bpm = 180`, `beat = 60/$bpm`; a variable can use the ones above it). Type a formula
+  such as `$beat*2` into ANY number field — event properties, X/Y components, level settings — and
+  the field keeps the formula (tinted; hover shows its current value) while the event stores the
+  result. Editing a variable re-evaluates every formula in the level as one undo step, and renaming
+  one rewrites the formulas that use it. The saved `.adofai` holds plain numbers, so the level plays
+  in the unmodded game; the formulas ride along in a `sapphire` section the game ignores. Re-saving
+  in the unmodded editor keeps the numbers and drops the formulas.
 
 ---
 

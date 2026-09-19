@@ -53,13 +53,17 @@ namespace Sapphire
             return false;
         }
 
-        internal static bool TryEval(string expr, out double result)
+        internal static bool TryEval(string expr, out double result) => TryEval(expr, null, out result);
+
+        /* `$name` reads a level variable through `vars` (null = no variables; an unknown name
+           fails the whole expression rather than reading as 0). */
+        internal static bool TryEval(string expr, Func<string, double?> vars, out double result)
         {
             result = 0.0;
             if (string.IsNullOrEmpty(expr)) return false;
             try
             {
-                var p = new Parser(expr);
+                var p = new Parser(expr, vars);
                 double v = p.ParseExpr();
                 if (!p.AtEnd) return false;                       // trailing junk = malformed
                 if (double.IsNaN(v) || double.IsInfinity(v)) return false;
@@ -72,8 +76,9 @@ namespace Sapphire
         private sealed class Parser
         {
             private readonly string _s;
+            private readonly Func<string, double?> _vars;
             private int _i;
-            internal Parser(string s) { _s = s; _i = 0; }
+            internal Parser(string s, Func<string, double?> vars) { _s = s; _vars = vars; _i = 0; }
 
             internal bool AtEnd { get { Skip(); return _i >= _s.Length; } }
 
@@ -136,8 +141,20 @@ namespace Sapphire
                     _i++;
                     return v;
                 }
+                if (c == '$') return ParseVar();
                 if (char.IsLetter(c)) return ParseIdent();
                 return ParseNumber();
+            }
+
+            private double ParseVar()
+            {
+                Skip();
+                int start = ++_i;
+                while (_i < _s.Length && (char.IsLetterOrDigit(_s[_i]) || _s[_i] == '_')) _i++;
+                if (_i == start || _vars == null) throw new FormatException();
+                double? v = _vars(_s.Substring(start, _i - start));
+                if (!v.HasValue) throw new FormatException();
+                return v.Value;
             }
 
             private double ParseNumber()
