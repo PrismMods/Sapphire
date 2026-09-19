@@ -3,6 +3,53 @@
 
 # Changelog
 
+## 1.0.0-a7
+
+### Script (new) — Level settings → Script
+
+- **Runtime logic that plays in the unmodded game.** Variables (`flag`, `state`, `counter`), key handlers (`on key Up:`), `if` / `else`, conditions, `when` clauses and per-tile judgments (`on miss at 40:`) compile into ordinary events. The game's only runtime memory is its key → events table, which a key event can rewrite, so the script becomes a state machine on it.
+- A **code editor** with line numbers, colouring and errors as you type; **Compile** writes the events, **Remove** clears them. `run tag` uses events you tagged as templates.
+
+### Level variables (new) — Level settings → Variables
+
+- Named values (`bpm = 180`, `beat = 60/$bpm`) and **`$name` formulas in any number field**. The event stores the result, so the level plays anywhere; the formulas are saved inside the level for editing and survive undo, copy/paste and the tray.
+
+### Event tray (new) — `Tray` in the event panel
+
+- A clipboard you can see: drag rows — or the whole selection, any mix of types — in as **folders**, open them to **edit events in place**, drag a folder or one event onto a tile (**Shift replaces** that tile's events).
+
+### Audio window (new)
+
+- Waveform with the level's beat grid, a **tempo curve** for the whole song, a **metronome** that follows it, an **offset suggestion** and **chart analysis** that sorts every SetSpeed into subdivision, magic shape or real tempo change.
+
+### Event panel
+
+- Click **selects**; the `▸` button with the event's icon **expands**. One event opens expanded; several select the first. **↑ / ↓** move the selection, rows slide open and closed.
+- **Copy** confirms with a notification; **Ctrl+V replaces** the selected tiles' events, **Ctrl+Shift+V adds** on top.
+- **Tab / Shift+Tab** move between fields; digits typed into a field no longer switch palette tools.
+
+### Quick chart
+
+- **`U` edits the selected tile's event** — one opens directly, several show a numbered list previewing every parameter. Opens centred; Esc keeps the tile selected.
+- **`Shift+R` move tile**, **`Shift+O` hold**. Pads are optional (one opens when the mode turns on).
+- Angle pad: Enter no longer places the run twice; runs after a mid-track corner start from the right heading.
+
+### Editor
+
+- The **tile right-click menu** works (it never opened), including Copy / Cut with an event filter for a single tile.
+- **Sidebar tab rails and tear-off docking**; tabs are easier to see. **Decorations** has its own window.
+- **Timeline**: lanes size independently, an audio track, and a smooth height drag.
+- **Hover tips** on icon-only buttons. **Animation duration** from instant to slow. **Remove toolbar shortcuts** (on by default) frees the digit keys. Keybinds can include **Alt**.
+- **Play mode** locks the path and hides the placement rings.
+
+### Fixes
+
+- The colour wheel shows the picked colour and opens beside its field. PlaySound's sound has its dropdown back.
+- The filter manager opens on tiles without a filter event. Presets switch on the first click. The autoplay tip no longer flashes.
+- Sidebar resize grips no longer draw over popups. English help showed lookup ids instead of sentences.
+
+---
+
 ## 1.0.0-a6
 
 ### Play mode (new)
@@ -115,6 +162,53 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a7
+
+### 스크립트 (신규) — 레벨 설정 → 스크립트
+
+- **모드 없는 게임에서도 동작하는 실행 중 로직입니다.** 변수(`flag`, `state`, `counter`), 키 처리(`on key Up:`), `if` / `else`, 조건, `when` 절, 타일별 판정(`on miss at 40:`)이 일반 이벤트로 컴파일됩니다. 게임이 실행 중에 기억하는 것은 키 → 이벤트 표뿐이고 키 이벤트가 이 표를 바꿀 수 있으므로, 스크립트는 그 위에서 동작하는 상태 기계가 됩니다.
+- 줄 번호, 색 구분, 입력 중 오류 표시를 갖춘 **코드 편집기**를 제공합니다. **컴파일**은 이벤트를 기록하고 **제거**는 지웁니다. `run 태그`는 템플릿으로 태그해 둔 이벤트를 사용합니다.
+
+### 레벨 변수 (신규) — 레벨 설정 → 변수
+
+- 이름 붙은 값(`bpm = 180`, `beat = 60/$bpm`)과 **모든 숫자 입력란의 `$이름` 수식**을 지원합니다. 이벤트에는 계산 결과가 저장되므로 어디서나 플레이할 수 있고, 수식은 편집용으로 레벨 안에 함께 저장되어 되돌리기, 복사/붙여넣기, 트레이에서도 유지됩니다.
+
+### 이벤트 트레이 (신규) — 이벤트 패널의 `트레이`
+
+- 눈에 보이는 클립보드입니다. 행이나 선택 전체(종류가 섞여도 됩니다)를 **폴더**로 끌어다 넣고, 폴더를 열어 **그 자리에서 이벤트를 편집**하며, 폴더나 이벤트 하나를 타일로 끌어다 놓을 수 있습니다(**Shift를 누르면 교체**합니다).
+
+### 오디오 창 (신규)
+
+- 레벨의 박자 격자가 겹쳐진 파형, 곡 전체의 **템포 곡선**, 이를 따라가는 **메트로놈**, **오프셋 제안**, 그리고 모든 SetSpeed를 분할·마법진·실제 템포 변화로 분류하는 **채보 분석**을 제공합니다.
+
+### 이벤트 패널
+
+- 클릭하면 **선택**되고, 이벤트 아이콘이 있는 `▸` 버튼으로 **펼칩니다**. 이벤트가 하나면 펼쳐진 채로, 여러 개면 첫 이벤트가 선택된 채로 열립니다. **↑ / ↓**로 선택을 옮기며, 행은 부드럽게 열리고 닫힙니다.
+- **복사**하면 알림으로 알려 주고, **Ctrl+V는 선택한 타일의 이벤트를 교체**하며 **Ctrl+Shift+V는 위에 추가**합니다.
+- **Tab / Shift+Tab**으로 입력란을 이동하며, 입력란에 친 숫자가 더 이상 팔레트 도구를 바꾸지 않습니다.
+
+### 빠른 차팅
+
+- **`U`로 선택한 타일의 이벤트를 편집**합니다. 이벤트가 하나면 바로 열리고, 여러 개면 각 속성을 미리 보여 주는 번호 목록이 열립니다. 화면 가운데에 열리며, Esc로 닫아도 타일 선택이 유지됩니다.
+- **`Shift+R`로 타일 이동**, **`Shift+O`로 홀드** 이벤트를 만듭니다. 패드는 선택 사항입니다(모드를 켤 때 하나 열립니다).
+- 각도 패드: Enter가 더 이상 묶음을 두 번 배치하지 않으며, 트랙 중간 모서리 뒤의 묶음이 올바른 방향에서 시작합니다.
+
+### 에디터
+
+- **타일 우클릭 메뉴**가 동작합니다(한 번도 열리지 않았습니다). 단일 타일에서도 이벤트 필터로 복사 / 잘라내기를 할 수 있습니다.
+- **사이드바 탭 레일과 떼어 내기 도킹**을 지원하며, 탭이 더 잘 보입니다. **장식**은 별도 창으로 열립니다.
+- **타임라인**: 레인 높이를 따로 조절하고, 오디오 트랙이 생겼으며, 높이 조절이 부드러워졌습니다.
+- 아이콘만 있는 버튼에 **호버 도움말**이 생겼습니다. **애니메이션 길이**를 즉시부터 느리게까지 조절합니다. **도구 모음 단축키 제거**(기본값 켜짐)로 숫자 키가 자유로워집니다. 단축키에 **Alt**를 넣을 수 있습니다.
+- **플레이 모드**가 경로를 잠그고 배치 링을 숨깁니다.
+
+### 수정
+
+- 색상 휠이 고른 색을 보여 주며 입력란 옆에 열립니다. PlaySound의 소리 드롭다운이 돌아왔습니다.
+- 필터 이벤트가 없는 타일에서도 필터 관리자가 열립니다. 프리셋이 한 번의 클릭으로 바뀝니다. 자동 재생 안내가 더 이상 깜빡이지 않습니다.
+- 사이드바 크기 조절 손잡이가 더 이상 팝업 위에 그려지지 않습니다. 영어 도움말에 문장 대신 조회 ID가 보이던 문제를 고쳤습니다.
+
+---
 
 ## 1.0.0-a6
 
