@@ -169,6 +169,7 @@
         <Compile Include="Editor\Events\EventRows.cs" />
         <Compile Include="Editor\Events\EventRowsParticle.cs" />
         <Compile Include="Editor\Charting\EditorQuickChart.cs" />
+        <Compile Include="Editor\Charting\EditorQuickEdit.cs" />
         <Compile Include="Editor\Charting\EditorHzTool.cs" />
         <Compile Include="Editor\Events\EditorEventPanel.cs" />
         <Compile Include="Editor\Events\EditorEventSelector.cs" />

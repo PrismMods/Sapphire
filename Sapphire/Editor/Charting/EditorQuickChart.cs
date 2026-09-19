@@ -99,10 +99,11 @@ namespace Sapphire
                 return;
             }
 
-            // Ctrl/Cmd/Alt belong to game chords — never quick-chart.
+            // Ctrl/Cmd belong to game chords — never quick-chart. Alt is part of a bind now:
+            // Keybinds.Down matches it exactly, so a plain bind still ignores Alt+key.
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
-                || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)
-                || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) return;
+                || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)) return;
+            if (Keybinds.Down(Bind.QcEdit)) { EditorQuickEdit.Toggle(ed); return; }
             // Keybinds.Down matches the Shift state as part of the bind, so bare keys and Shift
             // combos live in ONE chain — a user who moves the angle pad off Shift+G onto a bare
             // key needs no branch of its own.

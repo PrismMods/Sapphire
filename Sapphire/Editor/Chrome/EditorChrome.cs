@@ -629,8 +629,9 @@ namespace Sapphire
 
         private static void TickDockKeys(scnEditor ed)
         {
-            // Digits and Enter both belong to a field being typed in (or just submitted).
-            if (UI.FieldNav.Typing) return;
+            // Digits and Enter both belong to a field being typed in (or just submitted), and 1–9
+            // to the quick editor's pick list while it's up.
+            if (UI.FieldNav.Typing || EditorQuickEdit.Picking) return;
             try
             {
                 if (ed.selectedFloors == null || ed.selectedFloors.Count == 0) return;

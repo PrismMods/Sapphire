@@ -881,7 +881,7 @@ namespace Sapphire
             AfterCommit = EventAfterCommit,
         };
 
-        private static void EventAfterCommit(scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi)
+        internal static void EventAfterCommit(scnEditor ed, ADOFAI.LevelEvent evt, ADOFAI.PropertyInfo pi)
         {
             bool path = false, floors = false;
             try { path = pi != null && pi.affectsPath; } catch { }

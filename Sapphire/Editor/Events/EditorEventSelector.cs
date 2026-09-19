@@ -510,7 +510,7 @@ namespace Sapphire
 
         private static void TickKeys(scnEditor ed)
         {
-            if (UI.FieldNav.Typing) return;
+            if (UI.FieldNav.Typing || EditorQuickEdit.Picking) return;
 
             try
             {

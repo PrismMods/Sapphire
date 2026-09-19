@@ -53,6 +53,13 @@ namespace Sapphire
             private static bool Prefix() { try { return !EditorEventPanel.OwnsArrows(); } catch { return true; } }
         }
 
+        // Esc that closes the quick editor keeps the tile selected.
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.DeselectAllEditorAction), "Execute")]
+        private static class QuickEditEscPatch
+        {
+            private static bool Prefix() { try { return !EditorQuickEdit.SwallowsEsc; } catch { return true; } }
+        }
+
         [HarmonyPatch(typeof(scnEditor), "Play")]
         private static class ControlsTipPlayPatch
         {

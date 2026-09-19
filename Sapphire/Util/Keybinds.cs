@@ -4,12 +4,13 @@ using Sapphire.UI.Pages;
 
 namespace Sapphire
 {
-    /* One rebindable key: a KeyCode plus a Shift flag. Serialized inside Settings, so public. */
+    /* One rebindable key: a KeyCode plus Shift / Alt flags. Serialized inside Settings, so public. */
     public class KeyBindDto
     {
         public string Id = "";
         public KeyCode Key = KeyCode.None;
         public bool Shift = false;
+        public bool Alt = false;
     }
 
     // Stable ids. Persisted BY NAME, so the enum can be reordered freely; only renaming an entry
@@ -17,7 +18,7 @@ namespace Sapphire
     internal enum Bind
     {
         QuickChart,
-        QcSwirl, QcSetSpeed, QcSpeedDown, QcSpeedUp, QcPause, QcLocate, QcAnglePad, QcMoveTrack, QcHold,
+        QcSwirl, QcSetSpeed, QcSpeedDown, QcSpeedUp, QcPause, QcLocate, QcAnglePad, QcMoveTrack, QcHold, QcEdit,
         ToolPrev, ToolSlot, ToolSlotSave, HzTool,
     }
 
@@ -39,9 +40,9 @@ namespace Sapphire
             public readonly Bind Id;
             public readonly string Group, Label;   // both are Loc keys
             public readonly KeyCode Key;
-            public readonly bool Shift;
-            public Def(Bind id, string group, string label, KeyCode key, bool shift)
-            { Id = id; Group = group; Label = label; Key = key; Shift = shift; }
+            public readonly bool Shift, Alt;
+            public Def(Bind id, string group, string label, KeyCode key, bool shift, bool alt = false)
+            { Id = id; Group = group; Label = label; Key = key; Shift = shift; Alt = alt; }
         }
 
         internal static readonly Def[] All =
@@ -61,6 +62,8 @@ namespace Sapphire
             // Shift+H/M/T are tile keys, so these sit on free letters.
             new Def(Bind.QcMoveTrack,  "Quick chart", "Move tile event",            KeyCode.R, true),
             new Def(Bind.QcHold,       "Quick chart", "Hold event",                 KeyCode.O, true),
+            // U: not a tile key and unbound in the game (only Ctrl+U), so no modifier is needed.
+            new Def(Bind.QcEdit,       "Quick chart", "Edit this tile's event",     KeyCode.U, false),
 
             new Def(Bind.ToolPrev,     "Tools",       "Previous tool",              KeyCode.Comma, false),
             new Def(Bind.ToolSlot,     "Tools",       "Saved tool slot",            KeyCode.Period, false),
@@ -75,10 +78,15 @@ namespace Sapphire
 
         private static readonly KeyCode[] _key = new KeyCode[All.Length];
         private static readonly bool[] _shift = new bool[All.Length];
+        private static readonly bool[] _alt = new bool[All.Length];
         private static bool _loaded;
 
         internal static bool ShiftHeld =>
             Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+        // Option on a Mac keyboard.
+        internal static bool AltHeld =>
+            Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
 
         /* True on the frame this bind's key goes down WITH its exact Shift state. Callers must
            still filter Ctrl/Cmd/Alt themselves — matching Shift alone would let a game chord
@@ -89,7 +97,7 @@ namespace Sapphire
             int i = (int)b;
             var k = _key[i];
             if (k == KeyCode.None) return false;            // deliberately unbound
-            return Input.GetKeyDown(k) && ShiftHeld == _shift[i];
+            return Input.GetKeyDown(k) && ShiftHeld == _shift[i] && AltHeld == _alt[i];
         }
 
         internal static KeyCode Key(Bind b) { Ensure(); return _key[(int)b]; }
@@ -102,7 +110,7 @@ namespace Sapphire
             int i = (int)b;
             if (_key[i] == KeyCode.None) return "—";
             string k = KeyTokens.PrettyTokenLabel(KeyTokens.TokenFromKeyCode(_key[i]));
-            return _shift[i] ? "Shift+" + k : k;
+            return (_alt[i] ? "Alt+" : "") + (_shift[i] ? "Shift+" : "") + k;
         }
 
         // The other bind sharing this key+Shift, or null. Two binds on one key isn't fatal (the
@@ -114,17 +122,17 @@ namespace Sapphire
             int i = (int)b;
             if (_key[i] == KeyCode.None) return null;
             for (int j = 0; j < All.Length; j++)
-                if (j != i && _key[j] == _key[i] && _shift[j] == _shift[i])
+                if (j != i && _key[j] == _key[i] && _shift[j] == _shift[i] && _alt[j] == _alt[i])
                     return Loc.T(All[j].Label);
             return null;
         }
 
-        internal static void Set(Bind b, KeyCode key, bool shift)
+        internal static void Set(Bind b, KeyCode key, bool shift, bool alt = false)
         {
             Ensure();
             int i = (int)b;
-            if (_key[i] == key && _shift[i] == shift) return;
-            _key[i] = key; _shift[i] = shift;
+            if (_key[i] == key && _shift[i] == shift && _alt[i] == alt) return;
+            _key[i] = key; _shift[i] = shift; _alt[i] = alt;
             Revision++;
             Persist();
         }
@@ -132,7 +140,7 @@ namespace Sapphire
         internal static void ResetAll()
         {
             Ensure();
-            for (int i = 0; i < All.Length; i++) { _key[i] = All[i].Key; _shift[i] = All[i].Shift; }
+            for (int i = 0; i < All.Length; i++) { _key[i] = All[i].Key; _shift[i] = All[i].Shift; _alt[i] = All[i].Alt; }
             Revision++;
             Persist();
         }
@@ -142,7 +150,7 @@ namespace Sapphire
         private static void Ensure()
         {
             if (_loaded) return;
-            for (int i = 0; i < All.Length; i++) { _key[i] = All[i].Key; _shift[i] = All[i].Shift; }
+            for (int i = 0; i < All.Length; i++) { _key[i] = All[i].Key; _shift[i] = All[i].Shift; _alt[i] = All[i].Alt; }
             var s = MainClass.Settings;
             // Don't latch on defaults if a tick beats settings loading — retry next call, or a
             // user's saved binds would be invisible for the rest of the session.
@@ -155,7 +163,7 @@ namespace Sapphire
                 for (int i = 0; i < All.Length; i++)
                 {
                     if (All[i].Id.ToString() != dto.Id) continue;
-                    _key[i] = dto.Key; _shift[i] = dto.Shift;
+                    _key[i] = dto.Key; _shift[i] = dto.Shift; _alt[i] = dto.Alt;
                     break;                                  // unknown ids just fall through
                 }
             }
@@ -167,7 +175,7 @@ namespace Sapphire
             if (s == null) return;
             s.Keybinds = new List<KeyBindDto>();
             for (int i = 0; i < All.Length; i++)
-                s.Keybinds.Add(new KeyBindDto { Id = All[i].Id.ToString(), Key = _key[i], Shift = _shift[i] });
+                s.Keybinds.Add(new KeyBindDto { Id = All[i].Id.ToString(), Key = _key[i], Shift = _shift[i], Alt = _alt[i] });
             MainClass.SaveSettings();
         }
 

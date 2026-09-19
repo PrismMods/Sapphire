@@ -69,6 +69,7 @@ namespace Sapphire
             new Hint(Quick,  Bind.QcLocate,    "Tile location event"),
             new Hint(Quick,  Bind.QcMoveTrack, "Move tile event"),
             new Hint(Quick,  Bind.QcHold,      "Hold event"),
+            new Hint(Quick,  Bind.QcEdit,      "Edit this tile's event"),
             new Hint(Quick,  Bind.QcAnglePad,  "Angle pad"),
         };
 

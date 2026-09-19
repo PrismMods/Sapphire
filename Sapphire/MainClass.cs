@@ -281,6 +281,7 @@ namespace Sapphire
                 UI.ColorWheel.Tick();
                 UI.EditorDropdown.Tick(); // auto-close its full-screen blocker when the trigger's gone
                 EditorQuickChart.Tick(); Acc(26);
+                EditorQuickEdit.Tick();
                 EditorHzTool.Tick();
                 PanelLayout.Tick();
                 EditorShapeLibrary.Tick(); Acc(27);
@@ -470,6 +471,7 @@ namespace Sapphire
             EditorEventTray.Dispose();
             EditorVariables.Dispose();
             EditorScript.Dispose();
+            EditorQuickEdit.Dispose();
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorHzTool.Dispose();

@@ -154,11 +154,10 @@ namespace Sapphire
             ["run too long to store"] = "저장하기에 너무 긴 묶음입니다",
             ["stored in"] = "저장 위치:",
             ["From Angle Pad"] = "각 패드에서 추가",
-            ["Click a key to rebind it. The Shift state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held. The defaults use only keys that do not clash (f g i k l o p r u)."] = "단축키를 눌러 다시 지정합니다. 누른 순간의 Shift 상태가 함께 저장되므로\n"
-                + "Shift+G는 Shift+G로, 그냥 G는 G로 지정됩니다.\n"
-                + "게임 에디터는 타일 배치 키 17개(a b c d e h j m n q s t v w x y z)를 Shift 유무\n"
-                + "양쪽에 모두 등록하므로, 그 글자들은 Shift를 붙여도 충돌합니다. 기본값은 충돌하지\n"
-                + "않는 키(f g i k l o p r u)만 사용합니다.",
+            ["Click a key to rebind it. The Shift and Alt state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held — Alt+letter is free except Alt+A, Alt+B, Alt+F and Alt+N. The defaults use only keys that do not clash."] = "단축키를 눌러 다시 지정합니다. 누른 순간의 Shift와 Alt 상태가 함께 저장되므로\n"
+                + "Shift+G는 Shift+G로, 그냥 G는 G로 지정됩니다. 게임 에디터는 타일 배치 키 17개(a b c d e h j m n q s t v w x y z)를\n"
+                + "Shift 유무와 관계없이 등록하므로 이 글자들은 Shift를 눌러도 겹칩니다. Alt+글자는 Alt+A, Alt+B, Alt+F, Alt+N을 빼면 비어 있습니다.\n"
+                + "기본값은 겹치지 않는 키만 사용합니다.",
             ["Reset all keybinds"] = "모든 단축키 초기화",
             ["Tools"] = "도구",
             ["also"] = "중복:",
@@ -683,6 +682,14 @@ namespace Sapphire
             ["events"] = "개 이벤트",
             ["New folder"] = "새 폴더",
             ["Script"] = "스크립트",
+            ["Edit this tile's event"] = "이 타일의 이벤트 편집",
+            ["Edit event"] = "이벤트 편집",
+            ["Select one tile first"] = "타일을 하나 먼저 선택하세요",
+            ["No events on this tile"] = "이 타일에는 이벤트가 없습니다",
+            ["Tile"] = "타일",
+            ["pick an event (1–9)"] = "이벤트를 고르세요 (1–9)",
+            ["back"] = "뒤로",
+            ["Enter applies · Esc closes · Tab moves between fields"] = "Enter로 적용 · Esc로 닫기 · Tab으로 입력란 이동",
             ["Compile"] = "컴파일",
             ["Help"] = "도움말",
             ["Line"] = "줄",

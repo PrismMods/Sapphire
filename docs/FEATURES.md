@@ -75,6 +75,7 @@ A fast, tool-less charting mode. While on, the timeline hides and these keys are
 | `Shift+L` | **Tile location** — prompt X/Y → PositionTrack event. |
 | `Shift+R` | **Move tile** — prompt beats + X/Y → MoveTrack event on the selected tile. |
 | `Shift+O` | **Hold** — prompt duration → Hold event. |
+| `U` | **Edit** the selected tile's event: one event opens its parameters; several open a numbered list previewing every parameter (pick with `1`–`9` or a click). `Enter` applies and closes, `Esc` closes, `Tab` moves between fields. |
 | `Shift+G` | **Angle pad** — a floating field that appends a whole run of tiles. |
 | `Shift+K` | Toggle quick chart mode itself (works while the mode is off). |
 | `Shift+F` | **Hz tool** — charting by frequency (see below); works with the mode off too. |
@@ -540,7 +541,7 @@ release asset, and archive entries that would escape the mods folder are rejecte
 | `Shift+K` | editor | Toggle Quick chart mode (the toolbar `Q` cell does the same) |
 | `Shift+F` | editor | Toggle the Hz tool |
 | `I` `O` `[` `]` | Quick chart | Swirl / set speed / halve / double |
-| `Shift+P` `Shift+L` `Shift+R` `Shift+O` `Shift+G` | Quick chart | Pause / location / move tile / hold / angle pad |
+| `Shift+P` `Shift+L` `Shift+R` `Shift+O` `Shift+G` `U` | Quick chart | Pause / location / move tile / hold / angle pad / edit |
 
 The quick-chart and tool-slot rows above are **defaults**; rebind them in settings ▸ Keybinds. Defaults avoid the editor's 17 tile-placement letters (`a b c d e h j m n q s t v w
 x y z`), which the game binds with **and** without `Shift` — so a bind on one of those steals

@@ -24,7 +24,7 @@ namespace Sapphire.UI.Pages
             var s = UICore.Settings;
             var notify = UICore.OnSettingsChanged;
 
-            UIBuilder.Label(content, Loc.T("Click a key to rebind it. The Shift state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held. The defaults use only keys that do not clash (f g i k l o p r u)."));
+            UIBuilder.Label(content, Loc.T("Click a key to rebind it. The Shift and Alt state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held — Alt+letter is free except Alt+A, Alt+B, Alt+F and Alt+N. The defaults use only keys that do not clash."));
 
             // One listener serves every row on the page; OnKey is re-pointed per armed row.
             var listener = UIBuilder.Rect("KeybindListener", content).AddComponent<KeyListener>();
@@ -85,7 +85,7 @@ namespace Sapphire.UI.Pages
                 {
                     if (Keybinds.IsModifier(kc)) return;   // Shift fires first in "Shift+G" — wait
                     listener.Active = false;
-                    Keybinds.Set(d.Id, kc, Keybinds.ShiftHeld);
+                    Keybinds.Set(d.Id, kc, Keybinds.ShiftHeld, Keybinds.AltHeld);
                     UICore.OnSettingsChanged?.Invoke();
                     foreach (var r in refreshAll) r();      // a new bind can create/clear conflicts
                 };
