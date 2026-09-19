@@ -23,7 +23,15 @@ namespace Sapphire
     internal static class LevelVars
     {
         internal class Var { public string Name = ""; public string Expr = "0"; }
-        internal class Table { public readonly List<Var> Vars = new List<Var>(); }
+        /* The script is SHARED by every undo snapshot of a level (DataCopyPatch copies the box, not
+           the text): typing isn't an undo step, so a snapshot holding its own copy would roll the
+           script back to an old draft whenever an unrelated edit was undone. */
+        internal class ScriptBox { public string Text = ""; }
+        internal class Table
+        {
+            public readonly List<Var> Vars = new List<Var>();
+            public ScriptBox Script = new ScriptBox();
+        }
 
         internal const string Section = "sapphire";
         private static readonly Regex NameRx = new Regex(@"^[A-Za-z_][A-Za-z0-9_]*$");
@@ -238,8 +246,11 @@ namespace Sapphire
             EncodeList(ld.levelEvents.OrderBy(e => e.floor).Where(Active), "action", forms);
             EncodeList(ld.decorations.Where(Active), "decoration", forms);
             EncodeList(SettingsEvents(ld).Where(e => e != null), "settings", forms);
-            if (vars.Count == 0 && forms.Count == 0) return null;
-            return new Dictionary<string, object> { { "version", 1 }, { "variables", vars }, { "formulas", forms } };
+            string script = t != null ? t.Script.Text ?? "" : "";
+            if (vars.Count == 0 && forms.Count == 0 && script.Trim().Length == 0) return null;
+            var sec = new Dictionary<string, object> { { "version", 1 }, { "variables", vars }, { "formulas", forms } };
+            if (script.Trim().Length > 0) sec["script"] = script;
+            return sec;
         }
 
         private static void EncodeList(IEnumerable<ADOFAI.LevelEvent> list, string src, List<object> outp)
@@ -268,6 +279,7 @@ namespace Sapphire
             if (sec == null) return;
             var t = TableOf(ld);
             t.Vars.Clear();
+            t.Script = new ScriptBox { Text = sec.TryGetValue("script", out o) ? o as string ?? "" : "" };
             if (sec.TryGetValue("variables", out o) && o is List<object>)
                 foreach (var item in (List<object>)o)
                 {
@@ -343,6 +355,7 @@ namespace Sapphire
                     var c = TableOf(__result);
                     c.Vars.Clear();
                     foreach (var v in t.Vars) c.Vars.Add(new Var { Name = v.Name, Expr = v.Expr });
+                    c.Script = t.Script;
                 }
                 catch { }
             }

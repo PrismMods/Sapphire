@@ -36,7 +36,10 @@ namespace Sapphire
         private static bool _dockInited;
         private static CanvasGroup _panelCg;   // the hidden game settings panel
 
-        private struct TabDef { public string Field; public ADOFAI.LevelEventType Type; }
+        /* A settings object, or (Open set) a button that opens its own window — Decorations,
+           Variables and Script are browsers/editors, not settings. Glyph stands in for an icon on
+           the collapsed rail when the game has none. */
+        private struct TabDef { public string Field; public ADOFAI.LevelEventType Type; public Action Open; public string Label, Glyph; }
         private static readonly TabDef[] Tabs =
         {
             new TabDef { Field = "songSettings",       Type = ADOFAI.LevelEventType.SongSettings },
@@ -45,7 +48,12 @@ namespace Sapphire
             new TabDef { Field = "backgroundSettings", Type = ADOFAI.LevelEventType.BackgroundSettings },
             new TabDef { Field = "cameraSettings",     Type = ADOFAI.LevelEventType.CameraSettings },
             new TabDef { Field = "miscSettings",       Type = ADOFAI.LevelEventType.MiscSettings },
-            new TabDef { Field = "decorationSettings", Type = ADOFAI.LevelEventType.DecorationSettings },
+            new TabDef { Field = "decorationSettings", Type = ADOFAI.LevelEventType.DecorationSettings,
+                         Open = () => { EditorDecoMenu.Open(); EditorDecoMenu.Kit.BringToFront(); } },
+            new TabDef { Label = "Variables", Glyph = "$",
+                         Open = () => { EditorVariables.SetOpen(true); EditorVariables.Kit.BringToFront(); } },
+            new TabDef { Label = "Script", Glyph = "{ }",
+                         Open = () => { EditorScript.SetOpen(true); EditorScript.Kit.BringToFront(); } },
         };
 
         internal static bool IsOpen => _open;
@@ -298,14 +306,7 @@ namespace Sapphire
 
             float y = -2f;
             if (Tabs[_tab].Type == ADOFAI.LevelEventType.LevelSettings)
-            {
                 y = ArtistApprovalChip(ed, y);
-                var vt = LevelVars.Current;
-                UI.HoverTip.Attach(EventRows.Cell(_content, Loc.T("Variables") + " (" + (vt != null ? vt.Vars.Count : 0) + ")",
-                    Pad, y, _ctx.PanelW - Pad * 2f, RowH, EditorVariables.Toggle, true).gameObject,
-                    Loc.T("Named values you can use as $name in any number field"));
-                y -= RowH + Gap;
-            }
 
             var evt = SettingsEvent(ed, Tabs[_tab].Field);
             var info = InfoOf(Tabs[_tab].Type);
@@ -441,7 +442,15 @@ namespace Sapphire
                 bg.BorderColor = new Color(1f, 1f, 1f, 0.1f);
                 bg.raycastTarget = true;
 
-                var icon = TabIcon(Tabs[i].Type);
+                var icon = Tabs[i].Label == null ? TabIcon(Tabs[i].Type) : null;
+                if (icon == null && collapsed && Tabs[i].Glyph != null)
+                {
+                    var gGo = new GameObject("G", typeof(RectTransform));
+                    gGo.transform.SetParent(go.transform, false);
+                    var gr = (RectTransform)gGo.transform;
+                    gr.anchorMin = Vector2.zero; gr.anchorMax = Vector2.one; gr.offsetMin = gr.offsetMax = Vector2.zero;
+                    UIBuilder.Tmp(gGo, Tabs[i].Glyph, 12f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
+                }
                 if (icon != null)
                 {
                     var iGo = new GameObject("I", typeof(RectTransform));
@@ -462,7 +471,7 @@ namespace Sapphire
                     var lr = (RectTransform)lGo.transform;
                     lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
                     lr.offsetMin = new Vector2(icon != null ? 29f : 8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
-                    var lt = UIBuilder.Tmp(lGo, TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
+                    var lt = UIBuilder.Tmp(lGo, Tabs[i].Label != null ? Loc.T(Tabs[i].Label) : TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
                     lt.textWrappingMode = TextWrappingModes.NoWrap;
                     lt.overflowMode = TextOverflowModes.Ellipsis;
                     lt.raycastTarget = false;
@@ -470,9 +479,7 @@ namespace Sapphire
 
                 UI.ClickHandler.Attach(go, () =>
                 {
-                    // Decorations is a browser, not a settings object — it has its own window.
-                    if (Tabs[idx].Type == ADOFAI.LevelEventType.DecorationSettings)
-                    { EditorDecoMenu.Open(); EditorDecoMenu.Kit.BringToFront(); return; }
+                    if (Tabs[idx].Open != null) { Tabs[idx].Open(); return; }
                     _tab = idx; _scroll = 0f; _sig = 0;
                 });
                 y -= rowH + gap;

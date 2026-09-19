@@ -178,6 +178,8 @@ namespace Sapphire
                 var go = es != null ? es.currentSelectedGameObject : null;
                 if (go == null || !IsSapphireOwned(go)) return;   // a game field: leave it alone
                 var f = go.GetComponent<TMP_InputField>();
+                // A multi-line field is a document (the script editor): Ctrl+Z there must not undo the level.
+                if (f != null && f.lineType != TMP_InputField.LineType.SingleLine) return;
                 if (f != null) f.DeactivateInputField();
                 es.SetSelectedGameObject(null);
                 bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);

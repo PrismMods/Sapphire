@@ -179,6 +179,9 @@
         <Compile Include="Editor\Level\EditorLevelMenu.cs" />
         <Compile Include="Editor\Level\LevelVars.cs" />
         <Compile Include="Editor\Level\EditorVariables.cs" />
+        <Compile Include="Editor\Level\VanillaLogic.cs" />
+        <Compile Include="Editor\Level\ScriptLang.cs" />
+        <Compile Include="Editor\Level\EditorScript.cs" />
         <Compile Include="Editor\Level\EditorDecoMenu.cs" />
         <Compile Include="Editor\Level\EditorChartAnalysis.cs" />
         <Compile Include="Editor\Level\EditorVisualizer.cs" />

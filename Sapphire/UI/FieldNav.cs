@@ -104,6 +104,7 @@ namespace Sapphire.UI
             var cur = SelectedField();
             // Something else already moved focus on this Tab (the quick-chart prompt cycles its own).
             if (cur == null || cur.gameObject != _polledSel) return;
+            if (cur.lineType != TMP_InputField.LineType.SingleLine) return;   // a code field indents on Tab
             var root = WindowOf(cur);
             if (root == null) return;
             var list = Ordered(root);

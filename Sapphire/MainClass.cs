@@ -275,6 +275,7 @@ namespace Sapphire
                 EditorEventPanel.Tick(); Acc(24);
                 EditorEventTray.Tick();
                 EditorVariables.Tick();
+                EditorScript.Tick();
                 EditorBulkEdit.Tick();
                 EditorEventSelector.Tick(); Acc(25);
                 UI.ColorWheel.Tick();
@@ -327,6 +328,8 @@ namespace Sapphire
                             () => EditorEventTray.IsOpen, EditorEventTray.SetOpen);
                         UI.PanelKit.RegisterTabbable(EditorVariables.Kit, Loc.T("Variables"), EditorVariables.TabAvailable,
                             () => EditorVariables.IsOpen, EditorVariables.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorScript.Kit, Loc.T("Script"), EditorScript.TabAvailable,
+                            () => EditorScript.IsOpen, EditorScript.SetOpen);
                     }
                     bool rails = false;
                     try
@@ -466,6 +469,7 @@ namespace Sapphire
             EditorEventPanel.Dispose();
             EditorEventTray.Dispose();
             EditorVariables.Dispose();
+            EditorScript.Dispose();
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorHzTool.Dispose();

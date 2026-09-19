@@ -46,6 +46,7 @@ namespace Sapphire
             new Entry { Id = "hztool",     IsOpen = () => EditorHzTool.IsOpen,       SetOpen = EditorHzTool.SetOpen,       Kit = () => EditorHzTool.Kit },
             new Entry { Id = "tray",       IsOpen = () => EditorEventTray.IsOpen,    SetOpen = EditorEventTray.SetOpen,    Kit = () => EditorEventTray.Kit },
             new Entry { Id = "variables",  IsOpen = () => EditorVariables.IsOpen,    SetOpen = EditorVariables.SetOpen,    Kit = () => EditorVariables.Kit },
+            new Entry { Id = "script",     IsOpen = () => EditorScript.IsOpen,       SetOpen = EditorScript.SetOpen,       Kit = () => EditorScript.Kit },
         };
 
         private static bool _restored;

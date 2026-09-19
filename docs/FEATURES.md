@@ -425,7 +425,7 @@ right sidebar works the same way; it just starts with no tabs on it.
   tile's events. Rows can also be dragged straight from the event panel onto another tile. A card
   follows the cursor naming the target; `Esc` cancels. Everything in the tray is a copy and lasts
   for the session.
-- **Level variables** — `Level settings → Level → Variables` opens the level's table of named
+- **Level variables** — `Variables` on the Level settings rail opens the level's table of named
   values (`bpm = 180`, `beat = 60/$bpm`; a variable can use the ones above it). Type a formula
   such as `$beat*2` into ANY number field — event properties, X/Y components, level settings — and
   the field keeps the formula (tinted; hover shows its current value) while the event stores the
@@ -433,6 +433,32 @@ right sidebar works the same way; it just starts with no tabs on it.
   one rewrites the formulas that use it. The saved `.adofai` holds plain numbers, so the level plays
   in the unmodded game; the formulas ride along in a `sapphire` section the game ignores. Re-saving
   in the unmodded editor keeps the numbers and drops the formulas.
+- **Script (runtime logic that plays unmodded)** — `Script` on the Level settings rail opens a
+  code editor (line numbers, colouring, errors as you type). `Compile` turns the script into
+  ordinary events, so the level plays in the unmodded game. The game's only runtime memory is
+  `SetInputEvent`'s key → events table, which a fired `SetInputEvent` rewrites; the compiler builds a
+  state machine on it, one tagged event group per state and key on a host tile.
+
+  ```
+  flag lights                    # off / on
+  counter hits 0..3 wrap         # clamps at the ends unless wrap
+  on key Up nohit:               # Up Down Left Right Action1 Action2 Confirm Any · release · nohit
+      toggle lights
+      hits += 1
+      if hits == 3:
+          run flash              # copies every event tagged "flash"
+  when lights:                   # runs each time the condition becomes true
+      run grey
+  on miss at 40:                 # hit judgments fire per tile; they can only run
+      run shake
+  ```
+
+  `state mode = calm, wild` declares named states; conditions use `== != < > <= >=`, `and`, `or`,
+  `not`. Events used by `run` are **templates**: tag them, and Compile places active copies on the
+  host tile (`host N`, default 0) and switches the originals off. Path and timing events (SetSpeed,
+  Twirl, Pause, …) can't be triggered and are skipped. Keys are also hits unless `nohit`. All
+  variables together may reach at most 256 combinations. `Remove` deletes the compiled events and
+  switches the templates back on. Test from the start of the level.
 
 ---
 
