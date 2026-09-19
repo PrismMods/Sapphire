@@ -1461,6 +1461,82 @@ namespace Sapphire
             _inspEvents.Clear();
             if (evs != null) foreach (var e in evs) if (e != null) _inspEvents.Add(e);
             _inspVersion++;
+            _evClip = false;   // a capture or preset is the eyedropper's, not Ctrl+V's
+        }
+
+        /* The event panel's Copy: same buffer, but pasted with Ctrl+V / the tile menu's Paste
+           onto the selected tile(s) instead of arming the eyedropper. It owns paste only while it
+           is the LATEST copy — any copy into the game's clipboard afterwards (tiles, Ctrl+C on an
+           event) changes the clipboard's stamp and hands paste back to the game, whose paste
+           inserts floors rather than adding events. */
+        private static bool _evClip;
+        private static int _evClipStamp;
+
+        internal static int CopyEventsForPaste(System.Collections.Generic.List<ADOFAI.LevelEvent> list)
+        {
+            var buf = new System.Collections.Generic.List<ADOFAI.LevelEvent>();
+            if (list != null) foreach (var e in list) { try { if (e != null) buf.Add(e.Copy()); } catch { } }
+            LoadInspectorBuffer(buf);
+            _evClip = buf.Count > 0;
+            _evClipStamp = GameClipStamp(scnEditor.instance);
+            return buf.Count;
+        }
+
+        // Boxed FloorData entries are new objects on every game copy, so identity + count tells
+        // whether the game's clipboard changed since ours was taken.
+        private static int GameClipStamp(scnEditor ed)
+        {
+            try
+            {
+                var c = ed != null ? ed.clipboard : null;
+                if (c == null || c.Count == 0) return 0;
+                return c.Count * 31 + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(c[0]);
+            }
+            catch { return 0; }
+        }
+
+        // replace = Ctrl+V: the target tiles' own events go first. Otherwise (Ctrl+Shift+V) add on top.
+        internal static bool PasteEventClip(scnEditor ed, bool replace)
+        {
+            if (!_evClip || _inspEvents.Count == 0 || ed == null || !MainClass.EditorSuiteOn) return false;
+            if (GameClipStamp(ed) != _evClipStamp) { _evClip = false; return false; }
+            System.Collections.Generic.List<scrFloor> targets = null;
+            try { targets = ed.playMode ? null : new System.Collections.Generic.List<scrFloor>(ed.selectedFloors); } catch { }
+            if (targets == null || targets.Count == 0) return false;
+            int n = 0;
+            try
+            {
+                using (new SaveStateScope(ed))
+                {
+                    if (replace)
+                    {
+                        var seqs = new System.Collections.Generic.HashSet<int>();
+                        foreach (var f in targets) if (f != null) seqs.Add(f.seqID);
+                        for (int i = ed.events.Count - 1; i >= 0; i--)
+                        {
+                            var ev = ed.events[i];
+                            if (ev != null && seqs.Contains(ev.floor)) ed.events.RemoveAt(i);
+                        }
+                    }
+                    foreach (var f in targets)
+                    {
+                        if (f == null) continue;
+                        foreach (var e in _inspEvents)
+                        {
+                            if (e == null) continue;
+                            var c = e.Copy();
+                            c.floor = f.seqID;
+                            ed.events.Add(c);
+                            n++;
+                        }
+                    }
+                    try { ed.ApplyEventsToFloors(); } catch { }
+                    try { ed.RemakePath(true, true); } catch { }
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("EventClip: paste failed: " + ex.Message); }
+            try { ed.ShowNotification(Loc.T(replace ? "Events replaced" : "Events pasted") + " · " + n, null, 0f); } catch { }
+            return true;
         }
 
         internal static System.Collections.Generic.List<int> InspectorTypes()

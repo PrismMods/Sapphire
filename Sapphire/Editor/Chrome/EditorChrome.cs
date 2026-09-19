@@ -806,6 +806,7 @@ namespace Sapphire
                 int t = eventType;
                 string name = ((ADOFAI.LevelEventType)t).ToString();
                 UI.ClickHandler.Attach(cellGo, () => EditorToolbar.SelectEventTool(t, name));
+                UI.HoverTip.Attach(cellGo, EditorEventSelector.TypeName(t));
             }
             else
             {

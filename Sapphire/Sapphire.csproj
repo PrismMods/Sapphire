@@ -114,6 +114,7 @@
         <Compile Include="UI\PanelKit.cs" />
         <Compile Include="UI\UiAnim.cs" />
         <Compile Include="UI\FieldNav.cs" />
+        <Compile Include="UI\HoverTip.cs" />
         <Compile Include="UI\ColorWheel.cs" />
         <Compile Include="UI\EditorDropdown.cs" />
         <Compile Include="UI\ShapePathGraphic.cs" />

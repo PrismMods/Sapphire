@@ -316,8 +316,11 @@ namespace Sapphire
                     preset.Name + "  ·  " + preset.Events.Count, 13f, TextAnchor.MiddleLeft, Theme.Text);
                 lbl.raycastTarget = false;
 
-                var click = UI.ClickHandler.Attach(rowGo, () => LoadPreset(preset, idx));
-                click.OnRightClick = () => { _renameIdx = idx; _shownCount = -1; };
+                /* Load on PRESS. A pointer-click needs the press and release on one live object
+                   with no drag in between, and something on this window cancelled the first one —
+                   it took two clicks to switch presets. A press can't be cancelled. */
+                rowGo.AddComponent<UI.SearchRowDown>().OnDown = () => LoadPreset(preset, idx);
+                UI.ClickHandler.Attach(rowGo, null).OnRightClick = () => { _renameIdx = idx; _shownCount = -1; };
             }
 
             // delete ×

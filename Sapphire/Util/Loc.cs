@@ -665,6 +665,14 @@ namespace Sapphire
             ["Hold event"] = "홀드 이벤트",
             ["Move tile"] = "타일 이동",
             ["Hold"] = "홀드",
+            ["One more repeat"] = "반복 1회 추가",
+            ["One fewer repeat"] = "반복 1회 줄이기",
+            ["Expand"] = "펼치기",
+            ["Collapse"] = "접기",
+            ["Delete all events in this group"] = "이 그룹의 이벤트 모두 삭제",
+            ["Events copied"] = "이벤트 복사됨",
+            ["Events pasted"] = "이벤트 붙여넣음",
+            ["Events replaced"] = "이벤트 교체됨",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short

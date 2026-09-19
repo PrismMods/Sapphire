@@ -45,6 +45,15 @@ namespace Sapphire
         private static readonly List<RectTransform> _mRows = new List<RectTransform>();
         private static readonly List<Vector2> _mBase = new List<Vector2>();
         private static readonly List<float> _mBottom = new List<float>();   // NaN = slides; else body row, fades
+        /* Keyboard rows: every visible header in display order (a group header selects its whole
+           group, like a click), rebuilt with the content. The cursor is held by row KEY, not
+           index, so it survives an expand shifting everything below it. */
+        private static readonly List<List<ADOFAI.LevelEvent>> _rows = new List<List<ADOFAI.LevelEvent>>();
+        private static readonly List<long> _rowKeys = new List<long>();
+        private static readonly List<float> _rowY = new List<float>();
+        private static long _cursorKey = long.MinValue, _rowAnchorKey = long.MinValue;
+        private static bool _revealCursor;
+        private static int _shownFrame = -10;
         private static long _sig;
         private const long EmptySig = -1L;     // _sig marker: scanned, tile has no events
         private static bool _empty;            // last scan found nothing on this floor
@@ -141,7 +150,7 @@ namespace Sapphire
                 if (!K.Built || floorChanged) { BuildShell(ed); rebuildContent = true; }
                 long sig = Sig(ed, floor, events);
                 if (sig != _sig) { _sig = sig; rebuildContent = true; }
-                if (rebuildContent) { BuildContent(ed, events); BeginMotion(); }
+                if (rebuildContent) { BuildContent(ed, events); BeginMotion(); RevealCursor(); }
                 if (_animList) { _animList = false; _listAnim = 0f; _motionKey = long.MinValue; }
             }
             // Nothing to show until the first scan, or when the latch says the tile is empty
@@ -152,6 +161,8 @@ namespace Sapphire
             if (_content != null) UI.UiAnim.Step(_content.gameObject, true, ref _listAnim, false);
             TickMotion();
             K.Show(true);
+            _shownFrame = Time.frameCount;
+            TickArrows();
             ClampIntoView();
             TickScroll();
             TickResize();
@@ -355,6 +366,7 @@ namespace Sapphire
             var first = events[0];   // events[0] is also the first row: groups keep first-seen order
             if (events.Count == 1) _expandedTypes.Add((int)first.eventType);
             _sel.Clear(); _sel.Add(first); _anchor = first; _gameSel = first;
+            _cursorKey = _rowAnchorKey = -1L - (int)first.eventType;
         }
 
         private static ADOFAI.LevelEventInfo InfoOf(ADOFAI.LevelEvent evt)
@@ -429,6 +441,7 @@ namespace Sapphire
             // Destroy is deferred: the old rows stay children until the frame ends.
             _motionFirstChild = _content.childCount;
             _mRows.Clear(); _mBase.Clear(); _mBottom.Clear(); _motionT = 1f;
+            _rows.Clear(); _rowKeys.Clear(); _rowY.Clear();
 
             // tree view: events grouped by TYPE, instances as child nodes
             var order = new List<int>();
@@ -473,8 +486,9 @@ namespace Sapphire
 
             float pw = _size.x; // live panel width — headers/× must track it like the value rows do
             float headW = pw - Pad * 2f - DelW - ActGap;
+            AddRow(typeKey, list, y);
             var head = HeaderCell(title, preview, Pad, y, headW, tExp, EditorEventSelector.TypeIcon(type),
-                () => SelectRow(list), () =>
+                () => SelectRow(list, typeKey), () =>
             {
                 if (!_expandedTypes.Add(type)) _expandedTypes.Remove(type);
                 ArmMotion(typeKey);
@@ -482,13 +496,14 @@ namespace Sapphire
             // Collapsed folders sit brighter than leaf rows so the two tiers separate at a glance.
             head.color = RowTint(list, tExp, 0.4f, single ? 0.06f : 0.11f);
             var group = list;
-            EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () =>
+            var delGroup = EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () =>
             {
                 if (single) { DeleteEvent(ed, group[0]); return; }
                 // Deleting a whole group is the one destructive action here that isn't one row.
                 ConfirmBox.Ask(Loc.T("Delete this event group?") + "\n" + EventTitle(group[0]) + " · " + group.Count,
                     Loc.T("Delete"), () => DeleteEvents(ed, group));
             }, true);
+            UI.HoverTip.Attach(delGroup.gameObject, Loc.T(single ? "Delete event" : "Delete all events in this group"));
             y -= RowH + Gap;
             if (!tExp) return y;
 
@@ -503,9 +518,11 @@ namespace Sapphire
                 string prev = Preview(evt);
                 string label = (i + 1) + "." + TagSuffix(evt);
                 if (_motionKey == key) { _motionHeadY = y; _motionHeadSeen = true; }
+                var one = new List<ADOFAI.LevelEvent> { evt };
+                AddRow(key, one, y);
                 var sub = HeaderCell(label, prev, Pad + 12f, y,
                     pw - Pad * 2f - 12f - DelW - ActGap, iExp, null,
-                    () => SelectRow(new List<ADOFAI.LevelEvent> { evt }), () =>
+                    () => SelectRow(one, key), () =>
                 {
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
                     ArmMotion(key);
@@ -513,7 +530,8 @@ namespace Sapphire
                 sub.color = _sel.Contains(evt) ? SelTint
                     : iExp ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
                            : new Color(1f, 1f, 1f, 0.04f);
-                EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () => DeleteEvent(ed, evt), true);
+                UI.HoverTip.Attach(EventRows.Cell(_content, "×", pw - Pad - DelW, y, DelW, RowH, () => DeleteEvent(ed, evt), true).gameObject,
+                    Loc.T("Delete event"));
                 y -= RowH + Gap;
                 if (iExp) y = InstanceBody(ed, evt, y);
             }
@@ -600,14 +618,66 @@ namespace Sapphire
         // ── free selection (ctrl toggle · shift range) ───────────────────────
 
         // A plain click selects just this row; Ctrl/Shift extend. Expanding is the glyph's job.
-        private static void SelectRow(List<ADOFAI.LevelEvent> rowEvents)
+        private static void SelectRow(List<ADOFAI.LevelEvent> rowEvents, long key)
         {
+            _cursorKey = key;
             if (SelectClick(rowEvents)) return;
+            _rowAnchorKey = key;
             _sel.Clear();
             foreach (var e in rowEvents) _sel.Add(e);
             _anchor = rowEvents[rowEvents.Count - 1];
             _gameSel = rowEvents[0];   // hand the game's hotkeys the row's first event
             _sig = 0;
+        }
+
+        private static void AddRow(long key, List<ADOFAI.LevelEvent> events, float y)
+        { _rows.Add(events); _rowKeys.Add(key); _rowY.Add(y); }
+
+        // ── Up / Down ──────────────────────────────────────────────────────────
+
+        // Also read by the Harmony guards that stand the game's own Up/Down actions down.
+        internal static bool OwnsArrows()
+        {
+            if (Time.frameCount - _shownFrame > 1 || _rows.Count == 0 || UI.FieldNav.Typing) return false;
+            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)
+                || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) return false;
+            try { var ed = scnEditor.instance; return ed != null && !ed.playMode; } catch { return false; }
+        }
+
+        // Up/Down move one row; with Shift they extend from the row the selection started on.
+        private static void TickArrows()
+        {
+            bool up = Input.GetKeyDown(KeyCode.UpArrow), down = Input.GetKeyDown(KeyCode.DownArrow);
+            if ((!up && !down) || !OwnsArrows()) return;
+            int cur = _rowKeys.IndexOf(_cursorKey);
+            int next = cur < 0 ? 0 : Mathf.Clamp(cur + (down ? 1 : -1), 0, _rows.Count - 1);
+            if (next == cur) return;
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            int a = shift ? _rowKeys.IndexOf(_rowAnchorKey) : -1;
+            if (a < 0) { a = next; _rowAnchorKey = _rowKeys[next]; }
+            _sel.Clear();
+            for (int i = Mathf.Min(a, next); i <= Mathf.Max(a, next); i++)
+                foreach (var e in _rows[i]) _sel.Add(e);
+            var row = _rows[next];
+            _cursorKey = _rowKeys[next];
+            _anchor = row[row.Count - 1];
+            _gameSel = row[0];
+            _revealCursor = true;
+            _sig = 0;
+        }
+
+        // Scroll the keyboard cursor's row into view after the rebuild that moved it.
+        private static void RevealCursor()
+        {
+            if (!_revealCursor || _viewport == null || _content == null) return;
+            _revealCursor = false;
+            int i = _rowKeys.IndexOf(_cursorKey);
+            if (i < 0) return;
+            float top = -_rowY[i], viewH = _viewport.rect.height;
+            if (top - Gap < _scroll) _scroll = top - Gap;
+            else if (top + RowH + Gap > _scroll + viewH) _scroll = top + RowH + Gap - viewH;
+            ClampScroll();
         }
 
         // Returns true for a Ctrl/Shift gesture. A group row selects (or clears) all of its
@@ -680,19 +750,15 @@ namespace Sapphire
             return y - (RowH + Gap);
         }
 
-        /* Copy = load Sapphire's event clipboard (the inspector tool's capture buffer) and arm
-           that tool, so the very next right-click on a tile pastes — filtered by the copy panel
-           exactly like a tile capture. Copies are detached (LevelEvent.Copy) so later edits to
-           the source don't rewrite the clipboard. */
+        /* Copy = detached copies (LevelEvent.Copy, so later edits to the source don't rewrite the
+           clipboard) that Ctrl+V pastes onto the selected tile(s). No tool is armed and no panel
+           opens; the notification is the whole response. */
         private static void CopyEvents(List<ADOFAI.LevelEvent> list)
         {
             if (list == null || list.Count == 0) return;
             _gameSel = list[0];   // keep the game's own Ctrl+C on the same event we just copied
-            var buf = new List<ADOFAI.LevelEvent>(list.Count);
-            foreach (var e in list) { try { if (e != null) buf.Add(e.Copy()); } catch { } }
-            EditorToolbar.LoadInspectorBuffer(buf);
-            EditorToolbar.ArmInspector();
-            SapphireLog.Log("EventPanel: copied " + buf.Count + " event(s) to the paste buffer");
+            int n = EditorToolbar.CopyEventsForPaste(list);
+            try { scnEditor.instance.ShowNotification(Loc.T("Events copied") + " · " + n, null, 0f); } catch { }
         }
 
         // tag / filter-name shown beside the node — the tree stays scannable while collapsed
@@ -836,6 +902,7 @@ namespace Sapphire
             dbg.Radius = 4f;
             dbg.color = new Color(1f, 1f, 1f, expanded ? 0.16f : 0.09f);
             UI.ClickHandler.Attach(dGo, onToggle);
+            UI.HoverTip.Attach(dGo, Loc.T(expanded ? "Collapse" : "Expand"));
             var cGo = new GameObject("V", typeof(RectTransform));
             cGo.transform.SetParent(dGo.transform, false);
             var cr = (RectTransform)cGo.transform;

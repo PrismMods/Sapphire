@@ -9,6 +9,56 @@ namespace Sapphire
 {
     internal static class Patches
     {
+        /* Play() switches the autoplay control tip ("Space [⎵] Pause ❚❚") back on, and when it
+           runs after this frame's TickControlsTip the tip draws for one frame. Hide it again
+           inside the same call. */
+        // The event panel's copied events, while they are the latest copy: Ctrl+V replaces the
+        // selected tiles' events, Ctrl+Shift+V (the game's own event paste) adds on top.
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.PasteFloorEditorAction), "Execute")]
+        private static class EventClipPastePatch
+        {
+            private static bool Prefix(scnEditor editor) { try { return !EditorToolbar.PasteEventClip(editor, true); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.PasteEventsEditorAction), "Execute")]
+        private static class EventClipAddPatch
+        {
+            private static bool Prefix(scnEditor editor) { try { return !EditorToolbar.PasteEventClip(editor, false); } catch { return true; } }
+        }
+
+        /* Up/Down select rows in the event panel. The game binds them (and Shift+) to cycling the
+           tabs / selected event of its own panel, which Sapphire keeps hidden — stand those down
+           while the panel owns the keys. */
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.CyclePreviousEventTabEditorAction), "Execute")]
+        private static class ArrowPrevTabPatch
+        {
+            private static bool Prefix() { try { return !EditorEventPanel.OwnsArrows(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.CycleNextEventTabEditorAction), "Execute")]
+        private static class ArrowNextTabPatch
+        {
+            private static bool Prefix() { try { return !EditorEventPanel.OwnsArrows(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.CyclePreviousSelectedEventEditorAction), "Execute")]
+        private static class ArrowPrevEventPatch
+        {
+            private static bool Prefix() { try { return !EditorEventPanel.OwnsArrows(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.CycleNextSelectedEventEditorAction), "Execute")]
+        private static class ArrowNextEventPatch
+        {
+            private static bool Prefix() { try { return !EditorEventPanel.OwnsArrows(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(scnEditor), "Play")]
+        private static class ControlsTipPlayPatch
+        {
+            private static void Postfix() { try { Tweaks.TickControlsTip(); } catch { } }
+        }
+
         /* The editor's info splash (scnEditor.notificationText — "Level saved", tool feedback,
            etc.) SLIDES in from off-screen (DOAnchorPosX) near the top, where Sapphire's file
            menu bar now covers it. While the suite is active, re-home it to screen centre and

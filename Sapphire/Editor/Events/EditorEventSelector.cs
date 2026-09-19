@@ -193,7 +193,7 @@ namespace Sapphire
             }
         }
 
-        private static string TypeName(int type)
+        internal static string TypeName(int type)
         {
             try
             {
@@ -315,6 +315,7 @@ namespace Sapphire
                         TextAnchor.MiddleCenter, Theme.Text);
                     lt.raycastTarget = false;
                 }
+                UI.HoverTip.Attach(cGo, CatName(_catIds[i]));
                 UI.ClickHandler.Attach(cGo, () =>
                 {
                     _cat = idx;

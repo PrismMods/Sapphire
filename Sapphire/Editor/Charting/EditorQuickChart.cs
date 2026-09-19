@@ -36,6 +36,7 @@ namespace Sapphire
         private static TMP_InputField[] _promptFields; // for Tab cycling
         private static bool _speedIsBpm;               // remembered Set-speed mode
         private static int _spawnSeq;   // cascades duplicate windows so they don't stack exactly
+        private static bool _modeWasOn, _spawnPending;   // a pad opens once per toggle-on, not whenever none is open
 
         // ── tick ─────────────────────────────────────────────────────────────
         internal static void Tick()
@@ -43,6 +44,9 @@ namespace Sapphire
             var s = MainClass.Settings;
             scnEditor ed = null;
             bool on = false;
+            bool mode = s != null && s.FeatQuickChart;
+            if (mode && !_modeWasOn) _spawnPending = true;
+            _modeWasOn = mode;
             try
             {
                 ed = scnEditor.instance;
@@ -66,12 +70,10 @@ namespace Sapphire
             ClampPads();
             TickSteppers();
             TickPreview(ed);
-            /* The pad is the mode's main surface, so the mode is never on with nothing to type
-               into. Spawned WITHOUT focus — an auto-appearing field that steals the keyboard
-               would eat the editor's own tile keys the moment quick chart turns on. */
-            // No longer waits for a laid-out canvas: the default position is corner-relative, so
-            // there is no rect to read and nothing to get wrong on the first frame.
-            if (_pads.Count == 0) SpawnPad(null, "", focus: false);
+            /* Turning the mode on opens a pad; closing every pad afterwards is allowed (Shift+G
+               brings one back). Spawned WITHOUT focus — an auto-appearing field that steals the
+               keyboard would eat the editor's own tile keys the moment quick chart turns on. */
+            if (_spawnPending) { _spawnPending = false; if (_pads.Count == 0) SpawnPad(null, "", focus: false); }
 
             if (!Input.anyKeyDown) return; // hotkeys below are all GetKeyDown
             // Prompt-local keys (handled BEFORE the typing gate, since a prompt field is focused).
@@ -748,6 +750,7 @@ namespace Sapphire
             UIBuilder.Tmp(lGo, up ? "\u25B2" : "\u25BC", 7f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
             go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.24f));
             ClickHandler.Attach(go, onClick);
+            HoverTip.Attach(go, Loc.T(up ? "One more repeat" : "One fewer repeat"));
         }
 
         private static void StepReps(Pad pw, int delta)
@@ -1123,14 +1126,6 @@ namespace Sapphire
         {
             if (pw == null) return;
             if (_picking) EndPick();   // indices shift; a stale badge would point at the wrong pad
-            // The mode always keeps one pad, so × on the last one CLEARS it instead of leaving a
-            // bare screen for Tick to refill (which would teleport it back to the default corner).
-            if (_pads.Count == 1 && _pads[0] == pw)
-            {
-                if (pw.Field != null) pw.Field.text = "";
-                if (pw.Hint != null) { pw.Hint.color = Theme.TextMuted; pw.Hint.text = Loc.T(HintText); }
-                return;
-            }
             _pads.Remove(pw);
             if (pw.Root != null) UnityEngine.Object.Destroy(pw.Root);
             pw.Root = null;
@@ -1401,6 +1396,7 @@ namespace Sapphire
             draw(go);
             go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.16f));
             ClickHandler.Attach(go, () => { Deselect(); onClick(); });
+            HoverTip.Attach(go, tip);
             return bg;
         }
 
@@ -1481,6 +1477,7 @@ namespace Sapphire
             UIBuilder.Tmp(gGo, glyph, 14f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
             go.AddComponent<Hover>().Init(bg, bg.color, new Color(1f, 1f, 1f, 0.14f));
             ClickHandler.Attach(go, () => { Deselect(); onClick(); });
+            HoverTip.Attach(go, tip);
         }
 
         private static void MakeTextBtn(GameObject parent, string label, float x, float yBottom,
@@ -1608,6 +1605,7 @@ namespace Sapphire
             ClosePrompt();
             if (_canvasGo != null) UnityEngine.Object.Destroy(_canvasGo);
             _canvasGo = null; _root = null; _spawnSeq = 0;
+            _modeWasOn = false;   // a rebuilt surface opens its pad again
         }
     }
 

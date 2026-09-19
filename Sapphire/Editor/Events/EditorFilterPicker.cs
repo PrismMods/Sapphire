@@ -518,7 +518,7 @@ namespace Sapphire
             tr.sizeDelta = new Vector2(0f, 24f);
             tr.anchoredPosition = new Vector2(0f, -10f);
             var title = UIBuilder.Tmp(titleGo,
-                Loc.T(_legacyMode ? "Filter manager (legacy)" : "Filter manager") + " · #" + evt.floor,
+                Loc.T(_legacyMode ? "Filter manager (legacy)" : "Filter manager") + " · #" + _floor,
                 14.5f, TextAnchor.MiddleCenter, Theme.Text);
             title.raycastTarget = false;
 

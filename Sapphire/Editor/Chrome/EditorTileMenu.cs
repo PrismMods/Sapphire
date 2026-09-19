@@ -180,7 +180,7 @@ namespace Sapphire
                     // one tile: pick which events ride along, then Copy/Cut there.
                     Row(Loc.T("Copy (select events)"), _ => EditorCopyPanel.OpenForSelection(false)),
                     Row(Loc.T("Cut (select events)"),  _ => EditorCopyPanel.OpenForSelection(true)),
-                    Row(Loc.T("Paste"),     ed => ed.PasteFloors(false)),
+                    Row(Loc.T("Paste"),     ed => { if (!EditorToolbar.PasteEventClip(ed, true)) ed.PasteFloors(false); }),
                     Row(Loc.T("Delete"),    ed => ed.DeleteSingleSelection(false)),
                 };
 

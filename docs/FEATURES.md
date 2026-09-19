@@ -88,9 +88,9 @@ Space-separated **relative** angles (charter convention: `180` = straight, `90` 
 - **Group repeat** — parenthesise and multiply: `(30t 150 180 180 180)*4`. Groups can nest.
 
 Angle pads **are duplicable** (each keeps its own value as a scratch preset) and draggable.
-One pad is always on screen while the mode is on, spawning in the **top-right corner** (clear of
-the toolbar's drop-down submenus and of the key hints below); `×` on the last pad clears it
-instead of closing it.
+Turning the mode on opens a pad in the **top-right corner** (clear of the toolbar's drop-down
+submenus and of the key hints below). Every pad can be closed, including the last; `Shift+G`
+opens a new one.
 
 **Swirl button — invert the first tile's twirl, first repetition only.** It does *not* edit what
 you typed. A twirl in the expression is part of the **shape**: `30t 30t 120t` is a unit whose three
@@ -369,6 +369,9 @@ right sidebar works the same way; it just starts with no tabs on it.
   leaving rather than swallowing the next one.
   In the event panel, expanding a row slides the rows below it down and uncovers the settings
   as they move; collapsing slides them back up, and switching tiles fades the list in.
+- **Hover tips** — icon-only buttons name themselves after a short hover: the angle pad's
+  buttons and repeat stepper, the event panel's expand / delete buttons, the event dock's icons,
+  the palette's category rail and every window's close button.
 - **Chart analysis** — the `Chart` button in the Audio window opens a reading of every speed
   change the level makes, classified against what the song is doing. A **subdivision** (a
   power-of-two ratio) and a **magic shape** (a `180/angle` ratio — odd angles with a compensating
@@ -408,6 +411,11 @@ right sidebar works the same way; it just starts with no tabs on it.
 - **Event tree selection** — clicking a row selects it (Ctrl toggles, Shift extends); the
   `▸` button at its left — which also carries the event's icon — expands it. A tile with one event opens with it selected and
   expanded; with several, the first is selected and the tree stays collapsed.
+  `↑` / `↓` move the selection one row (`Shift` extends it) whenever you aren't typing in a field.
+- **Copy / paste events** — `Copy` in the panel's selection bar copies the selected events and
+  confirms with a notification. `Ctrl+V` (or `Paste` in the tile menu) REPLACES every selected
+  tile's events with them; `Ctrl+Shift+V` adds them on top. Copying tiles afterwards hands both keys
+  back to the game.
 
 ---
 

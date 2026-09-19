@@ -248,6 +248,13 @@ namespace Sapphire.UI
             new System.Collections.Generic.List<TMPro.TextMeshProUGUI>(), new System.Collections.Generic.List<TMPro.TextMeshProUGUI>(),
         };
         private static readonly bool[][] _tabOpenTmp = { new bool[16], new bool[16] };
+        // Accent edge bar per tab (bottom when horizontal, outer edge when folded) + hovered slot.
+        private static readonly System.Collections.Generic.List<Image>[] _tabInds =
+        {
+            new System.Collections.Generic.List<Image>(), new System.Collections.Generic.List<Image>(),
+        };
+        private static readonly int[] _tabHover = { -1, -1 };
+        private const float TabIndW = 3f;
         private static GameObject _tabCanvasGo;
         private static Canvas _tabCanvas;
         private static RectTransform _tabRoot;
@@ -696,18 +703,43 @@ namespace Sapphire.UI
                 if (!bg.gameObject.activeSelf) bg.gameObject.SetActive(true);
                 var r = (RectTransform)bg.transform;
                 var bp = collapsed ? new Vector2(0f, -i * RailTabLen) : new Vector2(i * tw, 0f);
-                var bs = collapsed ? new Vector2(RailW, RailTabLen - 1f) : new Vector2(tw - 1f, DockTabH);
+                var bs = collapsed ? new Vector2(RailW, RailTabLen - 2f) : new Vector2(tw - 2f, DockTabH);
                 if ((r.anchoredPosition - bp).sqrMagnitude > 1f) r.anchoredPosition = bp;
                 if ((r.sizeDelta - bs).sqrMagnitude > 1f) r.sizeDelta = bs;
 
+                /* Tabs used to be the strip's own near-black with an 8% white active state — the
+                   sidebar's tabs were easy to miss entirely. Every tab now reads as a button, and
+                   the open one carries the accent plus an edge bar. */
                 bool on = opens[i];
-                var want = on ? Theme.TabActive : Theme.TabRail;
+                bool hover = _tabHover[ix] == i;
+                var ac = Theme.Accent;
+                var want = on ? new Color(ac.r, ac.g, ac.b, hover ? 0.34f : 0.26f)
+                              : new Color(1f, 1f, 1f, hover ? 0.13f : 0.07f);
                 if (bg.color != want) bg.color = want;
+
+                var ind = _tabInds[ix][i];
+                if (ind.gameObject.activeSelf != on) ind.gameObject.SetActive(on);
+                if (on)
+                {
+                    var ir = ind.rectTransform;
+                    // Folded: the edge facing the screen border. Open: along the bottom, over the panel.
+                    Vector2 amin, amax;
+                    if (!collapsed) { amin = new Vector2(0f, 0f); amax = new Vector2(1f, 0f); }
+                    else if (side == 1) { amin = new Vector2(0f, 0f); amax = new Vector2(0f, 1f); }
+                    else { amin = new Vector2(1f, 0f); amax = new Vector2(1f, 1f); }
+                    if (ir.anchorMin != amin) ir.anchorMin = amin;
+                    if (ir.anchorMax != amax) ir.anchorMax = amax;
+                    var isz = collapsed ? new Vector2(TabIndW, 0f) : new Vector2(0f, TabIndW);
+                    if (ir.sizeDelta != isz) ir.sizeDelta = isz;
+                    if (ind.color != ac) ind.color = ac;
+                }
 
                 var lbl = labels[i];
                 if (lbl.text != list[i].Label) lbl.text = list[i].Label;
-                var lc = on ? Theme.Text : Theme.TextMuted;
+                var lc = on || hover ? Theme.Text : new Color(Theme.Text.r, Theme.Text.g, Theme.Text.b, 0.72f);
                 if (lbl.color != lc) lbl.color = lc;
+                var fs = on ? FontStyles.Bold : FontStyles.Normal;
+                if (lbl.fontStyle != fs) lbl.fontStyle = fs;
                 // The label rect is the tab's long axis either way; collapsed it is turned 90°.
                 var lr = lbl.rectTransform;   // the TMP sits on the label object itself
                 var ls = collapsed ? new Vector2(RailTabLen, RailW) : bs;
@@ -765,16 +797,28 @@ namespace Sapphire.UI
                 r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
                 r.pivot = new Vector2(0f, 1f);
                 var bg = go.AddComponent<RoundedRectGraphic>();
-                bg.Radius = 0f; bg.color = Theme.TabRail; bg.raycastTarget = true;
+                bg.Radius = 3f; bg.color = Theme.TabRail; bg.raycastTarget = true;
                 var lGo = new GameObject("L", typeof(RectTransform));
                 lGo.transform.SetParent(go.transform, false);
                 var lr = (RectTransform)lGo.transform;
                 lr.anchorMin = lr.anchorMax = lr.pivot = new Vector2(0.5f, 0.5f);
-                var lt = UIBuilder.Tmp(lGo, "", 11.5f, TextAnchor.MiddleCenter, Theme.TextMuted);
+                var lt = UIBuilder.Tmp(lGo, "", 12.5f, TextAnchor.MiddleCenter, Theme.TextMuted);
                 lt.raycastTarget = false;
+                var iGo = new GameObject("Ind", typeof(RectTransform));
+                iGo.transform.SetParent(go.transform, false);
+                var ir = (RectTransform)iGo.transform;
+                ir.pivot = new Vector2(0.5f, 0.5f);
+                ir.anchoredPosition = Vector2.zero;
+                var ind = iGo.AddComponent<Image>();
+                ind.sprite = Theme.White; ind.raycastTarget = false;
+                iGo.SetActive(false);
                 ClickHandler.Attach(go, () => ClickTab(sd, slot));
+                var hv = go.AddComponent<HoverHandler>();
+                int hix = Ix(side);
+                hv.OnEnter = () => _tabHover[hix] = slot;
+                hv.OnExit = () => { if (_tabHover[hix] == slot) _tabHover[hix] = -1; };
                 var drag = go.AddComponent<RailTabDrag>(); drag.Side = sd; drag.Slot = slot;
-                bgs.Add(bg); labels.Add(lt);
+                bgs.Add(bg); labels.Add(lt); _tabInds[Ix(side)].Add(ind);
             }
         }
 
@@ -923,7 +967,7 @@ namespace Sapphire.UI
             _tabCanvasGo = null; _tabCanvas = null; _tabRoot = null;
             _tabCanvasGo = null; _tabCanvas = null; _tabRoot = null;
             for (int i = 0; i < 2; i++)
-            { _stripGo[i] = null; _tabBgs[i].Clear(); _tabLabels[i].Clear(); _tabs[i].Clear(); }
+            { _stripGo[i] = null; _tabBgs[i].Clear(); _tabLabels[i].Clear(); _tabs[i].Clear(); _tabInds[i].Clear(); _tabHover[i] = -1; }
             _tearKit = null;
             _hDivPool.Clear(); _hDivUsed = 0;
             _dockL.Clear(); _dockR.Clear(); _focusReg.Clear();
@@ -1193,6 +1237,7 @@ namespace Sapphire.UI
             var xtmp = UIBuilder.Tmp(xlGo, "×", 12f, TextAnchor.MiddleCenter, Theme.Text);
             xtmp.raycastTarget = false;
             ClickHandler.Attach(xGo, onClose);
+            HoverTip.Attach(xGo, Loc.T("Close"));
 
             if (Scrollable) BuildViewport();
         }
