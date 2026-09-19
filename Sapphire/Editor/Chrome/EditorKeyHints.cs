@@ -22,6 +22,8 @@ namespace Sapphire
         // Exactly one tile selected AND tile actions enabled — TickFreeAngle's real Alt gate
         // (plain Sel overclaimed for 2+ selected tiles or Sapphire-tools-off).
         private const int FreeAngle = 16;
+        // Toolbar digit shortcuts switched off in settings — the "1-0" row would be lying.
+        private const int NoToolKeys = 32;
 
         /* A row's key column is either a literal (game keys we don't own) or one/two Bind ids,
            rendered live so a rebind shows up here instead of leaving the card lying. */
@@ -49,7 +51,7 @@ namespace Sapphire
             // TickToolHotkeys is the only one of these three gated on selection; TickToolSwap
             // (the tool-swap + quick-chart binds) has no selection check at all — tagging it
             // NoSel hid live hotkeys the instant a tile was selected, the commonest edit state.
-            new Hint(NoSel,  "1-0",     "Select tool"),
+            new Hint(NoSel,  "1-0",     "Select tool", not: NoToolKeys),
             // Tweaks.PanEligible bails once anything is selected, so this is NoSel too.
             new Hint(NoSel,  "WASD",     "Pan camera"),
             new Hint(Always, Bind.QuickChart,   "Quick chart mode"),
@@ -117,6 +119,7 @@ namespace Sapphire
             ctx |= sel == 0 ? NoSel : Sel;
             try { if (s.FeatQuickChart) ctx |= Quick; } catch { }
             try { if (s.EditorTileActions && ed.SelectionIsSingle()) ctx |= FreeAngle; } catch { }
+            if (s.RemoveToolbarShortcuts) ctx |= NoToolKeys;
             return ctx;
         }
 

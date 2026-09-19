@@ -154,6 +154,11 @@ namespace Sapphire
                 catch (Exception ex) { SapphireLog.Log("Presets: decode failed: " + ex.Message); }
             }
             EditorToolbar.LoadInspectorBuffer(evs);
+            /* Arm the tool, the way copying from the event panel already does. The panel can be
+               floated open without the inspector tool, and a preset loaded there went into a
+               buffer that only the inspector tool's right-click reads — so it looked loaded and
+               could not be pasted until the charter went and opened the tool by hand. */
+            EditorToolbar.ArmInspector();
             _loadedIdx = idx;
             _loadedVersion = EditorToolbar.InspectorVersion;
             SyncTints();

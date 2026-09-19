@@ -16,14 +16,28 @@ namespace Sapphire.UI
        for it. */
     internal static class UiAnim
     {
-        internal const float Sec = 0.11f;
+        /* The single source of truth for UI motion. PanelKit windows used to keep their own
+           copy of both the duration and the on/off check, so a setting could only ever reach
+           half the surfaces. Everything reads these two now. */
+        internal const float MaxSec = 0.6f;
 
+        internal static float Sec
+        {
+            get
+            {
+                var s = MainClass.Settings;
+                return s == null ? 0.11f : Mathf.Clamp(s.UiAnimSeconds, 0f, MaxSec);
+            }
+        }
+
+        // Off, or a duration too short to see, is instant — and keeps every caller clear of a
+        // divide by zero, since none of them reaches the step maths when this is false.
         internal static bool Enabled
         {
             get
             {
                 var s = MainClass.Settings;
-                return s == null || s.UiAnimations;
+                return s == null || (s.UiAnimations && s.UiAnimSeconds > 0.005f);
             }
         }
 

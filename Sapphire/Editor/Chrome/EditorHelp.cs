@@ -674,7 +674,7 @@ Hides ALL UI — Sapphire and the game's — for a clean view of the level. Stay
 The Sapphire tool strip, grouped by function: build (curved path, free angle, pseudo, zip, magic shape) · generate (track tools, deco tools) · events (inspector) · view (camera path, VFX preview). Hover a tool for a hint below the bar; click a tool's icon here in help mode for its full docs.
 
 <b>Keys</b>
-Digits 1–0 select tools when no tile is selected.");
+Digits 1–0 select tools when no tile is selected — off by default; untick Keybinds › Remove toolbar shortcuts to use them.");
 
             Add(d, "PseudoMenu", "Pseudo submenu",
 @"<b>What it does</b>
@@ -913,7 +913,7 @@ The file header strip and event palette — Sapphire replacements for the game's
 The Sapphire tool strip and its submenus. Click a specific tool icon for details.
 
 <b>Keys</b>
-Digits 1–0 select tools when no tile is selected.");
+Digits 1–0 select tools when no tile is selected — off by default; untick Keybinds › Remove toolbar shortcuts to use them.");
 
             // ── Unlisted (reachable by pointing, not from Contents) ─────
 

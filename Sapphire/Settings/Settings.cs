@@ -110,6 +110,13 @@ namespace Sapphire
            want opposite things from autoplay, so enabling one clears the other. */
         // Panel open/close motion. Off restores instant show/hide exactly.
         public bool UiAnimations = true;
+        // Seconds an open/close takes. 0 is instant; the old fixed value was 0.11.
+        public float UiAnimSeconds = 0.11f;
+        /* Digits 1-0 pick a toolbar tool when no tile is selected. On by default because the
+           digits are the most-pressed keys in charting and a stray one swapping the active tool
+           mid-flow costs more than the shortcut saves; the toolbar is one click away. Only the
+           TOOLBAR binding: with a tile selected the digits still pick dock events. */
+        public bool RemoveToolbarShortcuts = true;
         public bool EditorWaveform = true;
         public bool PlayModeEnabled = false;
         public bool PlayModeNoFail = true;

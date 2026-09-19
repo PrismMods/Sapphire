@@ -222,11 +222,18 @@ namespace Sapphire
            create and delete paths outright while playMode is set — the tile-key ring that offers
            them is hidden at the same time (Tweaks.TickPlaytestLock). Gated on the master switch
            so turning Sapphire off restores stock behaviour exactly. */
+        /* Also true in Sapphire's play MODE, not only during a playtest RUN. The two were
+           conflated by name and only the run was ever checked, so in play mode placement and
+           deletion stayed live. Tweaks.SyncEditLock engages the game's own path lock too; this
+           is the belt to that lock's braces, since the game re-enables the lock on nothing and
+           a level load can clear it for a frame. */
         private static bool PlaytestLocked()
         {
             try
             {
                 if (!MainClass.MasterSwitchOn) return false;
+                var s = MainClass.Settings;
+                if (s != null && s.PlayModeActive) return true;
                 var ed = scnEditor.instance;
                 return ed != null && ed.playMode;
             }

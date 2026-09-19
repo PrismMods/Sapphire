@@ -24,7 +24,7 @@ namespace Sapphire.UI.Pages
             var s = UICore.Settings;
             var notify = UICore.OnSettingsChanged;
 
-            UIBuilder.Label(content, Loc.T("KeybindsHelp"));
+            UIBuilder.Label(content, Loc.T("Click a key to rebind it. The Shift state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held. The defaults use only keys that do not clash (f g i k l o p r u)."));
 
             // One listener serves every row on the page; OnKey is re-pointed per armed row.
             var listener = UIBuilder.Rect("KeybindListener", content).AddComponent<KeyListener>();
@@ -43,10 +43,18 @@ namespace Sapphire.UI.Pages
             /* Not rebindable, and listed so the map is complete. Ctrl+E is the panel's own
                hotkey; Escape closes whatever is on top; the digits pick tools or dock events
                depending on selection; Alt is the free-angle hold; WASD pans. */
+            UIBuilder.SectionHeader(content, Loc.T("Toolbar"));
+            UIBuilder.Collapsible(content, Loc.T("Remove toolbar shortcuts"), s.RemoveToolbarShortcuts,
+                v => { s.RemoveToolbarShortcuts = v; notify?.Invoke(); UICore.RebuildBody(); },
+                body => UIBuilder.Label(body, Loc.T("With nothing selected, digits 1-0 no longer switch the active toolbar tool, so a stray keypress mid-chart cannot swap tools under you. With a tile selected they still pick dock events.")));
+
             UIBuilder.SectionHeader(content, Loc.T("Fixed keys"));
             FixedRow(content, "Ctrl+E", Loc.T("Sapphire settings"));
             FixedRow(content, "ESC", Loc.T("Close panel / disarm tool"));
-            FixedRow(content, "1-0", Loc.T("Select tool") + " / " + Loc.T("pick dock event"));
+            // Say what the digits actually do right now, not what they could do.
+            FixedRow(content, "1-0", s.RemoveToolbarShortcuts
+                ? Loc.T("pick dock event")
+                : Loc.T("Select tool") + " / " + Loc.T("pick dock event"));
             FixedRow(content, "Alt", Loc.T("Hold: free-angle aim"));
             FixedRow(content, "WASD", Loc.T("Pan camera"));
 

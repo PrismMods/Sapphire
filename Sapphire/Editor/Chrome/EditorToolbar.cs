@@ -475,6 +475,8 @@ namespace Sapphire
             // Everything below is GetKeyDown, which can only fire on a frame where a key went
             // down — so one gate skips ten ICalls plus the input-field guard's GetComponents.
             if (!Input.anyKeyDown) return;
+            var st = MainClass.Settings;
+            if (st != null && st.RemoveToolbarShortcuts) return;
             try
             {
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return;

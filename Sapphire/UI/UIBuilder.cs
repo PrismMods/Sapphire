@@ -2000,7 +2000,7 @@ namespace Sapphire.UI
                 cusImg.color = c;
                 for (int j = 0; j < ringObjs.Length; j++) ringObjs[j].SetActive(false);
                 onChange?.Invoke(c);
-            }));
+            }, cusRect));
 
             return row;
         }
@@ -2208,7 +2208,12 @@ namespace Sapphire.UI
         {
             if (!_running) return;
             float dir = _expanding ? 1f : -1f;
-            _t = Mathf.Clamp01(_t + dir * Time.unscaledDeltaTime / Duration);
+            /* Follows the global animation setting, keeping its own proportion: Duration is what
+               this takes at the default panel speed (0.11 s), so a section still opens a touch
+               slower than a panel, and instant means instant here too. */
+            float dur = UiAnim.Enabled ? UiAnim.Sec * (Duration / 0.11f) : 0f;
+            _t = dur <= 0f ? (_expanding ? 1f : 0f)
+                           : Mathf.Clamp01(_t + dir * Time.unscaledDeltaTime / dur);
             float eased = EaseOutCubic(_t);
 
             if (BodyLe != null) BodyLe.preferredHeight = eased * _naturalH;

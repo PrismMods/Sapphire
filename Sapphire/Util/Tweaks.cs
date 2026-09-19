@@ -203,7 +203,11 @@ namespace Sapphire
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
             if (ed == null) { _lockedRing = false; return; }
-            bool want = MainClass.MasterSwitchOn && ed.playMode;
+            // A playtest RUN, or Sapphire's play MODE — the same run-versus-mode mix-up as
+            // PlaytestLocked had. Both rings advertise edits the path lock refuses.
+            bool mode = false;
+            try { var st = MainClass.Settings; mode = st != null && st.PlayModeActive; } catch { }
+            bool want = MainClass.MasterSwitchOn && (ed.playMode || mode);
             if (!want && !_lockedRing) return;
             _lockedRing = want;
             try { if (ed.floorButtonContainer != null) SetRing(ed.floorButtonContainer, !want); } catch { }
@@ -284,6 +288,11 @@ namespace Sapphire
             try { playing = ed != null && ed.playMode; } catch { }
 
             bool assert = active && (!_wasPlayActive || (playing && !_wasPlayPlaying));
+            // Same condition as the patches in Patches.cs: with Sapphire switched off, play mode
+            // must not reach into the game's lock either.
+            bool lockOn = active && MainClass.MasterSwitchOn;
+            SyncEditLock(ed, lockOn, lockOn && !_wasLockOn, !lockOn && _wasLockOn);
+            _wasLockOn = lockOn;
             _wasPlayActive = active;
             _wasPlayPlaying = playing;
             if (!assert) return;
@@ -297,6 +306,33 @@ namespace Sapphire
                 GCS.useNoFail = true;
                 var c = scrController.instance;
                 if (c != null) c.noFail = true;
+            }
+            catch { }
+        }
+
+        /* Play mode is for PLAYING, so it borrows the game's own "Lock path" rather than guarding
+           edits one method at a time. That lock is read by CreateFloorWithCharOrAngle,
+           DeleteFloor, both Delete*Selection, RotateFloor, event add/remove, decoration drags and
+           the undoable editor actions' Execute — far more than the handful of methods Sapphire
+           patches — and every Sapphire tool already checks it. The game's own lock button shows
+           the state, so nothing is locked without saying so.
+
+           The charter's own lock setting is remembered on the way in and put back on the way
+           out, so leaving play mode never unlocks a path they had locked themselves. While the
+           mode is on the lock is re-asserted if something clears it, which a level load does.
+
+           The placement rings are hidden by TickPlaytestLock, which already did it for a
+           playtest run. */
+        private static bool _lockBeforePlay, _wasLockOn;
+
+        private static void SyncEditLock(scnEditor ed, bool active, bool entered, bool left)
+        {
+            if (ed == null) return;
+            try
+            {
+                if (entered) _lockBeforePlay = ed.lockPathEditing;
+                if (active && !ed.lockPathEditing) ed.LockPathEditing(true);
+                else if (left && ed.lockPathEditing != _lockBeforePlay) ed.LockPathEditing(_lockBeforePlay);
             }
             catch { }
         }

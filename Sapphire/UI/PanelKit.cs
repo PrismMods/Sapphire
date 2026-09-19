@@ -1015,7 +1015,6 @@ namespace Sapphire.UI
 
            Scale is on localScale rather than the rect, because the dock layout writes sizeDelta
            and anchoredPosition every frame and would fight anything that touched them. */
-        private const float AnimSec = 0.11f;      // fast enough to feel immediate, not instant
         private float _anim = 1f;                 // 0 hidden, 1 shown
         private bool _animWant = true;
 
@@ -1023,8 +1022,7 @@ namespace Sapphire.UI
         {
             if (PanelGo == null) return;
             bool was = PanelGo.activeSelf;
-            var st = MainClass.Settings;
-            bool animate = st == null || st.UiAnimations;
+            bool animate = UiAnim.Enabled;
 
             if (!animate)
             {
@@ -1039,7 +1037,7 @@ namespace Sapphire.UI
             if (on != _animWant) { _animWant = on; if (on) _anim = Mathf.Min(_anim, 0.001f); }
             if (on && !PanelGo.activeSelf) PanelGo.SetActive(true);
 
-            float step = Time.unscaledDeltaTime / AnimSec;
+            float step = Time.unscaledDeltaTime / UiAnim.Sec;
             _anim = Mathf.Clamp01(_anim + (on ? step : -step));
             // Ease-out on the way in, ease-in on the way out: the arrival is what reads as fluid.
             ApplyAnim(on ? 1f - (1f - _anim) * (1f - _anim) : _anim * _anim);

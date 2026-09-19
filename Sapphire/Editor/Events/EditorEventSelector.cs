@@ -385,6 +385,7 @@ namespace Sapphire
 
             int armed = EditorToolbar.CurrentEventTool;
             float y = -2f;
+            if (ShowsFilters()) y = FilterManagerRow(y);
             for (int i = 0; i < _visible.Count; i++)
             {
                 int type = _visible[i];
@@ -440,6 +441,68 @@ namespace Sapphire
             }
             _content.sizeDelta = new Vector2(0f, -y + 4f);
             ClampScroll();
+        }
+
+        /* The filter manager, pinned above the list whenever filter events are in it.
+
+           It used to live only in the event PANEL's top bar, whose own comment says it has to
+           be reachable from every tile because it is how the first filter gets added — but that
+           panel hides itself on a tile with no events, so on exactly those tiles it was not.
+           The palette is up whenever a tile is, and is where events get added.
+
+           Deliberately outside _visible, so the digits still pick the same events they did. */
+        private static bool ShowsFilters()
+        {
+            foreach (int t in _visible)
+                if (t == (int)ADOFAI.LevelEventType.SetFilterAdvanced
+                    || t == (int)ADOFAI.LevelEventType.SetFilter) return true;
+            return false;
+        }
+
+        private static float FilterManagerRow(float y)
+        {
+            var row = new GameObject("FilterManager", typeof(RectTransform));
+            row.transform.SetParent(_content, false);
+            var rr = (RectTransform)row.transform;
+            rr.anchorMin = new Vector2(0f, 1f); rr.anchorMax = new Vector2(1f, 1f);
+            rr.pivot = new Vector2(0.5f, 1f);
+            rr.anchoredPosition = new Vector2(0f, y);
+            rr.sizeDelta = new Vector2(-6f, RowH);
+            var bg = row.AddComponent<RoundedRectGraphic>();
+            bg.Radius = 6f;
+            bg.color = new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.22f);
+            bg.raycastTarget = true;
+            var lGo = new GameObject("L", typeof(RectTransform));
+            lGo.transform.SetParent(row.transform, false);
+            var lr = (RectTransform)lGo.transform;
+            lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
+            lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-4f, 0f);
+            var lt = UIBuilder.Tmp(lGo, Loc.T("Filter manager") + "  ›", 12f, TextAnchor.MiddleLeft, Theme.Text);
+            lt.raycastTarget = false;
+            UI.ClickHandler.Attach(row, OpenFilterManager);
+            return y - (RowH + Gap);
+        }
+
+        // Bound to the selected tile's filter event when it has one, else unbound — the same
+        // rule the event panel's button uses.
+        private static void OpenFilterManager()
+        {
+            scnEditor ed = null;
+            try { ed = scnEditor.instance; } catch { }
+            int floor = -1;
+            ADOFAI.LevelEvent filt = null;
+            try
+            {
+                if (ed != null && ed.selectedFloors != null && ed.selectedFloors.Count > 0)
+                    floor = ed.selectedFloors[0].seqID;
+                if (floor >= 0)
+                    foreach (var e in ed.events)
+                        if (e != null && e.floor == floor
+                            && (e.eventType == ADOFAI.LevelEventType.SetFilterAdvanced
+                                || e.eventType == ADOFAI.LevelEventType.SetFilter)) { filt = e; break; }
+            }
+            catch { }
+            EditorFilterPicker.Open(filt, floor);
         }
 
         // ── keys: digits arm the nth visible event, Enter stamps ────────────

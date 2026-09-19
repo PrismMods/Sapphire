@@ -24,7 +24,7 @@ namespace Sapphire.UI.Pages
             var s = UICore.Settings;
             var notify = UICore.OnSettingsChanged;
 
-            UIBuilder.Label(content, Loc.T("UpdatesHelp"));
+            UIBuilder.Label(content, Loc.T("Sapphire checks GitHub releases once per session and shows a toast when a newer build is available. Clicking it downloads and installs the build over this copy; the new version takes effect after the game restarts. Downloads are verified against the checksum GitHub publishes."));
 
             var dyn = UIBuilder.VGroup(content, "UpdateState", 4f).transform;
             var poll = dyn.gameObject.AddComponent<StatePoller>();

@@ -126,7 +126,18 @@ namespace Sapphire
             var p2 = pi;
 
             string[] strOpts = null;
-            try { if (val is string && pi.enumType != null) strOpts = Enum.GetNames(pi.enumType); } catch { }
+            string strOptsType = null;
+            try { if (val is string && pi.enumType != null) { strOpts = Enum.GetNames(pi.enumType); strOptsType = pi.enumType.Name; } } catch { }
+            /* Some string dropdowns the game fills by property NAME, inside
+               PropertiesPanel.RenderControl — the panel Sapphire hides — and it only records the
+               type as a string while rendering. pi.enumType stays null, so these fell through to
+               a bare text box. "hitsound" (PlaySound's sound) is backed by the HitSound enum. */
+            if (strOpts == null && val is string)
+            {
+                bool drop = false; string nm = null;
+                try { drop = pi.stringDropdown; nm = pi.name; } catch { }
+                if (drop && nm == "hitsound") { strOpts = Enum.GetNames(typeof(HitSound)); strOptsType = "HitSound"; }
+            }
 
             if (val is bool bv)
             {
@@ -171,8 +182,7 @@ namespace Sapphire
             if (strOpts != null && strOpts.Length > 0)
             {
                 string sv = (string)val;
-                string tn = null;
-                try { tn = pi.enumType.Name; } catch { }
+                string tn = strOptsType;
                 int cur = Mathf.Max(0, Array.IndexOf(strOpts, sv));
                 var opts = strOpts;
                 Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
@@ -270,8 +280,19 @@ namespace Sapphire
             }
             else if (isColor)
             {
-                Swatch(content, FormatVal(val), x + inputW + Gap, y, lbl,
-                    nv => CommitText(c, ed, e2, p2, k, nv, val));
+                /* A value commit does not rebuild this panel — its signature ignores values — so
+                   the row has to show the change itself. Before, a picked colour was written to
+                   the event while the hex field and the chip went on showing the old one, and
+                   the chip reopened the wheel with the hex captured when the row was built. */
+                RoundedRectGraphic sw = null;
+                sw = Swatch(content, FormatVal(val), x + inputW + Gap, y, lbl, nv =>
+                {
+                    CommitText(c, ed, e2, p2, k, nv, val);
+                    if (field != null) field.text = nv;
+                    if (sw != null) sw.color = HexColor(nv);
+                }, () => field != null ? field.text : FormatVal(val));
+                // ...and a hex typed into the field recolours the chip.
+                if (field != null) field.onEndEdit.AddListener(v => { if (sw != null) sw.color = HexColor(v); });
             }
             else if (isOffset)
             {
@@ -432,8 +453,8 @@ namespace Sapphire
 
         // RowH-square colour chip for a hex string; magenta marks an unparseable value.
         // With `pick`, the chip is the button that opens the HSV/RGB wheel for that value.
-        internal static void Swatch(RectTransform content, string hex, float x, float y,
-            string title = null, Action<string> pick = null)
+        internal static RoundedRectGraphic Swatch(RectTransform content, string hex, float x, float y,
+            string title = null, Action<string> pick = null, Func<string> current = null)
         {
             var go = new GameObject("Sw", typeof(RectTransform));
             go.transform.SetParent(content, false);
@@ -445,13 +466,22 @@ namespace Sapphire
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 5f;
             Color col;
-            bg.color = ColorUtility.TryParseHtmlString("#" + (hex ?? "").TrimStart('#'), out col)
-                ? col : Color.magenta;
+            bg.color = HexColor(hex);
             bg.BorderWidth = 1f;
             bg.BorderColor = new Color(1f, 1f, 1f, 0.2f);
             bg.raycastTarget = pick != null;
             if (pick != null)
-                UI.ClickHandler.Attach(go, () => UI.ColorWheel.OpenHex(title, hex, pick));
+                UI.ClickHandler.Attach(go, () =>
+                    UI.ColorWheel.OpenHex(title, current != null ? current() : hex, pick, r));
+            return bg;
+        }
+
+        // Magenta marks a value that does not parse, so a bad hex is visible rather than black.
+        internal static Color HexColor(string hex)
+        {
+            Color col;
+            return ColorUtility.TryParseHtmlString("#" + (hex ?? "").Trim().TrimStart('#'), out col)
+                ? col : Color.magenta;
         }
 
         internal static void Label(RectTransform content, string text, float x, float y, float w, float h, Color color)

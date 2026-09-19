@@ -15,7 +15,7 @@ namespace Sapphire.UI.Pages
             var s = UICore.Settings;
             var notify = UICore.OnSettingsChanged;
 
-            UIBuilder.SectionHeaderWithHelp(content, Loc.T("Features"), Loc.T("FeaturesHelp"));
+            UIBuilder.SectionHeaderWithHelp(content, Loc.T("Features"), Loc.T("Turns whole groups of features on and off. The master switch at the top right of the editor controls all of them together; here you choose which groups it switches."));
             var grid = UIBuilder.CardGrid(content).transform;
             UIBuilder.ToggleCard(grid, Loc.T("Event timeline"), s.FeatTimeline,
                 v => { s.FeatTimeline = v; notify?.Invoke(); });
@@ -45,10 +45,10 @@ namespace Sapphire.UI.Pages
                which has no chip of its own, stays. */
             UIBuilder.Collapsible(content, Loc.T("Autoplay in edit mode"), s.EditorModeAutoplay,
                 v => { s.EditorModeAutoplay = v; notify?.Invoke(); },
-                b => UIBuilder.Label(b, Loc.T("EditModeAutoplayHelp")));
+                b => UIBuilder.Label(b, Loc.T("Turns autoplay on when you start a play-test from edit mode. Off means you play it yourself.")));
             UIBuilder.Collapsible(content, Loc.T("No-fail in play mode"), s.PlayModeNoFail,
                 v => { s.PlayModeNoFail = v; notify?.Invoke(); },
-                b => UIBuilder.Label(b, Loc.T("PlayModeNoFailHelp")));
+                b => UIBuilder.Label(b, Loc.T("Off lets failure apply for real. Useful when you want to feel your misses as you check.")));
             UIBuilder.NavRow(content, Loc.T("Autoplay pause"), s.AutoplayPauseEnabled,
                 v => { s.AutoplayPauseEnabled = v; notify?.Invoke(); },
                 () => stack.Push(Loc.T("Autoplay pause"), AutoplayPage),
@@ -61,7 +61,7 @@ namespace Sapphire.UI.Pages
             var notify = UICore.OnSettingsChanged;
             UIBuilder.Collapsible(body, Loc.T("Quick chart mode"), s.FeatQuickChart,
                 v => { s.FeatQuickChart = v; notify?.Invoke(); }, null);
-            UIBuilder.Label(body, Loc.T("QuickChartHelp"));
+            UIBuilder.Label(body, Loc.T("A charting mode turned on with the Q button on the editor toolbar. While it is on, the event timeline is hidden to clear the screen and the shortcuts below become active."));
             UIBuilder.Label(body, Loc.T("Its keys are on the Keybinds tab."));
         }
 
@@ -71,7 +71,7 @@ namespace Sapphire.UI.Pages
             var notify = UICore.OnSettingsChanged;
             UIBuilder.Collapsible(body, Loc.T("Enable autoplay pause"), s.AutoplayPauseEnabled,
                 v => { s.AutoplayPauseEnabled = v; notify?.Invoke(); }, null);
-            UIBuilder.Label(body, Loc.T("AutoplayHelp"));
+            UIBuilder.Label(body, Loc.T("Pauses and resumes autoplay while you play-test in the editor (the game's own key is fixed to Space). Press the button, then the key you want."));
             UIBuilder.Label(body, Loc.T("Its key is on the Keybinds tab."));
         }
     }

@@ -37,12 +37,16 @@ namespace Sapphire.UI
         private static TMP_InputField _fHex, _fR, _fG, _fB, _fH, _fS, _fV, _fA;
         private static int _drag;              // 0 none · 1 hue ring · 2 SV square · 3 alpha bar
         private static bool _svDirty;
+        // What summoned the wheel. It opens beside that element's panel, level with it.
+        private static RectTransform _anchor;
 
         internal static bool IsOpen => _open;
         internal static PanelKit Kit => K;
 
-        internal static void Open(string title, Color initial, bool alpha, Action<Color> commit)
+        internal static void Open(string title, Color initial, bool alpha, Action<Color> commit,
+                                  RectTransform anchor = null)
         {
+            _anchor = anchor;
             _title = string.IsNullOrEmpty(title) ? Loc.T("Color") : title;
             _commit = commit;
             _useAlpha = alpha;
@@ -57,7 +61,8 @@ namespace Sapphire.UI
            RRGGBB or RRGGBBAA strings. The digit count of the ORIGINAL value decides the digit
            count written back — widening a 6-digit field to 8 makes the game write an alpha the
            level never had. */
-        internal static void OpenHex(string title, string hex, Action<string> commit)
+        internal static void OpenHex(string title, string hex, Action<string> commit,
+                                     RectTransform anchor = null)
         {
             string h = (hex ?? "").Trim().TrimStart('#');
             bool alpha = h.Length >= 8;
@@ -69,7 +74,7 @@ namespace Sapphire.UI
                 commit(alpha
                     ? string.Format("{0:X2}{1:X2}{2:X2}{3:X2}", c32.r, c32.g, c32.b, c32.a)
                     : string.Format("{0:X2}{1:X2}{2:X2}", c32.r, c32.g, c32.b));
-            });
+            }, anchor);
         }
 
         internal static void Close() { _open = false; _drag = 0; }
@@ -103,6 +108,7 @@ namespace Sapphire.UI
             K.Rebuild(_title, Close, new Vector2(320f, -120f));
             var panel = (RectTransform)K.PanelGo.transform;
             panel.sizeDelta = new Vector2(W, h);
+            if (_anchor != null) PlaceBeside(panel, _anchor, h);
 
             float y = -Pad;
             _ringRt = MakeRing(y);
@@ -343,6 +349,51 @@ namespace Sapphire.UI
                 Refresh();
             }
             if (_drag != 0 && !Input.GetMouseButton(0)) { _drag = 0; Commit(); }
+        }
+
+        /* Open beside the panel the colour came from, top level with the field that summoned it,
+           rather than at a fixed spot the charter then drags the wheel away from. Right of the
+           panel when there is room, left when there is not, and always kept on screen.
+
+           Panels here are anchored at their canvas's TOP-LEFT, while
+           ScreenPointToLocalPointInRectangle answers relative to the canvas's PIVOT, its centre.
+           Mixing those two up is what put the tile menu half a screen off and made the colour
+           ring ignore drags, so the conversion is done once, explicitly, below. */
+        private static void PlaceBeside(RectTransform panel, RectTransform anchor, float h)
+        {
+            var canvasRt = panel.parent as RectTransform;
+            if (canvasRt == null) return;
+            var host = HostPanel(anchor);
+            var hc = new Vector3[4]; host.GetWorldCorners(hc);      // 0 BL · 1 TL · 2 TR · 3 BR
+            var ac = new Vector3[4]; anchor.GetWorldCorners(ac);
+            Vector2 hostTL = TopLeftSpace(canvasRt, hc[1]), hostTR = TopLeftSpace(canvasRt, hc[2]);
+            Vector2 fieldTL = TopLeftSpace(canvasRt, ac[1]);
+            var cr = canvasRt.rect;
+            const float gap = 8f, margin = 8f;
+            float w = panel.sizeDelta.x;
+            float x = hostTR.x + gap;
+            if (x + w > cr.width - margin) x = hostTL.x - gap - w;   // no room right: go left
+            x = Mathf.Clamp(x, margin, Mathf.Max(margin, cr.width - w - margin));
+            float y = Mathf.Clamp(fieldTL.y, -cr.height + h + margin, -margin);
+            panel.anchoredPosition = new Vector2(x, y);
+        }
+
+        // A point in the canvas's top-left space: x right from the left edge, y negative downward.
+        private static Vector2 TopLeftSpace(RectTransform canvasRt, Vector3 world)
+        {
+            Vector2 lp;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRt, RectTransformUtility.WorldToScreenPoint(null, world), null, out lp);
+            var r = canvasRt.rect;
+            return new Vector2(lp.x - r.xMin, lp.y - r.yMax);
+        }
+
+        // The PanelKit window an element lives in (PanelKit names its root "Panel").
+        private static RectTransform HostPanel(RectTransform a)
+        {
+            for (var t = a.transform; t != null; t = t.parent)
+                if (t.name == "Panel" && t is RectTransform rt) return rt;
+            return a;
         }
 
         private static bool Hit(RectTransform r, Vector2 m)

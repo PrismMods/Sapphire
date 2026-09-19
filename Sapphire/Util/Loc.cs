@@ -35,7 +35,7 @@ namespace Sapphire
 
             // ── settings panel (Ctrl+E) ──
             ["Features"] = "기능",
-            ["FeaturesHelp"] = "기능 그룹을 통째로 켜고 끕니다. 에디터 우측 상단의 마스터 스위치가\n"
+            ["Turns whole groups of features on and off. The master switch at the top right of the editor controls all of them together; here you choose which groups it switches."] = "기능 그룹을 통째로 켜고 끕니다. 에디터 우측 상단의 마스터 스위치가\n"
                 + "이 모두를 함께 제어하며, 여기서는 어떤 그룹을 켤지 고릅니다.",
             ["Event timeline"] = "이벤트 타임라인",
             ["Event panels"] = "이벤트 패널",
@@ -49,7 +49,7 @@ namespace Sapphire
             ["General"] = "일반",
             ["Quick chart"] = "빠른 차팅",
             ["Quick chart mode"] = "빠른 차팅 모드",
-            ["QuickChartHelp"] = "에디터 툴바의 Q 버튼으로 켜는 차팅 모드입니다. 켜져 있는 동안에는 화면을\n"
+            ["A charting mode turned on with the Q button on the editor toolbar. While it is on, the event timeline is hidden to clear the screen and the shortcuts below become active."] = "에디터 툴바의 Q 버튼으로 켜는 차팅 모드입니다. 켜져 있는 동안에는 화면을\n"
                 + "비우기 위해 이벤트 타임라인이 숨겨지고 아래 단축키가 활성화됩니다.",
             ["I — swirl on/off on the selected tile(s)"] = "I — 선택한 타일의 소용돌이 켜기/끄기",
             ["O — set speed on the selected tile"] = "O — 선택한 타일에 속도 설정",
@@ -63,7 +63,7 @@ namespace Sapphire
             ["Edit mode"] = "편집 모드",
             ["Autoplay pause"] = "자동플레이 일시정지",
             ["Enable autoplay pause"] = "자동플레이 일시정지 사용",
-            ["AutoplayHelp"] = "에디터에서 플레이 테스트하는 동안 자동플레이를 멈추고 다시 재생합니다\n"
+            ["Pauses and resumes autoplay while you play-test in the editor (the game's own key is fixed to Space). Press the button, then the key you want."] = "에디터에서 플레이 테스트하는 동안 자동플레이를 멈추고 다시 재생합니다\n"
                 + "(게임은 Space로 고정되어 있습니다). 버튼을 누른 뒤 원하는 키를 눌러 바꿉니다.",
             ["Press a key…"] = "키를 누르세요…",
             ["Pause key"] = "일시정지 키",
@@ -74,9 +74,12 @@ namespace Sapphire
             ["Play mode"] = "플레이 모드",
             ["Enable no-fail"] = "노페일 켜기",
             ["No-fail in play mode"] = "플레이 모드에서 노페일",
-            ["PlayModeNoFailHelp"] = "끄면 실패가 그대로 적용됩니다. 미스를 직접 느끼며 확인하고 싶을 때 유용합니다.",
+            ["Off lets failure apply for real. Useful when you want to feel your misses as you check."] = "끄면 실패가 그대로 적용됩니다. 미스를 직접 느끼며 확인하고 싶을 때 유용합니다.",
             ["Fixed keys"] = "고정 단축키",
             ["pick dock event"] = "독 이벤트 선택",
+            ["Toolbar"] = "도구 모음",
+            ["Remove toolbar shortcuts"] = "도구 모음 단축키 제거",
+            ["With nothing selected, digits 1-0 no longer switch the active toolbar tool, so a stray keypress mid-chart cannot swap tools under you. With a tile selected they still pick dock events."] = "아무것도 선택하지 않았을 때 숫자 1~0으로 도구 모음의 도구를 바꾸지 않습니다. 채보 중 잘못 누른 키 때문에 도구가 바뀌는 일이 없습니다. 타일을 선택했을 때는 여전히 독 이벤트를 고릅니다.",
             ["Its keys are on the Keybinds tab."] = "이 모드의 키는 단축키 탭에 있습니다.",
             ["Its key is on the Keybinds tab."] = "이 키는 단축키 탭에 있습니다.",
             ["Latest"] = "최신",
@@ -90,9 +93,9 @@ namespace Sapphire
             ["Accent colour"] = "강조색",
             ["Developer"] = "개발자",
             ["Debug mode"] = "디버그 모드",
-            ["DebugModeHelp"] = "로그 뷰어에 [dbg] 줄을 표시합니다. 문제를 보고할 때만 켜면 됩니다.",
+            ["Shows [dbg] lines in the log viewer. Only needed when reporting a problem."] = "로그 뷰어에 [dbg] 줄을 표시합니다. 문제를 보고할 때만 켜면 됩니다.",
             ["Keep panel layout after restart"] = "재시작 후에도 패널 배치 유지",
-            ["PanelLayoutHelp"] = "패널의 열림/닫힘 상태와 위치는 한 세션 동안 그대로 유지됩니다.\n"
+            ["Which panels are open, and where, is kept for the rest of the session. With this on it is restored after the game restarts too; with it off it resets on each launch."] = "패널의 열림/닫힘 상태와 위치는 한 세션 동안 그대로 유지됩니다.\n"
                 + "이 옵션을 켜면 게임을 다시 켜도 그대로 복원되고, 꺼두면 실행할 때마다 초기화됩니다.",
             // Hz tool
             ["Hz tool"] = "Hz 도구",
@@ -151,7 +154,7 @@ namespace Sapphire
             ["run too long to store"] = "저장하기에 너무 긴 묶음입니다",
             ["stored in"] = "저장 위치:",
             ["From Angle Pad"] = "각 패드에서 추가",
-            ["KeybindsHelp"] = "단축키를 눌러 다시 지정합니다. 누른 순간의 Shift 상태가 함께 저장되므로\n"
+            ["Click a key to rebind it. The Shift state at the moment you press is saved with it, so Shift+G binds Shift+G and a plain G binds G. The game editor registers 17 tile-placement keys (a b c d e h j m n q s t v w x y z) with and without Shift, so those letters clash even with Shift held. The defaults use only keys that do not clash (f g i k l o p r u)."] = "단축키를 눌러 다시 지정합니다. 누른 순간의 Shift 상태가 함께 저장되므로\n"
                 + "Shift+G는 Shift+G로, 그냥 G는 G로 지정됩니다.\n"
                 + "게임 에디터는 타일 배치 키 17개(a b c d e h j m n q s t v w x y z)를 Shift 유무\n"
                 + "양쪽에 모두 등록하므로, 그 글자들은 Shift를 붙여도 충돌합니다. 기본값은 충돌하지\n"
@@ -161,12 +164,12 @@ namespace Sapphire
             ["also"] = "중복:",
             ["Halve speed"] = "속도 절반",
             ["Double speed"] = "속도 두 배",
-            ["LanguageHelp"] = "Sapphire 에디터 UI와 도움말의 언어입니다. 자동은 게임 설정을 따릅니다.",
+            ["Language for the Sapphire editor UI and help. Auto follows the game's setting."] = "Sapphire 에디터 UI와 도움말의 언어입니다. 자동은 게임 설정을 따릅니다.",
             ["Auto (follow game)"] = "자동 (게임 설정)",
             ["English"] = "English",
             ["Invert scroll direction"] = "스크롤 방향 반전",
             ["Updates"] = "업데이트",
-            ["UpdatesHelp"] = "Sapphire는 세션마다 한 번 GitHub 릴리스를 확인하고, 더 새로운 빌드가 있으면\n"
+            ["Sapphire checks GitHub releases once per session and shows a toast when a newer build is available. Clicking it downloads and installs the build over this copy; the new version takes effect after the game restarts. Downloads are verified against the checksum GitHub publishes."] = "Sapphire는 세션마다 한 번 GitHub 릴리스를 확인하고, 더 새로운 빌드가 있으면\n"
                 + "토스트를 띄웁니다. 토스트를 누르면 내려받아 이 사본 위에 설치하며, 새 버전은\n"
                 + "게임을 다시 시작한 뒤 적용됩니다. 내려받은 파일은 GitHub가 게시한 체크섬으로\n"
                 + "검증합니다.",
@@ -311,7 +314,8 @@ namespace Sapphire
             ["Fits Smoothness to the song by asking which value explains the audio with the fewest invented changes. Off by default: on songs that hop between half and double it prefers the hop, because hopping scores well."] = "오디오를 가장 잘 설명하면서 없는 변화를 가장 적게 만드는 값을 골라 매끄러움을 맞춥니다. 기본은 꺼짐입니다. 절반과 두 배 사이를 오가는 곡에서는 그 쪽 점수가 높아 오히려 그것을 고릅니다.",
             ["Audio preview unavailable."] = "오디오 미리듣기를 쓸 수 없습니다.",
             ["Panel animations"] = "패널 애니메이션",
-            ["UiAnimationsHelp"] = "패널이 열리고 닫힐 때 짧게 페이드하며 살짝 커집니다(0.11초). 끄면 즉시 나타나고 사라집니다.",
+            ["Panels fade briefly and grow slightly as they open and close. Off makes them appear and disappear instantly."] = "패널이 열리고 닫힐 때 짧게 페이드하며 살짝 커집니다. 끄면 즉시 나타나고 사라집니다.",
+            ["Animation duration (s)"] = "애니메이션 길이 (초)",
             ["Use"] = "적용",
             ["Seed"] = "자동 설정",
             ["Chart analysis"] = "채보 분석",
@@ -350,7 +354,7 @@ namespace Sapphire
             ["Song file not found."] = "노래 파일을 찾지 못했습니다.",
             ["Could not decode the song."] = "노래를 디코딩하지 못했습니다.",
             ["Autoplay in edit mode"] = "편집 모드에서 자동 재생",
-            ["EditModeAutoplayHelp"] = "편집 모드에서 플레이 테스트를 시작하면 자동 재생을 켭니다. 끄면 직접 칩니다.",
+            ["Turns autoplay on when you start a play-test from edit mode. Off means you play it yourself."] = "편집 모드에서 플레이 테스트를 시작하면 자동 재생을 켭니다. 끄면 직접 칩니다.",
             ["Audio"] = "오디오",
             ["Suggest offset"] = "오프셋 추천",
             ["Search decorations"] = "장식 검색",

@@ -39,8 +39,10 @@ namespace Sapphire
             // Close an open menu on Escape.
             if (_menuGo != null && Input.GetKeyDown(KeyCode.Escape)) { CloseMenu(); return; }
 
-            // An active event-palette tool claims right-click to stamp its event; yield the menu.
-            if (EditorToolbar.EventTool >= 0)
+            /* Right-click is claimed by both placement tools — the event palette stamps its
+               event, the inspector pastes its captured set. Only the first ever yielded, so
+               quick event placement with the inspector opened a menu over every paste. */
+            if (EditorToolbar.EventTool >= 0 || EditorToolbar.InspectorActive)
             {
                 if (_menuGo != null) CloseMenu();
                 return;
