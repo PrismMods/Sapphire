@@ -30,12 +30,21 @@ namespace Sapphire
         private static int _floor = -1;
         private static readonly HashSet<int> _expandedTypes = new HashSet<int>();   // tree: type nodes
         private static readonly HashSet<long> _expandedInst = new HashSet<long>();   // type*1000+instance
-        /* Expanding a node rebuilds the whole tree, so there is no element to slide — every row
-           below the node moves at once. A short fade over the rebuilt list is what hides that
-           jump; anything that animates position would have to animate rows that no longer
-           exist. */
+        // Switching tiles fades the rebuilt list in.
         private static float _listAnim = 1f;
         private static bool _animList;
+        /* Expand/collapse motion. Toggling rebuilds the whole tree, so the rows that move are NEW
+           rows: the toggled header's y is recorded while building, every row below it starts
+           where its predecessor sat (offset by the height change) and slides home, and an
+           expand's body is uncovered by that slide rather than fading in under rows still
+           passing over it. */
+        private static long _motionKey = long.MinValue;   // node toggled; built rows are measured against it
+        private static float _motionOldH, _motionHeadY, _motionT = 1f, _motionDelta, _motionCurtain;
+        private static bool _motionHeadSeen;
+        private static int _motionFirstChild;             // rows before this index are the destroyed old tree
+        private static readonly List<RectTransform> _mRows = new List<RectTransform>();
+        private static readonly List<Vector2> _mBase = new List<Vector2>();
+        private static readonly List<float> _mBottom = new List<float>();   // NaN = slides; else body row, fades
         private static long _sig;
         private const long EmptySig = -1L;     // _sig marker: scanned, tile has no events
         private static bool _empty;            // last scan found nothing on this floor
@@ -43,8 +52,8 @@ namespace Sapphire
         private static int _scanCd;            // frames until the next external-change rescan
         private static CanvasGroup _gameCg;    // the hidden game panel
         /* Free selection across the tree: ctrl-click toggles a row, shift-click takes the range
-           since the last anchor, in the flattened display order (_flat). Plain clicks stay
-           expand/collapse — the tree is still primarily a browser. Selection drives the batch
+           since the last anchor, in the flattened display order (_flat). A plain click selects
+           one row; the +/› glyph expands. Selection drives the batch
            bar (copy / delete) and survives content rebuilds because it holds the LevelEvent
            references themselves, not row indices. */
         private static readonly HashSet<ADOFAI.LevelEvent> _sel = new HashSet<ADOFAI.LevelEvent>();
@@ -105,7 +114,7 @@ namespace Sapphire
             bool floorChanged = floor != _floor;
             if (floorChanged)
             {
-                _floor = floor; SeedExpansion(); _scroll = 0f; _dirty = true;
+                _floor = floor; SeedExpansion(); _scroll = 0f; _dirty = true; _animList = true;
                 _sel.Clear(); _anchor = null; _gameSel = null;   // selection is per-tile
             }
             if (_sig == 0) _dirty = true;                       // an edit / tab click asked to redraw
@@ -123,6 +132,8 @@ namespace Sapphire
                    "scanned, nothing here" marker; floor changes, our own edits (_sig = 0)
                    and the 12-frame external-change rescan all still force a re-scan. */
                 if (events.Count == 0) { K.Show(false); _empty = true; _sig = EmptySig; return; }
+                // A new tile, or the first event landing on an empty one.
+                if (floorChanged || _empty) SeedSelection(events);
                 _empty = false;
                 // Shell (panel/header/viewport/resize) built once + on floor change; expanding
                 // a section rebuilds only the CONTENT tree.
@@ -130,8 +141,8 @@ namespace Sapphire
                 if (!K.Built || floorChanged) { BuildShell(ed); rebuildContent = true; }
                 long sig = Sig(ed, floor, events);
                 if (sig != _sig) { _sig = sig; rebuildContent = true; }
-                if (rebuildContent) BuildContent(ed, events);
-                if (_animList) { _animList = false; _listAnim = 0f; }
+                if (rebuildContent) { BuildContent(ed, events); BeginMotion(); }
+                if (_animList) { _animList = false; _listAnim = 0f; _motionKey = long.MinValue; }
             }
             // Nothing to show until the first scan, or when the latch says the tile is empty
             // (K may still be built from a previously selected tile).
@@ -139,6 +150,7 @@ namespace Sapphire
 
             SyncGameSelection(ed);
             if (_content != null) UI.UiAnim.Step(_content.gameObject, true, ref _listAnim, false);
+            TickMotion();
             K.Show(true);
             ClampIntoView();
             TickScroll();
@@ -329,12 +341,20 @@ namespace Sapphire
             return h;
         }
 
-        // Every tile opens fully COLLAPSED (user request July 19) — the tree is a compact
-        // scannable index; expand what you need.
         private static void SeedExpansion()
         {
             _expandedTypes.Clear();
             _expandedInst.Clear();
+        }
+
+        /* One event: open it, there is nothing else to scan past. Several: select the first so
+           the game's hotkeys and the batch bar have a target, but leave the tree collapsed as a
+           scannable index. */
+        private static void SeedSelection(List<ADOFAI.LevelEvent> events)
+        {
+            var first = events[0];   // events[0] is also the first row: groups keep first-seen order
+            if (events.Count == 1) _expandedTypes.Add((int)first.eventType);
+            _sel.Clear(); _sel.Add(first); _anchor = first; _gameSel = first;
         }
 
         private static ADOFAI.LevelEventInfo InfoOf(ADOFAI.LevelEvent evt)
@@ -406,6 +426,9 @@ namespace Sapphire
             _ctx.PanelW = _size.x; // rows/dropdowns re-fit the current panel width (viewport = full width)
             for (int i = _content.childCount - 1; i >= 0; i--)
                 UnityEngine.Object.Destroy(_content.GetChild(i).gameObject);
+            // Destroy is deferred: the old rows stay children until the frame ends.
+            _motionFirstChild = _content.childCount;
+            _mRows.Clear(); _mBase.Clear(); _mBottom.Clear(); _motionT = 1f;
 
             // tree view: events grouped by TYPE, instances as child nodes
             var order = new List<int>();
@@ -440,22 +463,21 @@ namespace Sapphire
         {
             bool tExp = _expandedTypes.Contains(type);
             bool single = list.Count == 1;
-            /* Groups read as FOLDERS, singles as rows: chevron disclosure + a count, against
-               the +/− the leaf rows use. Same visual language as the deco browser's tag
-               folders, so "this contains things" looks the same everywhere. */
+            // Groups carry a count; the toggle button in front of every header does the disclosing.
             string title = single
-                ? (tExp ? "− " : "+ ") + EventTitle(list[0]) + TagSuffix(list[0])
-                : (tExp ? "‹ " : "› ") + EventTitle(list[0]) + "  ×" + list.Count;
+                ? EventTitle(list[0]) + TagSuffix(list[0])
+                : EventTitle(list[0]) + "  ×" + list.Count;
             string preview = single ? Preview(list[0]) : TagList(list);
+            long typeKey = -1L - type;   // instance keys are >= 0
+            if (_motionKey == typeKey) { _motionHeadY = y; _motionHeadSeen = true; }
 
             float pw = _size.x; // live panel width — headers/× must track it like the value rows do
             float headW = pw - Pad * 2f - DelW - ActGap;
-            var head = HeaderCell(title, preview, Pad, y, headW, () =>
+            var head = HeaderCell(title, preview, Pad, y, headW, tExp, EditorEventSelector.TypeIcon(type),
+                () => SelectRow(list), () =>
             {
-                _gameSel = list[0];   // hand the game's hotkeys this type's first event
-                if (SelectClick(list)) return;
                 if (!_expandedTypes.Add(type)) _expandedTypes.Remove(type);
-                _sig = 0; _animList = true;
+                ArmMotion(typeKey);
             });
             // Collapsed folders sit brighter than leaf rows so the two tiers separate at a glance.
             head.color = RowTint(list, tExp, 0.4f, single ? 0.06f : 0.11f);
@@ -479,14 +501,14 @@ namespace Sapphire
                 long key = type * 1000L + i;
                 bool iExp = _expandedInst.Contains(key);
                 string prev = Preview(evt);
-                string label = (iExp ? "− " : "+ ") + (i + 1) + "." + TagSuffix(evt);
+                string label = (i + 1) + "." + TagSuffix(evt);
+                if (_motionKey == key) { _motionHeadY = y; _motionHeadSeen = true; }
                 var sub = HeaderCell(label, prev, Pad + 12f, y,
-                    pw - Pad * 2f - 12f - DelW - ActGap, () =>
+                    pw - Pad * 2f - 12f - DelW - ActGap, iExp, null,
+                    () => SelectRow(new List<ADOFAI.LevelEvent> { evt }), () =>
                 {
-                    _gameSel = evt;
-                    if (SelectClickOne(evt)) return;
                     if (!_expandedInst.Add(key)) _expandedInst.Remove(key);
-                    _sig = 0; _animList = true;
+                    ArmMotion(key);
                 });
                 sub.color = _sel.Contains(evt) ? SelTint
                     : iExp ? new Color(Theme.Accent.r, Theme.Accent.g, Theme.Accent.b, 0.25f)
@@ -500,6 +522,73 @@ namespace Sapphire
 
         private static readonly Color SelTint = new Color(0.35f, 0.76f, 1f, 0.45f);
 
+        // ── expand/collapse motion ─────────────────────────────────────────────
+
+        private static void ArmMotion(long key)
+        {
+            _motionKey = key; _motionHeadSeen = false;
+            _motionOldH = _content != null ? _content.sizeDelta.y : 0f;
+            _sig = 0;
+        }
+
+        private static void BeginMotion()
+        {
+            bool seen = _motionHeadSeen;
+            _motionKey = long.MinValue; _motionHeadSeen = false;
+            if (!seen || _content == null || !UI.UiAnim.Enabled) return;
+            float delta = _content.sizeDelta.y - _motionOldH;    // + opened, − closed
+            if (Mathf.Abs(delta) < 1f) return;
+            float pivot = _motionHeadY - RowH - Gap * 0.5f;      // between the header and what follows
+            float curtain = pivot - Mathf.Max(delta, 0f);        // an expand's body sits above this
+            var corners = new Vector3[4];
+            for (int i = _motionFirstChild; i < _content.childCount; i++)
+            {
+                var rt = _content.GetChild(i) as RectTransform;
+                if (rt == null) continue;
+                rt.GetWorldCorners(corners);
+                float top = _content.InverseTransformPoint(corners[1]).y;
+                if (top > pivot) continue;                        // the header and everything above it stay
+                bool body = top > curtain;
+                if (body)
+                {
+                    var cg = rt.GetComponent<CanvasGroup>();
+                    if (cg == null) rt.gameObject.AddComponent<CanvasGroup>();
+                }
+                _mRows.Add(rt);
+                _mBase.Add(rt.anchoredPosition);
+                _mBottom.Add(body ? _content.InverseTransformPoint(corners[0]).y : float.NaN);
+            }
+            _motionDelta = delta; _motionCurtain = curtain; _motionT = 0f;
+            ApplyMotion(0f);
+        }
+
+        private static void TickMotion()
+        {
+            if (_motionT >= 1f) return;
+            float sec = UI.UiAnim.Sec;
+            _motionT = sec > 0f ? Mathf.Min(1f, _motionT + Time.unscaledDeltaTime / sec) : 1f;
+            ApplyMotion(1f - (1f - _motionT) * (1f - _motionT));   // ease out
+            if (_motionT >= 1f) { _mRows.Clear(); _mBase.Clear(); _mBottom.Clear(); }
+        }
+
+        private static void ApplyMotion(float k)
+        {
+            float off = _motionDelta * (1f - k);
+            float curtain = _motionCurtain + off;   // top edge of the rows sliding over the body
+            for (int i = 0; i < _mRows.Count; i++)
+            {
+                var rt = _mRows[i];
+                if (rt == null) continue;
+                if (float.IsNaN(_mBottom[i]))
+                {
+                    rt.anchoredPosition = _mBase[i] + new Vector2(0f, off);
+                    continue;
+                }
+                var cg = rt.GetComponent<CanvasGroup>();
+                if (cg != null) cg.alpha = k >= 1f ? 1f : Mathf.Clamp01((_mBottom[i] - curtain) / RowH + 1f);
+            }
+        }
+
         private static Color RowTint(List<ADOFAI.LevelEvent> list, bool expanded, float onA, float offA)
         {
             foreach (var e in list) if (_sel.Contains(e)) return SelTint;
@@ -510,11 +599,19 @@ namespace Sapphire
 
         // ── free selection (ctrl toggle · shift range) ───────────────────────
 
-        private static bool SelectClickOne(ADOFAI.LevelEvent evt)
-            => SelectClick(new List<ADOFAI.LevelEvent> { evt });
+        // A plain click selects just this row; Ctrl/Shift extend. Expanding is the glyph's job.
+        private static void SelectRow(List<ADOFAI.LevelEvent> rowEvents)
+        {
+            if (SelectClick(rowEvents)) return;
+            _sel.Clear();
+            foreach (var e in rowEvents) _sel.Add(e);
+            _anchor = rowEvents[rowEvents.Count - 1];
+            _gameSel = rowEvents[0];   // hand the game's hotkeys the row's first event
+            _sig = 0;
+        }
 
-        // Returns true when the click was a SELECTION gesture, so the caller skips its normal
-        // expand/collapse. A group row selects (or clears) all of its instances at once.
+        // Returns true for a Ctrl/Shift gesture. A group row selects (or clears) all of its
+        // instances at once.
         private static bool SelectClick(List<ADOFAI.LevelEvent> rowEvents)
         {
             bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
@@ -718,11 +815,47 @@ namespace Sapphire
             catch { }
         }
 
-        // [chevron+title .......... muted preview]
+        // [▸ icon | title .......... muted preview]
+        private const float DiscW = 28f, DiscIconW = 48f, ChevW = 20f, IconSz = 16f;
+
         private static RoundedRectGraphic HeaderCell(string title, string preview, float x, float y,
-            float w, Action onClick)
+            float w, bool expanded, Sprite icon, Action onSelect, Action onToggle)
         {
-            var bg = EventRows.Cell(_content, title, x, y, w, RowH, onClick, false, TextAnchor.MiddleLeft);
+            var bg = EventRows.Cell(_content, title, x, y, w, RowH, onSelect, false, TextAnchor.MiddleLeft);
+            float dw = icon != null ? DiscIconW : DiscW;
+            var lbl = bg.transform.Find("L") as RectTransform;
+            if (lbl != null) lbl.offsetMin = new Vector2(dw + 8f, lbl.offsetMin.y);
+            // A visible button, not a glyph-sized hit zone. Its own handler takes the click before
+            // the row's, so it expands without selecting.
+            var dGo = new GameObject("D", typeof(RectTransform));
+            dGo.transform.SetParent(bg.transform, false);
+            var dr = (RectTransform)dGo.transform;
+            dr.anchorMin = Vector2.zero; dr.anchorMax = new Vector2(0f, 1f);
+            dr.offsetMin = new Vector2(2f, 2f); dr.offsetMax = new Vector2(2f + dw, -2f);
+            var dbg = dGo.AddComponent<RoundedRectGraphic>();
+            dbg.Radius = 4f;
+            dbg.color = new Color(1f, 1f, 1f, expanded ? 0.16f : 0.09f);
+            UI.ClickHandler.Attach(dGo, onToggle);
+            var cGo = new GameObject("V", typeof(RectTransform));
+            cGo.transform.SetParent(dGo.transform, false);
+            var cr = (RectTransform)cGo.transform;
+            cr.anchorMin = Vector2.zero; cr.anchorMax = new Vector2(0f, 1f);
+            cr.offsetMin = Vector2.zero; cr.offsetMax = new Vector2(ChevW, 0f);
+            UIBuilder.Tmp(cGo, expanded ? "▾" : "▸", 13f, TextAnchor.MiddleCenter, Theme.Text).raycastTarget = false;
+            if (icon != null)
+            {
+                var iGo = new GameObject("I", typeof(RectTransform));
+                iGo.transform.SetParent(dGo.transform, false);
+                var ir = (RectTransform)iGo.transform;
+                ir.anchorMin = ir.anchorMax = new Vector2(0f, 0.5f);
+                ir.pivot = new Vector2(0f, 0.5f);
+                ir.anchoredPosition = new Vector2(ChevW, 0f);
+                ir.sizeDelta = new Vector2(IconSz, IconSz);
+                var img = iGo.AddComponent<Image>();
+                img.sprite = icon;
+                img.preserveAspect = true;
+                img.raycastTarget = false;
+            }
             if (!string.IsNullOrEmpty(preview))
             {
                 var pGo = new GameObject("P", typeof(RectTransform));

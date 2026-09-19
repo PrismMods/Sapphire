@@ -73,6 +73,8 @@ A fast, tool-less charting mode. While on, the timeline hides and these keys are
 | `[` / `]` | **Halve / double** the selected tile's SetSpeed value. |
 | `Shift+P` | **Pause** — prompt beats → Pause event. |
 | `Shift+L` | **Tile location** — prompt X/Y → PositionTrack event. |
+| `Shift+R` | **Move tile** — prompt beats + X/Y → MoveTrack event on the selected tile. |
+| `Shift+O` | **Hold** — prompt duration → Hold event. |
 | `Shift+G` | **Angle pad** — a floating field that appends a whole run of tiles. |
 | `Shift+K` | Toggle quick chart mode itself (works while the mode is off). |
 | `Shift+F` | **Hz tool** — charting by frequency (see below); works with the mode off too. |
@@ -358,13 +360,15 @@ right sidebar works the same way; it just starts with no tabs on it.
   track. They are separate grips because they hold different kinds of content and one control for
   both means neither can be set.
 - **Panel animations** — windows, dropdowns, both context menus and the timeline strip fade and ease open over
-  0.11 s instead of snapping in, with the arrival eased out and the exit eased in. `Ctrl+E` → Misc
+  0.11 s by default (`Animation duration (s)`, 0–0.6 s, in `Ctrl+E` → Misc) instead of snapping in, with the arrival eased out and the exit eased in. `Ctrl+E` → Misc
   turns it off and restores the instant show/hide exactly. The motion is on alpha and
   `localScale`, never the rect, because the dock layout writes size and position every frame and
   would fight anything that touched them. A panel on its way out takes no part in the dock layout,
   so switching sidebar tabs no longer splits the sidebar between the outgoing and incoming panel
   for the length of the fade, and a closing dropdown stops catching clicks the instant it starts
   leaving rather than swallowing the next one.
+  In the event panel, expanding a row slides the rows below it down and uncovers the settings
+  as they move; collapsing slides them back up, and switching tiles fades the list in.
 - **Chart analysis** — the `Chart` button in the Audio window opens a reading of every speed
   change the level makes, classified against what the song is doing. A **subdivision** (a
   power-of-two ratio) and a **magic shape** (a `180/angle` ratio — odd angles with a compensating
@@ -401,6 +405,9 @@ right sidebar works the same way; it just starts with no tabs on it.
   beside the number on every expanded row, and as a list of the group's distinct tags on a
   collapsed group's header (a tile with seven `MoveDecorations` events no longer renders as
   seven identical rows).
+- **Event tree selection** — clicking a row selects it (Ctrl toggles, Shift extends); the
+  `▸` button at its left — which also carries the event's icon — expands it. A tile with one event opens with it selected and
+  expanded; with several, the first is selected and the tree stays collapsed.
 
 ---
 
@@ -410,6 +417,10 @@ Every numeric field in Sapphire accepts **arithmetic**, the way the vanilla insp
 type `180*2`, `100/3`, `(1+2)*45` or `360/8` and the field evaluates on commit. Also supports
 `^`, `%` and the constants `pi` / `tau` / `e`. Unlike vanilla, division is not integer division
 — `10/4` is `2.5`, not `2`. Text fields (tags, image paths) are never evaluated.
+
+**Tab** / **Shift+Tab** commits the field and moves to the next / previous one in the same
+window. While a field has the keyboard, digits and Enter never reach palette or toolbar
+shortcuts.
 
 ---
 
@@ -478,7 +489,7 @@ release asset, and archive entries that would escape the mods folder are rejecte
 | `Shift+K` | editor | Toggle Quick chart mode (the toolbar `Q` cell does the same) |
 | `Shift+F` | editor | Toggle the Hz tool |
 | `I` `O` `[` `]` | Quick chart | Swirl / set speed / halve / double |
-| `Shift+P` `Shift+L` `Shift+G` | Quick chart | Pause / location / angle pad |
+| `Shift+P` `Shift+L` `Shift+R` `Shift+O` `Shift+G` | Quick chart | Pause / location / move tile / hold / angle pad |
 
 The quick-chart and tool-slot rows above are **defaults**; rebind them in settings ▸ Keybinds. Defaults avoid the editor's 17 tile-placement letters (`a b c d e h j m n q s t v w
 x y z`), which the game binds with **and** without `Shift` — so a bind on one of those steals

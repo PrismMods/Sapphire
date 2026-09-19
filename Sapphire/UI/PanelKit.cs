@@ -131,6 +131,7 @@ namespace Sapphire.UI
            below the fixed popups (filter 945 / ease 946 / bezier 947 / help 949). */
         private const int DockedZBase = 901;   // docked windows: 901.. (below the timeline chrome)
         private const int FloatZBase = 936;    // floating windows: 936.. (below filter popup at 945)
+        private const int DropZoneZ = 948;     // dock chrome while a drop zone shows: over the dragged window
         private static int _focusClock;
         private int _focusStamp;
         private static readonly System.Collections.Generic.List<PanelKit> _focusReg =
@@ -623,6 +624,11 @@ namespace Sapphire.UI
                         || (_wDivL != null && _wDivL.activeSelf) || (_wDivR != null && _wDivR.activeSelf)
                         || (_dropInd != null && _dropInd.activeSelf);   // the rail has its own canvas
             if (_dockCanvas != null && _dockCanvas.enabled != need) _dockCanvas.enabled = need;
+            /* Grips and dividers only have to clear DOCKED windows. At 948 they drew over every
+               floating window and the filter manager (945) wherever those overlapped a sidebar
+               edge. Only the drop zone rises, so it stays visible under the window being dragged. */
+            int z = _dropInd != null && _dropInd.activeSelf ? DropZoneZ : FloatZBase - 1;
+            if (_dockCanvas != null && _dockCanvas.sortingOrder != z) _dockCanvas.sortingOrder = z;
         }
 
         /* The rails live on their OWN canvas, one order below the docked-window band, so they sit
@@ -932,7 +938,7 @@ namespace Sapphire.UI
             _dockCanvas = _dockChromeGo.AddComponent<Canvas>();
             var canvas = _dockCanvas;
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 948; // above floating windows, below top chrome/popups
+            canvas.sortingOrder = FloatZBase - 1;   // TickDocks owns it from here
             var scaler = _dockChromeGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);

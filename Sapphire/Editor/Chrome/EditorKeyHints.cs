@@ -67,6 +67,8 @@ namespace Sapphire
             new Hint(Quick,  Bind.QcSpeedDown, "Halve / double speed", key2: Bind.QcSpeedUp),
             new Hint(Quick,  Bind.QcPause,     "Pause event"),
             new Hint(Quick,  Bind.QcLocate,    "Tile location event"),
+            new Hint(Quick,  Bind.QcMoveTrack, "Move tile event"),
+            new Hint(Quick,  Bind.QcHold,      "Hold event"),
             new Hint(Quick,  Bind.QcAnglePad,  "Angle pad"),
         };
 

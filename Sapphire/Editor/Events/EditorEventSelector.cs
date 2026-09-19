@@ -205,7 +205,7 @@ namespace Sapphire
             try { return ((ADOFAI.LevelEventType)type).ToString(); } catch { return type.ToString(); }
         }
 
-        private static Sprite TypeIcon(int type)
+        internal static Sprite TypeIcon(int type)
         {
             try
             {
@@ -507,25 +507,9 @@ namespace Sapphire
 
         // ── keys: digits arm the nth visible event, Enter stamps ────────────
 
-        private static int _fieldFocusFrame = -10;
-
         private static void TickKeys(scnEditor ed)
         {
-            bool focused = false;
-            try
-            {
-                focused = ed.userIsEditingAnInputField;
-                if (!focused)
-                {
-                    var es = EventSystem.current;
-                    var sel = es != null ? es.currentSelectedGameObject : null;
-                    focused = sel != null && (sel.GetComponent<TMP_InputField>() != null
-                                           || sel.GetComponent<InputField>() != null);
-                }
-            }
-            catch { }
-            if (focused) { _fieldFocusFrame = Time.frameCount; return; }
-            if (Time.frameCount - _fieldFocusFrame <= 1) return;
+            if (UI.FieldNav.Typing) return;
 
             try
             {

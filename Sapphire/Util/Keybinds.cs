@@ -17,7 +17,7 @@ namespace Sapphire
     internal enum Bind
     {
         QuickChart,
-        QcSwirl, QcSetSpeed, QcSpeedDown, QcSpeedUp, QcPause, QcLocate, QcAnglePad,
+        QcSwirl, QcSetSpeed, QcSpeedDown, QcSpeedUp, QcPause, QcLocate, QcAnglePad, QcMoveTrack, QcHold,
         ToolPrev, ToolSlot, ToolSlotSave, HzTool,
     }
 
@@ -57,6 +57,10 @@ namespace Sapphire
             new Def(Bind.QcPause,      "Quick chart", "Pause event",                KeyCode.P, true),
             new Def(Bind.QcLocate,     "Quick chart", "Tile location event",        KeyCode.L, true),
             new Def(Bind.QcAnglePad,   "Quick chart", "Angle pad",                  KeyCode.G, true),
+            // Ctrl+H is the game's shortcuts panel (and Cmd+H hides the app on macOS), and
+            // Shift+H/M/T are tile keys, so these sit on free letters.
+            new Def(Bind.QcMoveTrack,  "Quick chart", "Move tile event",            KeyCode.R, true),
+            new Def(Bind.QcHold,       "Quick chart", "Hold event",                 KeyCode.O, true),
 
             new Def(Bind.ToolPrev,     "Tools",       "Previous tool",              KeyCode.Comma, false),
             new Def(Bind.ToolSlot,     "Tools",       "Saved tool slot",            KeyCode.Period, false),

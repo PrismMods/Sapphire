@@ -91,7 +91,7 @@ namespace Sapphire
                 if (_host == null) _host = GameObject.Find("SapphireGhosts") ?? new GameObject("SapphireGhosts");
                 var host = _host;
 
-                double dir = lm.floorAngles[Mathf.Clamp(anchorSeq, 0, lm.floorAngles.Length - 1)];
+                double dir = PseudoBuild.HeadingInto(anchorSeq);
                 int localSign = anchor.isCCW ? -1 : 1;
                 Vector3 pos = anchor.transform.position;
                 var made = new List<scrFloor>();

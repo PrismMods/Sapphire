@@ -112,23 +112,12 @@ namespace Sapphire
             else if (Keybinds.Down(Bind.QcSpeedUp)) AdjustSelectedSpeed(ed, 2.0);
             else if (Keybinds.Down(Bind.QcPause)) OpenPausePrompt(ed);
             else if (Keybinds.Down(Bind.QcLocate)) OpenLocatePrompt(ed);
+            else if (Keybinds.Down(Bind.QcMoveTrack)) OpenMoveTrackPrompt(ed);
+            else if (Keybinds.Down(Bind.QcHold)) OpenHoldPrompt(ed);
             else if (Keybinds.Down(Bind.QcAnglePad)) SpawnPad(null, "");
         }
 
-        // A game OR Sapphire input field is focused (the pad/prompt fields don't set the game's
-        // flag, so also check the EventSystem selection). Same guard the toolbar uses.
-        private static bool Typing(scnEditor ed)
-        {
-            try
-            {
-                if (ed.userIsEditingAnInputField) return true;
-                var es = EventSystem.current;
-                var sel = es != null ? es.currentSelectedGameObject : null;
-                return sel != null && (sel.GetComponent<TMP_InputField>() != null
-                                    || sel.GetComponent<InputField>() != null);
-            }
-            catch { return false; }
-        }
+        private static bool Typing(scnEditor ed) => FieldNav.Typing;
 
         // ── quick swirl ──────────────────────────────────────────────────────
         // Toggle a Twirl on the selected tile(s). Direction is set by the last selected tile:
@@ -213,6 +202,48 @@ namespace Sapphire
                     ApplyAndRemake(edit);
                 }
                 Notify(edit, "Tile location · (" + Trim(vals[0]) + ", " + Trim(vals[1]) + ")");
+            });
+        }
+
+        // MoveTrack on this tile alone (start/end default to ThisTile+0).
+        private static void OpenMoveTrackPrompt(scnEditor ed)
+        {
+            int seq = SelectedSeq(ed);
+            if (seq < 0) { Notify(ed, "Move tile: select a tile"); return; }
+            ShowPrompt("Move tile", new[] { "Beats", "X", "Y" }, new[] { "1", "0", "0" }, vals =>
+            {
+                var edit = SafeEditor();
+                if (edit == null) return;
+                using (new SaveStateScope(edit))
+                {
+                    var ev = new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.MoveTrack);
+                    if (!SetNum(ev, "duration", vals[0])) LogKeys("MoveTrack", ev);
+                    if (!SetXY(ev, "positionOffset", vals[1], vals[2])) LogKeys("MoveTrack", ev);
+                    Enable(ev, "positionOffset");
+                    edit.events.Add(ev);
+                    ApplyAndRemake(edit);
+                }
+                Notify(edit, "Move tile · (" + Trim(vals[1]) + ", " + Trim(vals[2]) + ") over " + Trim(vals[0]));
+            });
+        }
+
+        private static void OpenHoldPrompt(scnEditor ed)
+        {
+            int seq = SelectedSeq(ed);
+            if (seq < 0) { Notify(ed, "Hold: select a tile"); return; }
+            ShowPrompt("Hold", new[] { "Duration" }, new[] { "1" }, vals =>
+            {
+                var edit = SafeEditor();
+                if (edit == null) return;
+                using (new SaveStateScope(edit))
+                {
+                    var ev = new ADOFAI.LevelEvent(seq, ADOFAI.LevelEventType.Hold);
+                    if (!SetNum(ev, "duration", vals[0])) LogKeys("Hold", ev);   // int: rounds
+                    Enable(ev, "duration");
+                    edit.events.Add(ev);
+                    ApplyAndRemake(edit);
+                }
+                Notify(edit, "Hold · " + Trim(Math.Round(vals[0])));
             });
         }
 
@@ -1018,9 +1049,16 @@ namespace Sapphire
             SpawnPad(null, expr);
         }
 
+        /* Enter in a focused pad fires its onSubmit, which deselects the field; if the
+           EventSystem ran before this module's Tick, the same frame's "Enter with nothing
+           focused" branch then placed the run a SECOND time off the first copy's end. */
+        private static int _placedFrame = -1;
+
         private static void DoPlace(Pad pw)
         {
             if (pw == null || pw.Field == null) return;
+            if (_placedFrame == Time.frameCount) return;
+            _placedFrame = Time.frameCount;
             var angles = ParseAngles(pw.Field.text);
             if (angles == null || angles.Count == 0)
             {

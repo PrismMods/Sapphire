@@ -227,11 +227,14 @@ namespace Sapphire
                 if (ms > _perfMax[i]) _perfMax[i] = ms;
             }
 
+            private void LateUpdate() { UI.FieldNav.LateTick(); }
+
             private void Update()
             {
                 // Keep exactly one EventSystem alive (a stray DDOL one breaks carets/typing).
                 // Same cadence drains the log buffer so a burst costs one write, not hundreds.
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
+                UI.FieldNav.Poll();   // before any module reads a key
 
                 CheckLanguageFlip(); // drop stale-language overlays before this frame's ticks rebuild them
 

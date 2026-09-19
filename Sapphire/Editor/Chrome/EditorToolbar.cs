@@ -480,9 +480,9 @@ namespace Sapphire
             try
             {
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return;
-                if (ed.userIsEditingAnInputField) return;
             }
             catch { return; }
+            if (UI.FieldNav.Typing) return;
             if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha1)) OpenDialog();
             else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha2)) ToggleFreeAngle();
             else if (_builtWithSapphire && Input.GetKeyDown(KeyCode.Alpha3)) TogglePseudo();
@@ -1587,6 +1587,16 @@ namespace Sapphire
         // active tool and keeps inserting on each tile you click until another tool/ESC.
         internal static void SelectEventTool(int eventType, string name)
         {
+            // ponytail: diagnostic for the Tab-then-digit leak; drop with FieldNav's trace.
+            try
+            {
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                var sel = es != null ? es.currentSelectedGameObject : null;
+                var caller = new System.Diagnostics.StackTrace(1, false).GetFrame(0)?.GetMethod();
+                SapphireLog.Debug("SelectEventTool " + name + " f" + Time.frameCount + " typing=" + UI.FieldNav.Typing
+                    + " sel=" + (sel != null ? sel.name : "null") + " via " + (caller != null ? caller.DeclaringType?.Name + "." + caller.Name : "?"));
+            }
+            catch { }
             DeactivatePseudo();
             DeactivateFreeAngle();
             DeactivateInspector();

@@ -661,6 +661,10 @@ namespace Sapphire
             ["Halve / double speed"] = "속도 절반 / 두 배",
             ["Pause event"] = "정지 이벤트",
             ["Tile location event"] = "타일 위치 이벤트",
+            ["Move tile event"] = "타일 이동 이벤트",
+            ["Hold event"] = "홀드 이벤트",
+            ["Move tile"] = "타일 이동",
+            ["Hold"] = "홀드",
         };
 
         // Help topics: whole bodies mapped EN→KO (fallback = English). Kept beside the short

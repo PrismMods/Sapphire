@@ -195,8 +195,17 @@ namespace Sapphire
                 ? ed.selectedFloors[ed.selectedFloors.Count - 1].seqID : -1; }
             catch { return -1; }
         }
-        private static double StartDir(scnEditor ed)
-        { try { var af = ADOBase.lm.floorAngles; return af[Mathf.Clamp(AnchorSeq(ed), 0, af.Length - 1)]; } catch { return 0.0; } }
+        private static double StartDir(scnEditor ed) => HeadingInto(AnchorSeq(ed));
+
+        /* The heading the ball ARRIVES at floor `seq` with: floorAngles[i] is the step from floor
+           i to i+1, so that is [seq-1] (EditorToolbar's F(s) reads it the same way). Reading
+           [seq] took the NEXT tile's heading, which only agrees at the track's end — a run
+           inserted after a mid-track corner got its first charter off by the corner. */
+        internal static double HeadingInto(int seq)
+        {
+            try { var af = ADOBase.lm.floorAngles; return seq >= 1 && seq - 1 < af.Length ? af[seq - 1] : 0.0; }
+            catch { return 0.0; }
+        }
         /* Which way the ball is turning at the anchor, in the GAME's convention:
            +1 clockwise, -1 counter-clockwise, matching `EditorToolbar.AppendRel` and
            scnEditor.CreateArbitraryFloor (`dir + (ccw ? -(180-rel) : 180-rel)`). scrFloor.isCCW

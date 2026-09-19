@@ -627,39 +627,12 @@ namespace Sapphire
             if (r.anchoredPosition != pos) r.anchoredPosition = pos;
         }
 
-        /* Enter must not stamp when it was really submitting a text field. The game's
-           userIsEditingAnInputField (and TMP focus) is already FALSE on the frame Enter lands —
-           the field commits and releases focus in the same frame — so a one-frame latch of
-           "a field was focused" is the reliable guard. Covers the game's event-settings /
-           angle-input fields AND Sapphire's own TMP fields (EventSystem selection). */
-        private static int _fieldFocusFrame = -10;
-
-        private static void TrackFieldFocus(scnEditor ed)
-        {
-            bool focused = false;
-            try { focused = ed != null && ed.userIsEditingAnInputField; } catch { }
-            if (!focused)
-            {
-                try
-                {
-                    var es = UnityEngine.EventSystems.EventSystem.current;
-                    var go = es != null ? es.currentSelectedGameObject : null;
-                    focused = go != null && (go.GetComponent<TMPro.TMP_InputField>() != null
-                                          || go.GetComponent<UnityEngine.UI.InputField>() != null);
-                }
-                catch { }
-            }
-            if (focused) _fieldFocusFrame = Time.frameCount;
-        }
-
-        private static bool FieldFocusedRecently => Time.frameCount - _fieldFocusFrame <= 1;
-
         private static void TickDockKeys(scnEditor ed)
         {
-            TrackFieldFocus(ed);
+            // Digits and Enter both belong to a field being typed in (or just submitted).
+            if (UI.FieldNav.Typing) return;
             try
             {
-                if (ed.userIsEditingAnInputField) return;
                 if (ed.selectedFloors == null || ed.selectedFloors.Count == 0) return;
             }
             catch { return; }
@@ -674,7 +647,7 @@ namespace Sapphire
                 break;
             }
             if ((Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
-                && !FieldFocusedRecently && !ArbitraryAngleInputOpen(ed))
+                && !ArbitraryAngleInputOpen(ed))
                 EditorToolbar.StampOnSelectedTile();
         }
 
