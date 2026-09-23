@@ -513,7 +513,9 @@ release asset, and archive entries that would escape the mods folder are rejecte
 - **Practice pitch** — `scnEditor.playbackSpeed` (the game's native lever; hitsounds follow).
 - **Non-destructive pitch overlay**.
 - **WASD** camera pan.
-- **Autoplay-pause key**, live **tile-angle readout**.
+- **Autoplay-pause key**, live **tile-angle readout** — with the selected tile's **effective BPM**
+  beside it (its bpm after SetSpeed × 180/angle, i.e. the rate it is actually hit at: a 90° tile
+  reads double). Toggle it in `Ctrl+E` → Features → **Effective BPM**.
 - **Edit / Play mode** — one chip above the timeline, left of the difficulty chip; clicking it
   swaps the two. There is no third state, so the chip always reads the mode you are in.
   - **Edit** is the clean charting screen: Sapphire overlays and the key viewer stand down, and

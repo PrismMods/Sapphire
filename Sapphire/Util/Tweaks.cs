@@ -507,19 +507,34 @@ namespace Sapphire
                 foreach (var f in ed.selectedFloors)
                     if (f != null) sum += (float)(f.angleLength * Mathf.Rad2Deg);
             }
+            /* Effective bpm = the rate the tile is actually HIT at: its bpm after SetSpeed,
+               times 180/angle (a 90° tile lands twice per beat, so it reads double). A midspin
+               sweeps nothing, so it has no rate. */
+            string eff = "";
+            try
+            {
+                if (s.EditorEffectiveBpm && deg > 0.01f)
+                {
+                    double bpm = EditorEvents.SpeedBpmAt(fl.seqID) * 180.0 / deg;
+                    if (bpm > 0.0 && bpm < 1e6) eff = $"  ·  {bpm:0.#} BPM";
+                }
+            }
+            catch { }
             if (_angleText != null && (!Mathf.Approximately(deg, _lastAngleDeg)
                                        || count != _lastAngleCount
-                                       || !Mathf.Approximately(sum, _lastAngleSum)))
+                                       || !Mathf.Approximately(sum, _lastAngleSum)
+                                       || eff != _lastEff))
             {
-                _lastAngleDeg = deg; _lastAngleCount = count; _lastAngleSum = sum;
+                _lastAngleDeg = deg; _lastAngleCount = count; _lastAngleSum = sum; _lastEff = eff;
                 _angleText.text = count > 1
-                    ? $"Angle: {deg:0.##}°  ·  Σ {sum:0.##}°  ({count} tiles)"
-                    : $"Angle: {deg:0.##}°";
+                    ? $"Angle: {deg:0.##}°  ·  Σ {sum:0.##}°  ({count} tiles){eff}"
+                    : $"Angle: {deg:0.##}°{eff}";
             }
         }
 
         private static float _lastAngleDeg = float.NaN;
         private static float _lastAngleSum = float.NaN;
+        private static string _lastEff = null;
         private static int _lastAngleCount = -1;
 
         private static void BuildAngleDisplay()

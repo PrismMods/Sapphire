@@ -2548,6 +2548,11 @@ namespace Sapphire
             return _bpmPrefix[seq];
         }
 
+        /* The tile's bpm after SetSpeed, for readouts outside the timeline. The timeline builds
+           this prefix from the chart walk; before it has run (or with the timeline off) the
+           level's own bpm is the honest answer. */
+        internal static double SpeedBpmAt(int seq) => EffBpmAtTile(seq);
+
         private static string BpmLine(int seq) =>
             "base " + BpmNum(BpmAtTile(seq)) + "  ·  eff " + BpmNum(EffBpmAtTile(seq))
             + " bpm  ·  " + _timeSigNum + "/4";

@@ -33,6 +33,8 @@ namespace Sapphire.UI.Pages
                 v => { s.EditorKeyHints = v; notify?.Invoke(); });
             UIBuilder.ToggleCard(grid, Loc.T("Pin event presets"), s.EventPresetsFloating,
                 v => { s.EventPresetsFloating = v; notify?.Invoke(); });
+            UIBuilder.ToggleCard(grid, Loc.T("Effective BPM"), s.EditorEffectiveBpm,
+                v => { s.EditorEffectiveBpm = v; notify?.Invoke(); });
 
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeader(content, Loc.T("Modes"));

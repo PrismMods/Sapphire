@@ -78,6 +78,8 @@ namespace Sapphire
         public bool EditorKeyHints = true;    // bottom-right on-screen keybind card
         // Presets window follows the Inspector tool by default; on, it stays up on its own.
         public bool EventPresetsFloating = false;
+        // Hit rate beside the tile-angle readout: the tile's bpm x 180/angle.
+        public bool EditorEffectiveBpm = true;
 
         // ── granular facades over the categories (do not assign; read only) ──
         // Passive tile-angle readout: NOT a tool — stays up whenever the suite is on (its
