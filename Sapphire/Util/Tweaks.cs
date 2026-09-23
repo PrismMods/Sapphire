@@ -112,6 +112,36 @@ namespace Sapphire
         // ponytail: temporary triage for the autoplay/camera reports; drop once the cause is confirmed.
         private static void Diag(string msg) => SapphireLog.Debug("[state] " + msg);
 
+        /* Playtest camera probe: one line a second while playing, so a single repro says whether
+           the game still WANTS to follow (scrCamera.followMode) and whether the camera is moving
+           with the planet — and whether any ghost-preview floors are loose in the scene. */
+        private static float _probeAt;
+
+        internal static void TickCameraProbe()
+        {
+            try
+            {
+                var ed = scnEditor.instance;
+                if (ed == null || !ed.playMode) { _probeAt = 0f; return; }
+                if (Time.unscaledTime < _probeAt) return;
+                _probeAt = Time.unscaledTime + 1f;
+
+                var sb = new System.Text.StringBuilder("[cam]");
+                try { var c = ed.camera != null ? ed.camera : Camera.main;
+                      if (c != null) sb.Append(" pos=").Append(c.transform.position.ToString("0.0")).Append(" size=").Append(c.orthographicSize.ToString("0.00")); } catch { }
+                try { var sc = scrCamera.instance; if (sc != null) sb.Append(" followMode=").Append(sc.followMode); } catch { }
+                try { var ctrl = scrController.instance;
+                      if (ctrl != null && ctrl.planetarySystem != null && ctrl.planetarySystem.planetRed != null)
+                          sb.Append(" planet=").Append(ctrl.planetarySystem.planetRed.transform.position.ToString("0.0")); } catch { }
+                try { var host = GameObject.Find("SapphireGhosts");
+                      sb.Append(" ghosts=").Append(host != null ? host.transform.childCount : 0); } catch { }
+                try { sb.Append(" floors=").Append(ADOBase.lm.listFloors.Count); } catch { }
+                try { sb.Append(" auto=").Append(RDC.auto); } catch { }
+                SapphireLog.Debug(sb.ToString());
+            }
+            catch { }
+        }
+
         internal static void TickWasdPan()
         {
             scnEditor ed = null;
