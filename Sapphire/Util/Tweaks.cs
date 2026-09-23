@@ -79,8 +79,10 @@ namespace Sapphire
                     // it toggle autoplay. Two conditions so it's robust to Update-order skew
                     // between the game's key handling and ours: (1) A held now in a pan context,
                     // (2) a real pan moved the camera this frame or last.
-                    if (Time.frameCount - _wasdPanFrame <= 1) return true;
-                    return PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A);
+                    if (Time.frameCount - _wasdPanFrame <= 1) { Diag("autoplay toggle swallowed (WASD pan just moved)"); return true; }
+                    bool held = PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A);
+                    if (held) Diag("autoplay toggle swallowed (A held, pan-eligible)");
+                    return held;
                 }
                 catch { return false; }
             }
@@ -107,6 +109,9 @@ namespace Sapphire
             return true;
         }
 
+        // ponytail: temporary triage for the autoplay/camera reports; drop once the cause is confirmed.
+        private static void Diag(string msg) => SapphireLog.Debug("[state] " + msg);
+
         internal static void TickWasdPan()
         {
             scnEditor ed = null;
@@ -125,6 +130,7 @@ namespace Sapphire
                 // zoom-proportional speed so panning feels the same at any zoom
                 float speed = cam.orthographicSize * 1.6f;
                 cam.transform.position += (Vector3)(dir.normalized * speed * Time.unscaledDeltaTime);
+                if (Time.frameCount - _wasdPanFrame > 30) Diag("WASD pan moved the editor camera");
                 _wasdPanFrame = Time.frameCount; // latch: the autoplay-toggle guard reads this
             }
             catch { }
@@ -299,7 +305,7 @@ namespace Sapphire
             _wasPlayPlaying = playing;
             if (!assert) return;
 
-            try { RDC.auto = false; } catch { }
+            try { RDC.auto = false; Diag("play mode forced autoplay OFF"); } catch { }
             if (!s.PlayModeNoFail) return;
             try
             {
@@ -351,7 +357,7 @@ namespace Sapphire
                 var s = MainClass.Settings;
                 active = ed != null && s != null && MainClass.EditorSuiteOn && s.EditorModeActive;
                 if (playing && !_wasEditorPlay && active && s.EditorModeAutoplay)
-                    RDC.auto = true;
+                { RDC.auto = true; Diag("edit mode forced autoplay ON at play start"); }
             }
             catch { }
             _wasEditorPlay = playing;
