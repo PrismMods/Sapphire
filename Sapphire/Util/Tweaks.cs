@@ -79,10 +79,8 @@ namespace Sapphire
                     // it toggle autoplay. Two conditions so it's robust to Update-order skew
                     // between the game's key handling and ours: (1) A held now in a pan context,
                     // (2) a real pan moved the camera this frame or last.
-                    if (Time.frameCount - _wasdPanFrame <= 1) { Diag("autoplay toggle swallowed (WASD pan just moved)"); return true; }
-                    bool held = PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A);
-                    if (held) Diag("autoplay toggle swallowed (A held, pan-eligible)");
-                    return held;
+                    if (Time.frameCount - _wasdPanFrame <= 1) return true;
+                    return PanEligible(scnEditor.instance) && Input.GetKey(KeyCode.A);
                 }
                 catch { return false; }
             }
@@ -109,39 +107,6 @@ namespace Sapphire
             return true;
         }
 
-        // ponytail: temporary triage for the autoplay/camera reports; drop once the cause is confirmed.
-        private static void Diag(string msg) => SapphireLog.Debug("[state] " + msg);
-
-        /* Playtest camera probe: one line a second while playing, so a single repro says whether
-           the game still WANTS to follow (scrCamera.followMode) and whether the camera is moving
-           with the planet — and whether any ghost-preview floors are loose in the scene. */
-        private static float _probeAt;
-
-        internal static void TickCameraProbe()
-        {
-            try
-            {
-                var ed = scnEditor.instance;
-                if (ed == null || !ed.playMode) { _probeAt = 0f; return; }
-                if (Time.unscaledTime < _probeAt) return;
-                _probeAt = Time.unscaledTime + 1f;
-
-                var sb = new System.Text.StringBuilder("[cam]");
-                try { var c = ed.camera != null ? ed.camera : Camera.main;
-                      if (c != null) sb.Append(" pos=").Append(c.transform.position.ToString("0.0")).Append(" size=").Append(c.orthographicSize.ToString("0.00")); } catch { }
-                try { var sc = scrCamera.instance; if (sc != null) sb.Append(" followMode=").Append(sc.followMode); } catch { }
-                try { var ctrl = scrController.instance;
-                      if (ctrl != null && ctrl.planetarySystem != null && ctrl.planetarySystem.planetRed != null)
-                          sb.Append(" planet=").Append(ctrl.planetarySystem.planetRed.transform.position.ToString("0.0")); } catch { }
-                try { var host = GameObject.Find("SapphireGhosts");
-                      sb.Append(" ghosts=").Append(host != null ? host.transform.childCount : 0); } catch { }
-                try { sb.Append(" floors=").Append(ADOBase.lm.listFloors.Count); } catch { }
-                try { sb.Append(" auto=").Append(RDC.auto); } catch { }
-                SapphireLog.Debug(sb.ToString());
-            }
-            catch { }
-        }
-
         internal static void TickWasdPan()
         {
             scnEditor ed = null;
@@ -160,7 +125,6 @@ namespace Sapphire
                 // zoom-proportional speed so panning feels the same at any zoom
                 float speed = cam.orthographicSize * 1.6f;
                 cam.transform.position += (Vector3)(dir.normalized * speed * Time.unscaledDeltaTime);
-                if (Time.frameCount - _wasdPanFrame > 30) Diag("WASD pan moved the editor camera");
                 _wasdPanFrame = Time.frameCount; // latch: the autoplay-toggle guard reads this
             }
             catch { }
@@ -335,7 +299,7 @@ namespace Sapphire
             _wasPlayPlaying = playing;
             if (!assert) return;
 
-            try { RDC.auto = false; Diag("play mode forced autoplay OFF"); } catch { }
+            try { RDC.auto = false; } catch { }
             if (!s.PlayModeNoFail) return;
             try
             {
@@ -387,7 +351,7 @@ namespace Sapphire
                 var s = MainClass.Settings;
                 active = ed != null && s != null && MainClass.EditorSuiteOn && s.EditorModeActive;
                 if (playing && !_wasEditorPlay && active && s.EditorModeAutoplay)
-                { RDC.auto = true; Diag("edit mode forced autoplay ON at play start"); }
+                    RDC.auto = true;
             }
             catch { }
             _wasEditorPlay = playing;

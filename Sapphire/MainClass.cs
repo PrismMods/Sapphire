@@ -245,7 +245,7 @@ namespace Sapphire
 
                 _lap = System.Diagnostics.Stopwatch.GetTimestamp();
                 Tweaks.TickTileAngle(); Tweaks.TickEditorMode(); Tweaks.TickPlayMode();
-                Tweaks.TickWasdPan(); Tweaks.TickCameraProbe(); Tweaks.TickControlsTip(); Tweaks.TickUndoRelay(); Tweaks.TickPlaytestLock(); Acc(0);
+                Tweaks.TickWasdPan(); Tweaks.TickControlsTip(); Tweaks.TickUndoRelay(); Tweaks.TickPlaytestLock(); Acc(0);
                 EditorEvents.Tick(); Acc(1);
                 EditorChrome.Tick(); Acc(3);
                 EditorInspector.Tick(); Acc(4);
