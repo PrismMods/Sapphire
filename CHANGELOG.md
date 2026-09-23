@@ -3,6 +3,15 @@
 
 # Changelog
 
+## 1.0.0-a8
+
+### Effective BPM on the tile-angle readout
+
+- The angle readout now reads `Angle 90° at 120 BPM (240 eff BPM)`: the tile's own pulse (its bpm after SetSpeed) and the rate it is actually hit at (bpm × 180/angle, so a 90° tile reads double). A multi-selection keeps its `Σ` and tile count after it.
+- Toggle the bpm part in `Ctrl+E` → Features → **Effective BPM**. Both figures come from the timeline's chart walk, so with the event timeline off they fall back to the level's base bpm.
+
+---
+
 ## 1.0.0-a7
 
 ### Script (new) — Level settings → Script
@@ -162,6 +171,15 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a8
+
+### 타일 각도 표시의 체감 BPM
+
+- 각도 표시가 `Angle 90° at 120 BPM (240 eff BPM)` 형태가 되었습니다. 타일 자체의 BPM(SetSpeed 적용값)과 실제로 치는 속도(BPM × 180/각도, 90° 타일은 두 배)를 함께 보여 주며, 여러 타일을 선택하면 `Σ`와 타일 수가 뒤에 이어집니다.
+- BPM 부분은 `Ctrl+E` → 기능 → **체감 BPM**에서 켜고 끕니다. 두 값 모두 타임라인의 채보 계산에서 나오므로, 이벤트 타임라인을 끄면 레벨의 기본 BPM으로 대체됩니다.
+
+---
 
 ## 1.0.0-a7
 
