@@ -61,6 +61,12 @@
         <Reference Include="Newtonsoft.Json"><HintPath>$(AdofaiManaged)/Newtonsoft.Json.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="netstandard"><HintPath>$(AdofaiManaged)/netstandard.dll</HintPath><Private>False</Private></Reference>
         <Reference Include="System" />
+        <!-- Compile-time only: the running copy is installed and loaded by PrismBootstrap, which
+             is why Private is False. Refresh with lib/update-prismlib.sh. -->
+        <Reference Include="PrismLib">
+            <HintPath>$(MSBuildProjectDirectory)/../lib/PrismLib.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
         <Reference Include="System.Core" />
         <Reference Include="System.Xml.Linq" />
         <Reference Include="System.Data.DataSetExtensions" />
@@ -129,6 +135,8 @@
         <Compile Include="Util\TmpShadow.cs" />
         <Compile Include="Util\KeyListener.cs" />
         <Compile Include="Util\Keybinds.cs" />
+        <Compile Include="Util\PrismBootstrap.cs" />
+        <Compile Include="Util\PrismBridge.cs" />
         <Compile Include="Util\PanelLayout.cs" />
         <Compile Include="Util\Tweaks.cs" />
         <Compile Include="Util\AudioAnalysis.cs" />

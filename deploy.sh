@@ -3,6 +3,10 @@ set -e
 
 GAME_DIR="${ADOFAI_ROOT:-$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice}"
 
+# Compile-time reference only — the copy the game runs is installed by PrismBootstrap. Fetched
+# rather than committed so the checked-in tree never disagrees with the published release.
+[ -f "$(dirname "$0")/lib/PrismLib.dll" ] || "$(dirname "$0")/lib/update-prismlib.sh"
+
 # Two loader layouts in the wild: MelonLoader + UMMCompat reads UMMMods/, native UMM reads
 # Mods/. Pick whichever this machine actually has instead of assuming one.
 if [ -d "$GAME_DIR/UMMMods" ]; then

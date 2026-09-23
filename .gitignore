@@ -441,3 +441,6 @@ Sapphire-*.zip
 tools/tempo-harness/.venv/
 tools/tempo-harness/osu_audio/
 tools/tempo-harness/*.npy
+
+# Fetched by lib/update-prismlib.sh; never edited here
+lib/PrismLib.dll

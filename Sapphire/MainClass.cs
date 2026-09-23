@@ -101,6 +101,9 @@ namespace Sapphire
         {
             _modEntry = modEntry;
             SapphireLog.Init();
+            // Before anything claims state or reads a hotkey. Installs PrismLib if it isn't there;
+            // everything downstream checks PrismBridge.Available and runs standalone without it.
+            PrismBridge.Init();
             harmony = new Harmony(modEntry.Info.Id);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -508,6 +511,7 @@ namespace Sapphire
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _deferredApplyPending = false;
+            PrismBridge.Shutdown();          // never leave a claim held by a mod that's gone
             Tweaks.ReleaseBismuthSuppress();
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();

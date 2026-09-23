@@ -61,7 +61,11 @@ namespace Sapphire
         }
 
         // StopMod: never leave Bismuth's overlays suppressed by a mod that's gone.
-        internal static void ReleaseBismuthSuppress() => SetBismuthSuppress(false);
+        internal static void ReleaseBismuthSuppress()
+        {
+            SetBismuthSuppress(false);
+            if (PrismBridge.Available) PrismBridge.ClaimHud(false);
+        }
 
         // WASD pans the editor camera — only with NO tile selected (the editor uses WASD to place
         // tiles when one is), nothing being typed, and no ctrl/cmd chords (save/select-all).
@@ -356,6 +360,7 @@ namespace Sapphire
             catch { }
             _wasEditorPlay = playing;
             SetBismuthSuppress(active);
+            if (PrismBridge.Available) PrismBridge.ClaimHud(active);
 
             /* The mode cluster carries difficulty / no-fail / autoplay itself and sits in the
                same screen corner as the game's icons, so the icons are both redundant and

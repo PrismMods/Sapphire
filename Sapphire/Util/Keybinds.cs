@@ -97,11 +97,16 @@ namespace Sapphire
             int i = (int)b;
             var k = _key[i];
             if (k == KeyCode.None) return false;            // deliberately unbound
+            // Another mod is swallowing the keyboard game-wide (Bismuth does it while its panel is
+            // open, and its block exempts only its own key). Firing here would act on a keystroke
+            // the user aimed at that panel.
+            if (PrismBridge.Available && PrismBridge.InputHeldElsewhere()) return false;
             return Input.GetKeyDown(k) && ShiftHeld == _shift[i] && AltHeld == _alt[i];
         }
 
         internal static KeyCode Key(Bind b) { Ensure(); return _key[(int)b]; }
         internal static bool Shift(Bind b) { Ensure(); return _shift[(int)b]; }
+        internal static bool Alt(Bind b) { Ensure(); return _alt[(int)b]; }
 
         // "Shift+G" / "I" / "[" / "—" when unbound.
         internal static string Label(Bind b)
@@ -135,6 +140,7 @@ namespace Sapphire
             _key[i] = key; _shift[i] = shift; _alt[i] = alt;
             Revision++;
             Persist();
+            if (PrismBridge.Available) PrismBridge.SyncKeys();   // so conflict reports track rebinds
         }
 
         internal static void ResetAll()
