@@ -511,7 +511,7 @@ namespace Sapphire
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _deferredApplyPending = false;
-            PrismBridge.Shutdown();          // never leave a claim held by a mod that's gone
+            if (PrismBridge.Available) PrismBridge.Shutdown();   // never leave a claim held by a mod that's gone
             Tweaks.ReleaseBismuthSuppress();
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();

@@ -10,10 +10,18 @@ namespace Sapphire
        can see the other doing it. PrismLib is where they say so. It installs itself — see
        PrismBootstrap — so there is nothing for the user to add.
 
-       EVERY PrismLib type stays inside this file, and every method here that touches one is called
-       only after Available has been checked. The CLR resolves a method's types when that method is
-       JITted, so a caller that mentions StateKey would fail to JIT on a machine where the library
-       never arrived — which is exactly the machine that must keep working. */
+       EVERY PrismLib type stays inside this file, in METHOD BODIES only, and every method here that
+       touches one is called solely after Available has been checked. Two separate rules, both
+       load-bearing on a machine where the library never arrived — which is exactly the machine that
+       must keep working:
+
+         - No PrismLib type may appear in a FIELD, because field types are part of the class layout
+           and are resolved when the type itself loads, before any method runs. A `ModHandle _me`
+           field made this whole class unloadable and took the mod down with it:
+           "TypeLoadException - Could not load type of field 'Sapphire.PrismBridge:_me'". Hence the
+           object fields and the casts.
+         - No caller outside this file may mention a PrismLib type, because the CLR resolves a
+           method's types when that method is JITted. */
     internal static class PrismBridge
     {
         internal static bool Available { get; private set; }
@@ -34,18 +42,22 @@ namespace Sapphire
         {
             Version v;
             Version.TryParse((MainClass.ModVersion ?? "0.0.0").Split('-')[0], out v);
-            _me = PrismLib.Prism.Register("Sapphire", v ?? new Version(0, 0, 0));
+            var me = PrismLib.Prism.Register("Sapphire", v ?? new Version(0, 0, 0));
+            _me = me;
             PrismLib.Prism.Log = SapphireLog.Log;
             PrismLib.Keys.KeyName = i => ((KeyCode)i).ToString();
-
-            SyncKeys();
+            RegisterKeys(me);
         }
 
         /// Register the EFFECTIVE binds (Keybinds.Def carries defaults, the user rebinds them), so
         /// a conflict report is about the keys actually live.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        internal static void SyncKeys()
+        internal static void SyncKeys() => RegisterKeys(_me as PrismLib.ModHandle);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void RegisterKeys(PrismLib.ModHandle me)
         {
+            if (me == null) return;
             try
             {
                 foreach (var d in Keybinds.All)
@@ -55,16 +67,17 @@ namespace Sapphire
                     var m = PrismLib.KeyMods.None;
                     if (Keybinds.Shift(d.Id)) m |= PrismLib.KeyMods.Shift;
                     if (Keybinds.Alt(d.Id)) m |= PrismLib.KeyMods.Alt;
-                    _me.BindKey(d.Id.ToString(), (int)key, m, Loc.T(d.Label));
+                    me.BindKey(d.Id.ToString(), (int)key, m, Loc.T(d.Label));
                 }
                 // Not in the Bind table: the settings panel's own toggle, hardcoded in UICore.
-                _me.BindKey("SettingsPanel", (int)KeyCode.E, PrismLib.KeyMods.Ctrl, "Open the settings panel");
+                me.BindKey("SettingsPanel", (int)KeyCode.E, PrismLib.KeyMods.Ctrl, "Open the settings panel");
             }
             catch { }
         }
 
-        private static PrismLib.ModHandle _me;
-        private static PrismLib.Claim _hud;
+        // Opaque on purpose — see the class comment. Cast at use, never in the field type.
+        private static object _me;
+        private static object _hud;
 
         /* Editor Mode owns the gameplay HUD: the mode cluster carries difficulty / no-fail /
            autoplay itself, so the game's own corner icons come down. Bismuth's overlays sit in the
@@ -76,8 +89,9 @@ namespace Sapphire
         {
             try
             {
-                if (on) { if (_hud == null) _hud = _me.ClaimState(PrismLib.StateKey.GameHud, "Editor Mode"); }
-                else if (_hud != null) { _hud.Release(); _hud = null; }
+                var me = _me as PrismLib.ModHandle;
+                if (on) { if (_hud == null && me != null) _hud = me.ClaimState(PrismLib.StateKey.GameHud, "Editor Mode"); }
+                else if (_hud != null) { ((PrismLib.Claim)_hud).Release(); _hud = null; }
             }
             catch { }
         }
