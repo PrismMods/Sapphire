@@ -515,8 +515,9 @@ namespace Sapphire
             {
                 if (s.EditorEffectiveBpm && deg > 0.01f)
                 {
-                    double bpm = EditorEvents.SpeedBpmAt(fl.seqID) * 180.0 / deg;
-                    if (bpm > 0.0 && bpm < 1e6) eff = $"  ·  {bpm:0.#} BPM";
+                    double bpm = EditorEvents.SpeedBpmAt(fl.seqID);
+                    double hit = bpm * 180.0 / deg;
+                    if (bpm > 0.0 && hit < 1e6) eff = $" at {bpm:0.#} BPM ({hit:0.#} eff BPM)";
                 }
             }
             catch { }
@@ -527,8 +528,8 @@ namespace Sapphire
             {
                 _lastAngleDeg = deg; _lastAngleCount = count; _lastAngleSum = sum; _lastEff = eff;
                 _angleText.text = count > 1
-                    ? $"Angle: {deg:0.##}°  ·  Σ {sum:0.##}°  ({count} tiles){eff}"
-                    : $"Angle: {deg:0.##}°{eff}";
+                    ? $"Angle {deg:0.##}°{eff}  ·  Σ {sum:0.##}°  ({count} tiles)"
+                    : $"Angle {deg:0.##}°{eff}";
             }
         }
 
