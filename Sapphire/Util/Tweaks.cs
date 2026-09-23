@@ -507,17 +507,18 @@ namespace Sapphire
                 foreach (var f in ed.selectedFloors)
                     if (f != null) sum += (float)(f.angleLength * Mathf.Rad2Deg);
             }
-            /* Effective bpm = the rate the tile is actually HIT at: its bpm after SetSpeed,
-               times 180/angle (a 90° tile lands twice per beat, so it reads double). A midspin
-               sweeps nothing, so it has no rate. */
+            /* The tile's own pulse (speed × base bpm) and the rate it is actually hit at. The
+               timeline already angle-adjusts the second one — multiplying by 180/angle here too
+               squared the factor, which is what made the plain bpm read like the effective one.
+               A midspin sweeps no angle, so it gets no rate. */
             string eff = "";
             try
             {
                 if (s.EditorEffectiveBpm && deg > 0.01f)
                 {
-                    double bpm = EditorEvents.SpeedBpmAt(fl.seqID);
-                    double hit = bpm * 180.0 / deg;
-                    if (bpm > 0.0 && hit < 1e6) eff = $" at {bpm:0.#} BPM ({hit:0.#} eff BPM)";
+                    double bpm = EditorEvents.TileBpmAt(fl.seqID);
+                    double hit = EditorEvents.EffBpmAt(fl.seqID);
+                    if (bpm > 0.0 && hit > 0.0 && hit < 1e6) eff = $" at {bpm:0.#} BPM ({hit:0.#} eff BPM)";
                 }
             }
             catch { }

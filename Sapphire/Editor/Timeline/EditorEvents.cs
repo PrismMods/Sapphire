@@ -2548,10 +2548,19 @@ namespace Sapphire
             return _bpmPrefix[seq];
         }
 
-        /* The tile's bpm after SetSpeed, for readouts outside the timeline. The timeline builds
-           this prefix from the chart walk; before it has run (or with the timeline off) the
-           level's own bpm is the honest answer. */
-        internal static double SpeedBpmAt(int seq) => EffBpmAtTile(seq);
+        /* For readouts outside the timeline. TileBpmAt is the PULSE (speed × base bpm,
+           angle-independent); EffBpmAt is the perceived tap rate, already angle-adjusted here —
+           callers must not apply 180/angle again. Before the walk has run (timeline off) both
+           fall back to the level's own bpm. */
+        internal static double TileBpmAt(int seq)
+        {
+            if (_tileBpmPrefix == null || _tileBpmPrefix.Length == 0) return _levelBpm;
+            if (seq < 0) seq = 0;
+            if (seq >= _tileBpmPrefix.Length) seq = _tileBpmPrefix.Length - 1;
+            return _tileBpmPrefix[seq];
+        }
+
+        internal static double EffBpmAt(int seq) => EffBpmAtTile(seq);
 
         private static string BpmLine(int seq) =>
             "base " + BpmNum(BpmAtTile(seq)) + "  ·  eff " + BpmNum(EffBpmAtTile(seq))
