@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using PrismLib.UI.Toolkit;
 using UnityEngine;
 
 namespace Sapphire
@@ -47,6 +49,11 @@ namespace Sapphire
             PrismLib.Prism.Log = SapphireLog.Log;
             PrismLib.Keys.KeyName = i => ((KeyCode)i).ToString();
             RegisterKeys(me);
+
+            // What this mod contributes to the shared debug window. Pulled, never pushed: the
+            // delegates only run while someone is looking at that tab.
+            me.AddLog("log", () => SapphireLog.ReadTail().Split('\n'), SapphireLog.LogPath);
+            me.AddFields("Editor", EditorFields);
         }
 
         /// Register the EFFECTIVE binds (Keybinds.Def carries defaults, the user rebinds them), so
@@ -71,6 +78,7 @@ namespace Sapphire
                 }
                 // Not in the Bind table: the settings panel's own toggle, hardcoded in UICore.
                 me.BindKey("SettingsPanel", (int)KeyCode.E, PrismLib.KeyMods.Ctrl, "Open the settings panel");
+                me.BindKey("DebugPanel", (int)KeyCode.D, PrismLib.KeyMods.Ctrl | PrismLib.KeyMods.Shift, "Open the debug panel");
             }
             catch { }
         }
@@ -109,12 +117,155 @@ namespace Sapphire
             catch { return false; }
         }
 
+        // ── shared debug window ──────────────────────────────────────────────
+
+        /* Ctrl+Shift+D, the SAME chord in every Prism mod, because the window itself is shared: it
+           shows every registered mod's log and fields, not just this one's. Both mods poll the
+           chord; the StateKey.DebugPanel claim decides which one actually draws, so the user gets
+           one window instead of two identical ones.
+
+           A typed PrismLib.UI field is fine here. That assembly ships inside the mod folder, unlike
+           PrismLib.dll, which may never install — which is why the handles above stay object. */
+        private static DebugPanel _debug;
+        private static object _debugClaim;
+
+        internal static void TickDebug()
+        {
+            bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                     || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (ctrl && shift && Input.GetKeyDown(KeyCode.D) && !UI.FieldNav.Typing) ToggleDebug();
+            if (_debug != null) _debug.Tick();
+        }
+
+        internal static void ToggleDebug()
+        {
+            if (_debug == null)
+            {
+                if (Available && !TakeDebugClaim()) return;   // another Prism mod draws it
+                _debug = new DebugPanel("Prism · Debug", DebugTabs);
+            }
+            _debug.Toggle();
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool TakeDebugClaim()
+        {
+            try
+            {
+                var me = _me as PrismLib.ModHandle;
+                if (me == null) return true;
+                _debugClaim = me.ClaimState(PrismLib.StateKey.DebugPanel, "Ctrl+Shift+D");
+                return _debugClaim != null;
+            }
+            catch { return true; }
+        }
+
+        private static IEnumerable<DebugTab> DebugTabs()
+        {
+            var tabs = new List<DebugTab>();
+            if (Available) AddPrismTabs(tabs);
+            // Standalone: nothing registered anywhere because PrismLib never installed. Show ours.
+            if (tabs.Count == 0)
+                tabs.Add(new DebugTab { Name = "Sapphire · log", Lines = () => SapphireLog.ReadTail().Split('\n') });
+            return tabs;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void AddPrismTabs(List<DebugTab> tabs)
+        {
+            foreach (var log in PrismLib.Diagnostics.Logs)
+            {
+                var src = log;
+                tabs.Add(new DebugTab { Name = src.Owner + " · " + src.Name, Lines = src.Tail });
+            }
+            foreach (var group in PrismLib.Diagnostics.Fields)
+            {
+                var g = group;
+                tabs.Add(new DebugTab { Name = g.Owner + " · " + g.Name, Lines = () => Pairs(g.Read()) });
+            }
+            tabs.Add(new DebugTab { Name = "Prism", Lines = PrismState });
+        }
+
+        private static IEnumerable<string> Pairs(IEnumerable<KeyValuePair<string, string>> src)
+        {
+            foreach (var kv in src) yield return kv.Key + " = " + kv.Value;
+        }
+
+        /// Who is loaded, who owns what, and which hotkeys collide — the answer to "autoplay is
+        /// broken" that used to take three log files to guess at.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static IEnumerable<string> PrismState()
+        {
+            var outp = new List<string>();
+            try
+            {
+                outp.Add("PrismLib " + PrismLib.Prism.Version);
+                foreach (var id in PrismLib.Prism.LoadedMods)
+                {
+                    Version v;
+                    PrismLib.Prism.IsLoaded(id, out v);
+                    outp.Add("  mod  " + id + " " + v);
+                }
+                outp.Add("");
+                outp.Add("— state claims —");
+                foreach (var kv in PrismLib.Claims.Held) outp.Add("  " + kv.Key + "  ->  " + kv.Value);
+                outp.Add("");
+                outp.Add("— key conflicts —");
+                bool any = false;
+                foreach (var c in PrismLib.Keys.Conflicts()) { outp.Add("  " + c.Key + "  vs  " + c.Value); any = true; }
+                if (!any) outp.Add("  (none)");
+                outp.Add("");
+                outp.Add("— registered keys —");
+                foreach (var k in PrismLib.Keys.All) outp.Add("  " + k);
+            }
+            catch (Exception e) { outp.Add("(unavailable: " + e.Message + ")"); }
+            return outp;
+        }
+
+        private static IEnumerable<KeyValuePair<string, string>> EditorFields()
+        {
+            var outp = new List<KeyValuePair<string, string>>();
+            Action<string, string> add = (k, v) => outp.Add(new KeyValuePair<string, string>(k, v));
+            try
+            {
+                add("Sapphire", MainClass.ModVersion ?? "?");
+                add("editor suite", MainClass.EditorSuiteOn ? "on" : "off");
+                var ed = scnEditor.instance;
+                add("editor", ed != null ? "open" : "not open");
+                if (ed != null)
+                {
+                    add("play mode", ed.playMode ? "playing" : "editing");
+                    add("selected tiles", (ed.selectedFloors != null ? ed.selectedFloors.Count : 0).ToString());
+                }
+                add("scene", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+                add("autoplay", RDC.auto ? "on" : "off");
+            }
+            catch (Exception e) { add("(read failed)", e.Message); }
+            return outp;
+        }
+
+        /* Callable with PrismLib absent, so it mentions no PrismLib type: the debug window is a
+           PrismLib.UI object that exists either way, and everything else is behind Available in a
+           method that is only ever JITted when the library is there. */
         internal static void Shutdown()
         {
+            if (_debug != null) { _debug.Dispose(); _debug = null; }
             if (!Available) return;
             Available = false;
-            try { _hud = null; PrismLib.Claims.ReleaseAll("Sapphire"); PrismLib.Keys.Unregister("Sapphire"); }
+            ReleasePrism();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ReleasePrism()
+        {
+            try
+            {
+                _hud = null; _debugClaim = null;
+                PrismLib.Claims.ReleaseAll("Sapphire");
+                PrismLib.Keys.Unregister("Sapphire");
+                PrismLib.Diagnostics.Unregister("Sapphire");
+            }
             catch { }
         }
     }

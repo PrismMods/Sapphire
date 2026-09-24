@@ -55,6 +55,9 @@ namespace Sapphire
         }
 
         // Truncate the log file (Clear button in the log viewer).
+        /// Where the file lives, for the debug panel's "open folder" button. Null if init failed.
+        internal static string LogPath => _path;
+
         internal static void Clear()
         {
             if (_path == null) return;
@@ -68,9 +71,10 @@ namespace Sapphire
            toggle on */
         internal static void Debug(string message) => Log("[dbg] " + message);
 
-        /* Tail of current log for in-game viewer. Capped well below uGUI Text
-           65k-vertex limit, ~4 verts per glyph */
-        internal static string ReadTail(int maxChars = 12000)
+        /* Tail of the current log for the in-game viewer. The old cap was a uGUI vertex budget
+           (~4 verts per glyph, 65k limit); PrismLib.UI's list virtualises, so what is left is
+           read cost. */
+        internal static string ReadTail(int maxChars = 200000)
         {
             if (_path == null) return "(log not initialized)";
             Flush();   // the viewer must see lines that are still buffered

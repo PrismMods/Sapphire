@@ -61,6 +61,7 @@ namespace Sapphire
             modEntry.OnUpdate = (_, __) =>
             {
                 UICore.HandleUpdate();
+                PrismBridge.TickDebug();
                 if (_forceReloadPending) { _forceReloadPending = false; DoForceReload(); }
             };
             // Opting into OnUnload makes the mod hot-reloadable.
@@ -511,7 +512,7 @@ namespace Sapphire
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _deferredApplyPending = false;
-            if (PrismBridge.Available) PrismBridge.Shutdown();   // never leave a claim held by a mod that's gone
+            PrismBridge.Shutdown();          // drops claims and the debug window; safe with PrismLib absent
             Tweaks.ReleaseBismuthSuppress();
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();
