@@ -63,6 +63,11 @@
         <Reference Include="System" />
         <!-- Compile-time only: the running copy is installed and loaded by PrismBootstrap, which
              is why Private is False. Refresh with lib/update-prismlib.sh. -->
+        <!-- Shipped in the mod folder, not installed: the UI half needs no shared instance. -->
+        <Reference Include="PrismLib.UI">
+            <HintPath>$(MSBuildProjectDirectory)/../lib/PrismLib.UI.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
         <Reference Include="PrismLib">
             <HintPath>$(MSBuildProjectDirectory)/../lib/PrismLib.dll</HintPath>
             <Private>False</Private>
@@ -144,7 +149,6 @@
         <Compile Include="Util\ExprEval.cs" />
         <Compile Include="Util\SemVer.cs" />
         <Compile Include="Util\UpdateService.cs" />
-        <Compile Include="UI\ToastStack.cs" />
         <Compile Include="UI\UpdateToast.cs" />
         <Compile Include="Editor\Timeline\EditorEvents.cs" />
         <Compile Include="Editor\Chrome\EditorChrome.cs" />

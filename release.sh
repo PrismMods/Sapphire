@@ -38,6 +38,9 @@ STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/Sapphire/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$STAGE/Sapphire/"
+# Ships with the mod: PrismLib.UI is an ordinary dependency (the UI half needs no shared
+# instance). Leaving it out makes the released build fail to load its update toast.
+cp lib/PrismLib.UI.dll "$STAGE/Sapphire/"
 cp Info.json "$STAGE/Sapphire/"
 cp Sapphire/Resources/*.ttf "$STAGE/Sapphire/Resources/"
 cp Sapphire/Resources/*.txt "$STAGE/Sapphire/Resources/"

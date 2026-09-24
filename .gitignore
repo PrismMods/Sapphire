@@ -444,3 +444,4 @@ tools/tempo-harness/*.npy
 
 # Fetched by lib/update-prismlib.sh; never edited here
 lib/PrismLib.dll
+lib/PrismLib.UI.dll

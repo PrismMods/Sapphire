@@ -22,6 +22,11 @@ namespace PrismLib.Bootstrap
          assembly it is resolving. That is also why the caller must keep its own PrismLib usage in a
          separate [MethodImpl(NoInlining)] method — see Usage in the README.
        - It never throws. Every failure path returns false and the mod runs standalone.
+       - It also resolves PrismLib.UI, which mods SHIP in their own folder rather than install.
+         The UI half needs no shared instance — two mods each drawing their own toast is correct,
+         and ToastStack coordinates them by GameObject name, not shared memory — so it is an
+         ordinary dependency and its call sites need no Available guard. The resolver is installed
+         before anything else here, so a mod's UI keeps working even when the network half fails.
        - It blocks on the network only when there is no usable copy at all, and then briefly. An
          update to an existing copy is fetched in the background and picked up next launch, because
          a game that hangs on load over a library nobody asked for is worse than being one version
@@ -43,6 +48,9 @@ namespace PrismLib.Bootstrap
             if (log != null) _log = log;
             if (_ran) return _ok;
             _ran = true;
+            // First, unconditionally: PrismLib.UI ships beside the mod and must resolve whether or
+            // not the shared PrismLib below can be reached.
+            AppDomain.CurrentDomain.AssemblyResolve += Resolve;
             try { _ok = Run(minimum ?? new Version(0, 1, 0)); }
             catch (Exception e) { Say("bootstrap failed: " + e.Message); _ok = false; }
             return _ok;
@@ -77,8 +85,6 @@ namespace PrismLib.Bootstrap
                 t.Start();
             }
 
-            // Install the resolver BEFORE anything touches a PrismLib type.
-            AppDomain.CurrentDomain.AssemblyResolve += Resolve;
             Assembly.LoadFrom(path);
             Say("loaded " + have + " from " + path);
             return true;
@@ -88,12 +94,28 @@ namespace PrismLib.Bootstrap
         {
             try
             {
-                if (!new AssemblyName(args.Name).Name.Equals("PrismLib", StringComparison.OrdinalIgnoreCase)) return null;
+                string want = new AssemblyName(args.Name).Name;
+                if (!want.StartsWith("PrismLib", StringComparison.OrdinalIgnoreCase)) return null;
+
                 foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
-                    if (a.GetName().Name == "PrismLib") return a;
-                string p = _dir != null ? Path.Combine(_dir, "PrismLib.dll") : null;
-                return p != null && File.Exists(p) ? Assembly.LoadFrom(p) : null;
+                    if (string.Equals(a.GetName().Name, want, StringComparison.OrdinalIgnoreCase)) return a;
+
+                // Beside the mod first (that is where a shipped PrismLib.UI lives), then the
+                // shared folder (that is where the installed PrismLib lives).
+                foreach (var dir in new[] { SelfDir(), _dir })
+                {
+                    if (dir == null) continue;
+                    string p = Path.Combine(dir, want + ".dll");
+                    if (File.Exists(p)) return Assembly.LoadFrom(p);
+                }
+                return null;
             }
+            catch { return null; }
+        }
+
+        private static string SelfDir()
+        {
+            try { return Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath); }
             catch { return null; }
         }
 
@@ -104,8 +126,8 @@ namespace PrismLib.Bootstrap
         {
             try
             {
-                string self = new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath;
-                string modsRoot = Path.GetDirectoryName(Path.GetDirectoryName(self));
+                string self = SelfDir();
+                string modsRoot = self != null ? Path.GetDirectoryName(self) : null;
                 if (modsRoot == null || !Directory.Exists(modsRoot)) return null;
                 string dir = Path.Combine(modsRoot, "PrismLib");
                 Directory.CreateDirectory(dir);

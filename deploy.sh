@@ -6,6 +6,7 @@ GAME_DIR="${ADOFAI_ROOT:-$HOME/Library/Application Support/Steam/steamapps/commo
 # Compile-time reference only — the copy the game runs is installed by PrismBootstrap. Fetched
 # rather than committed so the checked-in tree never disagrees with the published release.
 [ -f "$(dirname "$0")/lib/PrismLib.dll" ] || "$(dirname "$0")/lib/update-prismlib.sh"
+[ -f "$(dirname "$0")/lib/PrismLib.UI.dll" ] || "$(dirname "$0")/lib/update-prismlib.sh"
 
 # Two loader layouts in the wild: MelonLoader + UMMCompat reads UMMMods/, native UMM reads
 # Mods/. Pick whichever this machine actually has instead of assuming one.
@@ -31,6 +32,7 @@ fi
 
 mkdir -p "$MODS_DIR/Resources"
 cp Sapphire/bin/Release/Sapphire.dll "$MODS_DIR/"
+cp lib/PrismLib.UI.dll "$MODS_DIR/"
 cp Info.json "$MODS_DIR/"
 cp Sapphire/Resources/*.ttf "$MODS_DIR/Resources/"
 cp Sapphire/Resources/*.txt "$MODS_DIR/Resources/"
