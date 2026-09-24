@@ -140,12 +140,27 @@ namespace Sapphire
 
         internal static void ToggleDebug()
         {
-            if (_debug == null)
+            /* Everything here is logged, because the game disables exception capturing: without
+               these lines a broken panel and a hotkey that never fired look identical. */
+            try
             {
-                if (Available && !TakeDebugClaim()) return;   // another Prism mod draws it
-                _debug = new DebugPanel("Prism · Debug", DebugTabs);
+                if (_debug == null)
+                {
+                    if (Available && !TakeDebugClaim())
+                    {
+                        SapphireLog.Log("[prism] debug window: another Prism mod owns it, not opening a second");
+                        return;
+                    }
+                    PrismLib.UI.Toolkit.Ui.Log = m => SapphireLog.Log("[prism] " + m);
+                    _debug = new DebugPanel("Prism · Debug", DebugTabs);
+                    // UI Toolkit draws through TextCore, so hand it the legacy Font the TMP asset
+                    // was built from. Without a font the panel renders but every label is blank.
+                    var tmp = UI.Theme.TmpFont;
+                    _debug.SetFont(tmp != null ? tmp.sourceFontFile : null);
+                }
+                _debug.Toggle();
             }
-            _debug.Toggle();
+            catch (Exception e) { SapphireLog.Log("[prism] debug window FAILED: " + e); }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
