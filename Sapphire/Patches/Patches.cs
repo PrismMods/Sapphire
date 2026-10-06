@@ -350,8 +350,16 @@ namespace Sapphire
                new panel (the Hz tool was the one that slipped through) blocks the zoom without
                anyone remembering to extend this list. The named checks stay for the surfaces
                that are NOT PanelKit windows — the timeline strip, help, the docks, the graph
-               and the pickers. */
-            public static bool Prefix() => !UI.PanelKit.AnyPanelHovered()
+               and the pickers.
+
+               Prism windows and OTHER mods' panels block it too — scrolling a list must not zoom
+               the world behind it. Both tests are about where the POINTER is, not about what is
+               open: blocking the wheel whenever a panel exists somewhere on screen stopped the
+               editor zooming at all while one was up. */
+            public static bool Prefix() =>
+                   !PrismLib.UI.Toolkit.Ui.PointerOverWindow(Input.mousePosition)
+                && !(PrismBridge.Available && PrismBridge.PointerOverAnyUi())
+                && !UI.PanelKit.AnyPanelHovered()
                 && !EditorEvents.TimelineHovered && !EditorHelp.IsOpen && !EditorChrome.DockHovered
                 && !EditorGraph.PanelHovered && !EditorFilterPicker.IsOpen && !EditorEasePicker.IsOpen && !EditorBezier.IsOpen
                 && !EditorEventSelector.Hovered && !EditorEventPanel.Hovered && !EditorLevelMenu.Hovered

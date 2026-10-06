@@ -100,9 +100,9 @@ namespace PrismLib.Bootstrap
                 foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
                     if (string.Equals(a.GetName().Name, want, StringComparison.OrdinalIgnoreCase)) return a;
 
-                // Beside the mod first (that is where a shipped PrismLib.UI lives), then the
-                // shared folder (that is where the installed PrismLib lives).
-                foreach (var dir in new[] { SelfDir(), _dir })
+                // Beside the mod first (a shipped PrismLib.UI), then the shared folder (the
+                // installed PrismLib), then UserLibs (where a MelonLoader build puts them).
+                foreach (var dir in new[] { SelfDir(), _dir, UserLibs() })
                 {
                     if (dir == null) continue;
                     string p = Path.Combine(dir, want + ".dll");
@@ -119,19 +119,51 @@ namespace PrismLib.Bootstrap
             catch { return null; }
         }
 
-        /* <game>/Mods/<ThisMod>/This.dll  ->  <game>/Mods/PrismLib/
-           Derived from this assembly's own location so it works for both "Mods" and UMM's
-           "UMMMods" layout, and for a game installed anywhere. */
+        /* Where the shared copy lives, for BOTH loaders.
+
+           UMM gives each mod a folder: <game>/UMMMods/<Mod>/<Mod>.dll, so the mods root is the
+           parent of the parent. MelonLoader does not — its mods are flat DLLs in <game>/Mods —
+           so the same walk lands on the game root and scatters a PrismLib folder there. Decide by
+           looking at the directory name rather than assuming a depth. */
+        private static readonly string[] ModRootNames = { "Mods", "UMMMods", "Plugins" };
+
         private static string SharedDir()
         {
             try
             {
                 string self = SelfDir();
-                string modsRoot = self != null ? Path.GetDirectoryName(self) : null;
+                if (self == null) return null;
+                string modsRoot = IsModRoot(self) ? self : Path.GetDirectoryName(self);
                 if (modsRoot == null || !Directory.Exists(modsRoot)) return null;
                 string dir = Path.Combine(modsRoot, "PrismLib");
                 Directory.CreateDirectory(dir);
                 return dir;
+            }
+            catch { return null; }
+        }
+
+        private static bool IsModRoot(string dir)
+        {
+            string name = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar));
+            foreach (var n in ModRootNames)
+                if (string.Equals(name, n, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /* UserLibs is where both loaders keep shared assemblies, and MelonLoader loads them
+           itself. A MelonLoader build of a mod ships PrismLib.UI there rather than into Mods,
+           where MelonLoader would scan it for a MelonMod and complain that it has none. */
+        private static string UserLibs()
+        {
+            try
+            {
+                string self = SelfDir();
+                if (self == null) return null;
+                string root = IsModRoot(self) ? Path.GetDirectoryName(self)
+                                              : Path.GetDirectoryName(Path.GetDirectoryName(self));
+                if (root == null) return null;
+                string dir = Path.Combine(root, "UserLibs");
+                return Directory.Exists(dir) ? dir : null;
             }
             catch { return null; }
         }
