@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -37,7 +38,8 @@ namespace PrismLib.Bootstrap
         private const string Feed = "https://raw.githubusercontent.com/PrismMods/PrismLib/main/prismlib.json";
         private const int NetTimeoutMs = 10000;
 
-        private static Action<string> _log = _ => { };
+        private static Action<string> _log;   // null until Ensure hands one over; Say buffers till then
+        private static readonly List<string> _early = new List<string>();
         private static bool _ran;
         private static bool _ok;
         private static string _dir;      // the shared PrismLib folder, next to the mod folders
@@ -45,9 +47,14 @@ namespace PrismLib.Bootstrap
         /// Returns true when PrismLib is present and loadable. Safe to call more than once.
         public static bool Ensure(Action<string> log = null, Version minimum = null)
         {
-            if (log != null) _log = log;
+            if (log != null && _log == null)
+            {
+                _log = log;
+                lock (_early) { foreach (var m in _early) Say(m, true); _early.Clear(); }
+            }
             if (_ran) return _ok;
             _ran = true;
+            SyncUi();
             // First, unconditionally: PrismLib.UI ships beside the mod and must resolve whether or
             // not the shared PrismLib below can be reached.
             AppDomain.CurrentDomain.AssemblyResolve += Resolve;
@@ -90,6 +97,64 @@ namespace PrismLib.Bootstrap
             return true;
         }
 
+        /* PrismLib.UI ships in EVERY mod folder, but only one copy loads per session — whichever the
+           loader serves first. Under MelonLoader's UMM bridge that is decided by mod-folder order,
+           not version (it registers each folder's DLLs by name and answers AssemblyResolve before we
+           can), so an old copy in an alphabetically earlier mod silently wins and a newer mod calling
+           a new API throws MissingMethodException.
+
+           So the copies are made to agree instead: the newest version found in any mod folder (or
+           UserLibs) replaces every OLDER copy. Never a downgrade, never an equal version (dev builds
+           are left alone). Call it first thing in the mod's entry point, before any code that names
+           a PrismLib.UI type is JITted — afterwards it can only fix the files for next launch, and
+           says so. Writing into a sibling mod's folder is deliberate: it is the same library, only
+           ever newer, and the mod's own update simply re-runs this. */
+        public static void SyncUi()
+        {
+            if (_uiSynced) return;
+            _uiSynced = true;
+            try
+            {
+                var copies = new List<string>();
+                string root = ModsRoot();
+                if (root != null)
+                    foreach (var d in Directory.GetDirectories(root))
+                    {
+                        string p = Path.Combine(d, UiDll);
+                        if (File.Exists(p)) copies.Add(p);
+                    }
+                string ul = UserLibs();
+                if (ul != null && File.Exists(Path.Combine(ul, UiDll))) copies.Add(Path.Combine(ul, UiDll));
+
+                string best = null; Version bestV = null;
+                foreach (var p in copies)
+                {
+                    var v = VersionOf(p);
+                    if (v != null && (bestV == null || v > bestV)) { best = p; bestV = v; }
+                }
+                if (best == null) return;
+
+                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                    if (a.GetName().Name == "PrismLib.UI" && a.GetName().Version < bestV)
+                        Say("PrismLib.UI " + a.GetName().Version + " already loaded this session; " + bestV + " takes over next launch");
+
+                foreach (var p in copies)
+                {
+                    var v = VersionOf(p);
+                    if (v == null || v >= bestV) continue;
+                    string tmp = p + ".new";
+                    File.Copy(best, tmp, true);
+                    File.Delete(p);
+                    File.Move(tmp, p);
+                    Say("PrismLib.UI " + v + " -> " + bestV + " in " + Path.GetFileName(Path.GetDirectoryName(p)));
+                }
+            }
+            catch (Exception e) { Say("PrismLib.UI sync failed: " + e.Message); }
+        }
+
+        private const string UiDll = "PrismLib.UI.dll";
+        private static bool _uiSynced;
+
         private static Assembly Resolve(object sender, ResolveEventArgs args)
         {
             try
@@ -127,14 +192,24 @@ namespace PrismLib.Bootstrap
            looking at the directory name rather than assuming a depth. */
         private static readonly string[] ModRootNames = { "Mods", "UMMMods", "Plugins" };
 
-        private static string SharedDir()
+        private static string ModsRoot()
         {
             try
             {
                 string self = SelfDir();
                 if (self == null) return null;
-                string modsRoot = IsModRoot(self) ? self : Path.GetDirectoryName(self);
-                if (modsRoot == null || !Directory.Exists(modsRoot)) return null;
+                string root = IsModRoot(self) ? self : Path.GetDirectoryName(self);
+                return root != null && Directory.Exists(root) ? root : null;
+            }
+            catch { return null; }
+        }
+
+        private static string SharedDir()
+        {
+            try
+            {
+                string modsRoot = ModsRoot();
+                if (modsRoot == null) return null;
                 string dir = Path.Combine(modsRoot, "PrismLib");
                 Directory.CreateDirectory(dir);
                 return dir;
@@ -269,10 +344,11 @@ namespace PrismLib.Bootstrap
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void Say(string msg)
+        private static void Say(string msg, bool flushing = false)
         {
+            if (_log == null) { lock (_early) _early.Add(msg); return; }
             try { _log("PrismLib bootstrap: " + msg); } catch { }
-            Debug.WriteLine("PrismLib bootstrap: " + msg);
+            if (!flushing) Debug.WriteLine("PrismLib bootstrap: " + msg);
         }
     }
 }
