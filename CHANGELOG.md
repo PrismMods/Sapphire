@@ -3,6 +3,22 @@
 
 # Changelog
 
+## 1.0.0-a9
+
+### Fixed: the camera stopped following the player in Edit mode
+
+- On the first play-test of a session in Edit mode, cameras set to follow the player stayed put while the planets moved on, until one run in Play mode. Other camera motion was unaffected.
+- The cause was the hidden hit error meter: Edit mode hides it, it never finished setting up, and every autoplay hit failed partway through — after moving the planet but before moving the camera. The meter now always has what it needs.
+
+### Prism windows
+
+- **`Alt+Shift+S`** (or `Ctrl+Shift+P`) opens the Prism settings window — the settings of every Prism mod you have installed, in one searchable place, including keybinds you can press to set.
+- The shared debug window moves to **`Alt+Shift+D`** (`Ctrl+Shift+D` still works) and opens reliably on the first press.
+- Both windows use Sapphire's colours, remember where you left them, close with `Esc`, and support `Ctrl+Z`.
+- Scrolling over a Prism window or another Prism mod's panel no longer zooms the level behind it.
+
+---
+
 ## 1.0.0-a8
 
 ### Effective BPM on the tile-angle readout
@@ -171,6 +187,22 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a9
+
+### 수정: 편집 모드에서 카메라가 플레이어를 따라가지 않던 문제
+
+- 세션의 첫 편집 모드 플레이 테스트에서, 플레이어를 따라가도록 설정한 카메라가 행성이 움직이는 동안 제자리에 멈춰 있었습니다. 플레이 모드로 한 번 실행하면 그 뒤로는 정상이었습니다. 다른 카메라 움직임에는 영향이 없었습니다.
+- 원인은 숨겨진 타격 오차 표시기였습니다. 편집 모드가 표시기를 숨기면서 초기화가 끝나지 않았고, 자동 플레이의 매 타격이 행성을 옮긴 뒤 카메라를 옮기기 전에 실패했습니다. 이제 표시기는 항상 필요한 값을 갖습니다.
+
+### Prism 창
+
+- **`Alt+Shift+S`**(또는 `Ctrl+Shift+P`)로 Prism 설정 창을 엽니다. 설치한 모든 Prism 모드의 설정을 한곳에서 검색할 수 있으며, 키를 눌러 단축키를 지정할 수도 있습니다.
+- 공용 디버그 창은 **`Alt+Shift+D`**로 옮겼습니다(`Ctrl+Shift+D`도 계속 동작합니다). 처음 누를 때도 안정적으로 열립니다.
+- 두 창 모두 Sapphire의 색을 쓰고, 마지막 위치를 기억하며, `Esc`로 닫히고 `Ctrl+Z`를 지원합니다.
+- Prism 창이나 다른 Prism 모드의 패널 위에서 스크롤해도 뒤의 레벨이 더 이상 확대·축소되지 않습니다.
+
+---
 
 ## 1.0.0-a8
 
