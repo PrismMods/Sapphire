@@ -343,6 +343,25 @@ namespace Sapphire
             private static void Prefix() => EditorPitch.ImposePlaybackSpeed();
         }
 
+        /* ErrorMeterTick gets its colour scheme only in Start, which Unity runs only after the
+           tick has been active through a frame. Bismuth deactivates the hit error meter in the same
+           frame the game activates it (while Sapphire's Edit mode suppresses the HUD), so on the
+           first playtest of a session the ticks never start and Show NREs — inside scrPlayer.Hit,
+           after the planet switch and before UpdateFollowCam, so the follow camera froze until one
+           Play-mode run let the ticks start. Assign what Start would have, where it is needed. */
+        [HarmonyPatch(typeof(ADOFAI.ErrorMeterTick), "Show")]
+        private static class ErrorMeterTickColoursPatch
+        {
+            private static readonly AccessTools.FieldRef<ADOFAI.ErrorMeterTick, ColourSchemeHitMargin> _colours =
+                AccessTools.FieldRefAccess<ADOFAI.ErrorMeterTick, ColourSchemeHitMargin>("_hitMarginColors");
+
+            private static void Prefix(ADOFAI.ErrorMeterTick __instance)
+            {
+                try { if (_colours(__instance) == null) _colours(__instance) = RDConstants.data.hitMarginColoursUI; }
+                catch { }
+            }
+        }
+
         [HarmonyPatch(typeof(scnEditor), "ZoomCamera")]
         private static class EditorZoomBlockPatch
         {
