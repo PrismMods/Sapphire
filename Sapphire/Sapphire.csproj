@@ -113,6 +113,9 @@
         <Compile Include="UI\UIBuilder.cs" />
         <Compile Include="UI\ConfirmBox.cs" />
         <Compile Include="Editor\Events\EditorBulkEdit.cs" />
+        <Compile Include="Editor\Events\PatternEngine.cs" />
+        <Compile Include="Editor\Events\EditorPatterns.cs" />
+        <Compile Include="Editor\Events\EditorTrackKit.cs" />
         <Compile Include="UI\UICore.cs" />
         <Compile Include="UI\TabRail.cs" />
         <Compile Include="UI\PageStack.cs" />

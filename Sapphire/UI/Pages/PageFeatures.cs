@@ -35,6 +35,8 @@ namespace Sapphire.UI.Pages
                 v => { s.EventPresetsFloating = v; notify?.Invoke(); });
             UIBuilder.ToggleCard(grid, Loc.T("Effective BPM"), s.EditorEffectiveBpm,
                 v => { s.EditorEffectiveBpm = v; notify?.Invoke(); });
+            UIBuilder.ToggleCard(grid, Loc.T("Experimental tools"), s.FeatExperimental,
+                v => { s.FeatExperimental = v; notify?.Invoke(); });
 
             UIBuilder.Spacer(content);
             UIBuilder.SectionHeader(content, Loc.T("Modes"));

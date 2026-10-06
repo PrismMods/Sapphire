@@ -183,6 +183,16 @@ namespace Sapphire
                     Row(Loc.T("Paste"),     ed => { if (!EditorToolbar.PasteEventClip(ed, true)) ed.PasteFloors(false); }),
                     Row(Loc.T("Delete"),    ed => ed.DeleteSingleSelection(false)),
                 };
+            if (EditorPatterns.TabAvailable())
+            {
+                entries.Add(Row(Loc.T("Hide / show tile"), EditorTrackKit.ToggleHideSelection));
+                if (!multi) entries.Add(Row(Loc.T("Place track segment"), EditorTrackKit.ArmPlace));
+                else
+                {
+                    entries.Add(Row(Loc.T("Retime…"), _ => EditorPatterns.OpenTab(3)));
+                    entries.Add(Row(Loc.T("Patterns…"), _ => EditorPatterns.OpenTab(0)));
+                }
+            }
 
             const float rowH = 30f, padY = 6f, width = 190f;
             float y = -padY;

@@ -214,6 +214,7 @@ namespace Sapphire
             private static readonly double[] _perfMs = new double[28];
             private static readonly double[] _perfMax = new double[28];
         private static bool _leftTabsReg;
+        private static bool _expFailLogged;
         private static int _perfFrames;
 
             /* Lap timer: banks the elapsed slice into module i (no allocations). Reads the raw
@@ -289,6 +290,10 @@ namespace Sapphire
                 EditorHzTool.Tick();
                 PanelLayout.Tick();
                 EditorShapeLibrary.Tick(); Acc(27);
+                // Experimental modules get their own catch: an exception here must not take
+                // down every module ticked after them (there is no per-module guard otherwise).
+                try { EditorPatterns.Tick(); EditorTrackKit.Tick(); }
+                catch (Exception ex) { if (!_expFailLogged) { _expFailLogged = true; SapphireLog.Log("Experimental tick failed: " + ex); } }
                 EditorMasterSwitch.Tick(); Acc(23);
                 EditorKeyHints.Tick();
                 UI.PanelKit.TickFocus(); // DE-style bring-to-front for floating windows
@@ -329,6 +334,8 @@ namespace Sapphire
                             () => EditorDecoTools.IsOpen, EditorDecoTools.SetOpen);
                         UI.PanelKit.RegisterTabbable(EditorHzTool.Kit, Loc.T("Hz tool"), null,
                             () => EditorHzTool.IsOpen, EditorHzTool.SetOpen);
+                        UI.PanelKit.RegisterTabbable(EditorPatterns.Kit, Loc.T("Patterns"), EditorPatterns.TabAvailable,
+                            () => EditorPatterns.IsOpen, EditorPatterns.SetOpen);
                         UI.PanelKit.RegisterTabbable(EditorEventTray.Kit, Loc.T("Tray"), EditorEventTray.TabAvailable,
                             () => EditorEventTray.IsOpen, EditorEventTray.SetOpen);
                         UI.PanelKit.RegisterTabbable(EditorVariables.Kit, Loc.T("Variables"), EditorVariables.TabAvailable,
@@ -479,6 +486,8 @@ namespace Sapphire
             EditorEventSelector.Dispose();
             EditorQuickChart.Dispose();
             EditorHzTool.Dispose();
+            EditorPatterns.Dispose();
+            EditorTrackKit.Dispose();
             GhostPreview.Dispose();
             EditorMasterSwitch.Dispose();
             EditorKeyHints.Dispose();

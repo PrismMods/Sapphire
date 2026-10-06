@@ -20,6 +20,7 @@ namespace Sapphire
         QuickChart,
         QcSwirl, QcSetSpeed, QcSpeedDown, QcSpeedUp, QcPause, QcLocate, QcAnglePad, QcMoveTrack, QcHold, QcEdit,
         ToolPrev, ToolSlot, ToolSlotSave, HzTool,
+        ExPatterns, ExHideTile, ExPlaceSegment,
     }
 
     /* Sapphire's rebindable keys.
@@ -70,6 +71,12 @@ namespace Sapphire
             new Def(Bind.ToolSlotSave, "Tools",       "Save current tool to slot",  KeyCode.Period, true),
             // 'F' is one of the free letters (not a tile-placement key), so Shift+F is clear.
             new Def(Bind.HzTool,       "Tools",       "Hz tool",                    KeyCode.F, true),
+
+            // Experimental tools ship unbound: no default can be proven clear of every chord a
+            // charter already uses, and these only exist while the experimental switch is on.
+            new Def(Bind.ExPatterns,     "Experimental", "Patterns panel",          KeyCode.None, false),
+            new Def(Bind.ExHideTile,     "Experimental", "Hide / show tile",        KeyCode.None, false),
+            new Def(Bind.ExPlaceSegment, "Experimental", "Place track segment",     KeyCode.None, false),
         };
 
         // Bumped on every change. Per-frame consumers (the key-hint card) fold this into their

@@ -749,6 +749,22 @@ Capture a tile (Inspector), then + Save capture. Click a preset to load it as th
 <b>Note</b>
 Presets persist across sessions.");
 
+            Add(d, "SapphirePatterns", "Patterns (experimental)",
+@"<b>What it does</b>
+Writes repeated events as one pattern instead of one at a time. Everything it writes is ordinary game events.
+
+<b>Tabs</b>
+Train — the captured events every N beats across a tile range. Beats are musical: subdivisions and magic shapes don't change the spacing, a real tempo change does.
+Ramp — copies of one captured event with fields moving from start to end through an ease, one per tile or all on its own tile (a cascade).
+Camera — zoom punch / rotation sway pulses: a set plus a tween back, every N beats.
+Retime — one BPM SetSpeed per tile so a free-angle run keeps an even rhythm (1/N beat, or the run's own length). The tile after the range gets its old speed back.
+
+<b>How to use</b>
+Build the events on a tile with the game's inspector, select that tile, Capture. Set the range (Sel = selection), then write. One write = one undo.
+
+<b>Note</b>
+Needs Experimental tools on (Features tab). The tile menu adds Hide / show tile and Place track segment.");
+
             Add(d, "SapphireCameraCard", "Camera keyframe card",
 @"<b>What it does</b>
 Details for the selected camera keyframe: floor, relativeTo, offset, zoom, rotation, duration, ease. ▶ previews the move on the overlay box.");

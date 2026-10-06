@@ -508,6 +508,28 @@ release asset, and archive entries that would escape the mods folder are rejecte
 
 ---
 
+## Experimental: patterns & technical kit
+
+Off by default — turn on **Experimental tools** on the Features tab. Built from a scan of 295
+published charts (`tools/chart-scan`): most repeated events there are placed one at a time.
+Everything below writes ordinary game events, one undo per write.
+
+- **Patterns panel** (panel rail · *Patterns*). Build events on a tile with the game's inspector,
+  select it, **Capture**, then:
+  - **Train** — the captured events every N beats across a tile range. Beats are musical:
+    subdivisions and magic shapes keep the spacing, a real tempo change re-derives it.
+  - **Ramp** — copies of one captured event with fields moving start → end through an ease;
+    one per tile, or all on its own tile (a cascade, e.g. MoveTrack angle offsets stepping by 25).
+  - **Camera** — zoom punch / rotation sway pulses (a set plus a tween back) every N beats.
+  - **Retime** — one BPM SetSpeed per tile so a free-angle run keeps an even rhythm: uniform 1/N
+    beat, or *Fit run* (keeps the run's length). The tile after the range gets its old speed back;
+    holds, pauses and free-roam in the range are refused.
+- **Tile menu** (right-click) — *Hide / show tile* (PositionTrack opacity 0 on just that tile;
+  hidden tiles get a dotted ring while editing), *Place track segment* (move the mouse, click to
+  drop; snaps to ½ tile, Alt for free, Esc cancels), and on a multi-selection *Retime…* /
+  *Patterns…*.
+- Keybinds for all three ship **unbound** (Keybinds tab → Experimental).
+
 ## Playback & misc tweaks
 
 - **Practice pitch** — `scnEditor.playbackSpeed` (the game's native lever; hitsounds follow).

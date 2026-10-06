@@ -438,7 +438,7 @@ namespace Sapphire
             catch (Exception ex) { SapphireLog.Log("QuickChart: add PositionTrack failed: " + ex.Message); }
         }
 
-        private static bool SetNum(ADOFAI.LevelEvent ev, string key, double val)
+        internal static bool SetNum(ADOFAI.LevelEvent ev, string key, double val)
         {
             try
             {
@@ -479,7 +479,7 @@ namespace Sapphire
         // PositionTrack.positionOffset) come DISABLED and their value doesn't apply until enabled.
         // Clear the disable so the value we just set actually takes effect (matches the inspector
         // radio being on). Idempotent for always-on properties.
-        private static void Enable(ADOFAI.LevelEvent ev, string key)
+        internal static void Enable(ADOFAI.LevelEvent ev, string key)
         {
             try { if (ev.disabled != null) ev.disabled[key] = false; } catch { }
         }

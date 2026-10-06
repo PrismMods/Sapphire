@@ -75,6 +75,9 @@ namespace Sapphire
         public bool FeatToolsMods = true;     // MSM & MH tools (magic shape, track, deco)
         public bool FeatFileBar = true;       // Sapphire file chip / menu bar
         public bool FeatQuickChart = false;   // quick-chart mode (toolbar Q): keybinds + angle pad, hides timeline
+        // Patterns panel + technical kit (retime, hide tiles, place segments). Off by default:
+        // the tools are new and their UI will move once the navigation rework lands.
+        public bool FeatExperimental = false;
         public bool EditorKeyHints = true;    // bottom-right on-screen keybind card
         // Presets window follows the Inspector tool by default; on, it stays up on its own.
         public bool EventPresetsFloating = false;
