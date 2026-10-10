@@ -40,6 +40,50 @@ static class T {
     Check(NearDeg(t[2].Tail, 0), "back of tile 2 points at the stub, got " + t[2].Tail);
     Check(Near(t[3].X, -1) && Near(t[3].Beat, 2), "continues left, 1 beat later, got x=" + t[3].X + " beat=" + t[3].Beat);
     Check(Near(t[t.Length - 1].Sweep, 0) && NearDeg(t[t.Length - 1].TrackAngle, 180), "last tile rests, straight shape");
+    // 5. Planet keys: snap both on each hit, then sweep the orbiter; durations in HOST beats.
+    t = MultitrackLayout.Build(new List<double> { 0 }, null, 1);
+    var k = MultitrackLayout.Planets(t, 0, 120, 240);
+    Check(k.Count == 3, "straight 2-tile track: snap, sweep, snap; got " + k.Count);
+    Check(k[0].Both && Near(k[0].Offset, 0) && NearDeg(k[0].Rotation, 180), "tile 0 snap at 0, orbiter at the back");
+    Check(!k[1].Both && Near(k[1].Rotation, 0) && Near(k[1].Duration, 0.5), "sweep 180 CW to 0 over 0.5 host beat at 2x");
+    Check(k[2].Both && Near(k[2].Offset, 90) && Near(k[2].X, 1), "tile 1 snap at 90 deg, x=1");
+    t = MultitrackLayout.Build(new List<double> { 90 }, new HashSet<int> { 0 }, 1);
+    k = MultitrackLayout.Planets(t, 0, 120, 120);
+    Check(Near(k[1].Rotation, 450) && Near(k[1].Duration, 1.5), "CCW sweep counts up: 180 -> 450 over 1.5, got " + k[1].Rotation);
+    t = MultitrackLayout.Build(new List<double> { 0, 999, 180 }, null, 1);
+    k = MultitrackLayout.Planets(t, 0, 120, 120);
+    Check(k.Count == 5, "midspin tile emits nothing: 0 snap+sweep, 2 snap+sweep, 3 snap; got " + k.Count);
+    Check(k[2].Both && Near(k[2].Offset, 180) && Near(k[2].X, 0), "tile after the midspin snaps back onto tile 0 at beat 1");
+    Check(Near(MultitrackLayout.HostOffset(2, 1, 120, 240), 360), "offset = 180*(start + beat*host/fake)");
+    Check(Near(MultitrackLayout.RevealOffset(1), 0) && Near(MultitrackLayout.RevealOffset(5), 540), "reveal 2 host beats early, clamped at 0");
+    t = MultitrackLayout.Build(new List<double> { 0, 0 }, null, 1);
+    Check(Near(MultitrackLayout.LeaveOffset(t, 0, 0, 120, 120), 180) && Near(MultitrackLayout.EndOffset(t, 0, 120, 120), 540), "leave = next hit; end = last hit + 1 beat");
+    // 6. Tokens: smt1 is not a prefix match for smt12.
+    Check(MultitrackLayout.HasToken("smt1 smt1f3", "smt1f3") && !MultitrackLayout.HasToken("smt12 smt12f3", "smt1"), "exact tag tokens");
+    // 7. Edits mirror the editor: insert after the cursor, twirls ride their tiles.
+    var m = new MultitrackModel();
+    int c = m.Insert(0, 0); c = m.Insert(c, 90); c = m.Insert(c, 0);
+    Check(c == 3 && m.TileCount == 4, "three inserts at the end make 4 tiles");
+    m.ToggleTwirl(2);
+    c = m.Insert(1, 45);
+    Check(c == 2 && m.Angles[1] == 45 && m.Angles[2] == 90, "mid insert: cursor exit becomes 45, new tile keeps the old exit");
+    Check(m.Twirls.Contains(3) && !m.Twirls.Contains(2), "twirl after the cursor shifts with its tile");
+    Check(m.Delete(0) == -1 && m.TileCount == 5, "tile 0 cannot be deleted");
+    c = m.Delete(3);
+    Check(c == 2 && m.TileCount == 4 && !m.Twirls.Contains(3), "delete removes the tile and its twirl");
+    c = m.Delete(m.TileCount - 1);
+    Check(c == 2 && m.TileCount == 3, "deleting the last tile");
+    c = m.Insert(m.TileCount - 1, 999);
+    Check(m.Angles[m.Angles.Count - 1] == 999, "midspin key turns the cursor tile into a midspin");
+    // 8. Persistence round trip and clamps.
+    m.Id = 12; m.Bpm = 234; m.HostBpm = 117; m.StartBeat = 4; m.Size = 1.5; m.OriginX = -2; m.OriginY = 3.5;
+    var back = MultitrackModel.Parse(m.Serialize());
+    Check(back != null && back.Id == 12 && Near(back.Bpm, 234) && Near(back.HostBpm, 117) && Near(back.Size, 1.5) && Near(back.OriginY, 3.5), "round trip scalars");
+    Check(back != null && back.Angles.Count == m.Angles.Count && back.Angles[back.Angles.Count - 1] == 999, "round trip angles");
+    Check(back != null && back.Twirls.SetEquals(m.Twirls) && back.Tag == "smt12", "round trip twirls + tag");
+    Check(MultitrackModel.Parse("113.5 BPM") == null && MultitrackModel.Parse(null) == null, "a normal editor comment is not ours");
+    var bad = MultitrackModel.Parse(MultitrackModel.Prefix + " v1 id=1 bpm=0 start=-3 size=0");
+    Check(bad != null && bad.Bpm >= 1 && bad.StartBeat >= 0 && bad.Size > 0, "bpm/start/size clamp");
     Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");
     Environment.Exit(fails == 0 ? 0 : 1);
   }
