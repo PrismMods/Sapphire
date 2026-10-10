@@ -528,6 +528,13 @@ Everything below writes ordinary game events, one undo per write.
   hidden tiles get a dotted ring while editing), *Place track segment* (move the mouse, click to
   drop; snaps to ½ tile, Alt for free, Esc cancels), and on a multi-selection *Retime…* /
   *Patterns…*.
+- **Multitrack** (tile menu · *Create multitrack here*). A decorative second track charted with
+  the normal tile keys: they add fake tiles after a cursor ring, Backspace deletes, ←/→ move,
+  **I** twirls, Esc leaves. Two fake planets play it at its own BPM, starting a set number of host
+  beats after the host tile. The palette sets BPM, start, size, colours, hiding outside the run and
+  fading passed tiles. Each edit touches only that track's decorations, never the level's others,
+  and stays one undo step. It is saved in an editor comment on the host, so the level plays
+  without the mod.
 - Keybinds for all three ship **unbound** (Keybinds tab → Experimental).
 
 ## Playback & misc tweaks

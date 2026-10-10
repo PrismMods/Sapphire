@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using Sapphire.UI;
 
@@ -151,8 +152,8 @@ namespace Sapphire
         {
             scnEditor ed = null;
             try { ed = scnEditor.instance; } catch { }
-            if (!Available(ed)) { if (Editing) Exit(); return; }
-            if (!Editing) { WatchSelection(ed); return; }
+            if (!Available(ed)) { if (Editing) Exit(); K.Show(false); return; }
+            if (!Editing) { K.Show(false); WatchSelection(ed); return; }
 
             // Clicking a real tile or Esc leaves edit mode.
             if (Input.GetKeyDown(KeyCode.Escape) || (ed.selectedFloors != null && ed.selectedFloors.Count > 0)) { Exit(); return; }
@@ -166,6 +167,7 @@ namespace Sapphire
                 _jumpPending = false;
                 if (!InView(ed, _cursorObj.transform.position)) { try { ed.MoveCameraToDecoration(_cursorDeco); } catch { } }
             }
+            TickPalette(ed);
         }
 
         // False when the multitrack is gone (deleted, or undone past its creation).
@@ -239,11 +241,79 @@ namespace Sapphire
             try { ed.ShowNotification(msg); } catch { }
         }
 
+        private static readonly PanelKit K = new PanelKit("SapphireMultitrack", 945, PanelKit.PaletteW, focusable: true);
+        private static long _sig = long.MinValue;
+
+        // Palette while editing. Its number rows scrub; every change is one Write (one undo).
+        // Reads the cached model; a full lookup per frame would walk every event in the level.
+        private static void TickPalette(scnEditor ed)
+        {
+            var m = Editing ? _model : null;
+            if (m == null) { K.Show(false); return; }
+            long sig = (m.Id * 31L + m.TileCount) * 31L + (m.HideOutside ? 1 : 0) * 2 + (m.FadePassed ? 1 : 0);
+            if (K.SyncWidth()) _sig = long.MinValue;
+            if (!K.Built || sig != _sig) { _sig = sig; BuildPalette(m); }
+            K.Show(true);
+            K.TickScroll();
+        }
+
+        private static void BuildPalette(MultitrackModel m)
+        {
+            K.LblW = PanelKit.PaletteLblW;
+            K.Scrollable = true;
+            K.DefaultH = 360f;
+            K.Rebuild(Loc.T("Multitrack") + " · " + Loc.T("experimental"), Exit, new Vector2(360f, -140f));
+            ResizeHandle.AttachAll((RectTransform)K.PanelGo.transform, true, PanelKit.PaletteMinW, PanelKit.PaletteMinH);
+            float y = -34f;
+            y = K.FloatRow(y, Loc.T("BPM"), (float)m.Bpm, v => Apply(x => x.Bpm = Math.Max(1, v)));
+            y = K.FloatRow(y, Loc.T("Start (host beats)"), (float)m.StartBeat, v => Apply(x => x.StartBeat = Math.Max(0, v)));
+            y = K.FloatRow(y, Loc.T("Size"), (float)m.Size, v => Apply(x => x.Size = Math.Max(0.1, v)));
+            y = K.FieldRow(y, Loc.T("Track colour"), m.TrackColor, v => Apply(x => x.TrackColor = Hex(v, x.TrackColor)));
+            y = K.FieldRow(y, Loc.T("Planet colour"), m.PlanetColor, v => Apply(x => x.PlanetColor = Hex(v, x.PlanetColor)));
+            y = K.ToggleRow(y, Loc.T("Hidden outside its run"), m.HideOutside, v => Apply(x => x.HideOutside = v));
+            y = K.ToggleRow(y, Loc.T("Fade passed tiles"), m.FadePassed, v => Apply(x => x.FadePassed = v));
+            y = K.PrimaryRow(y, Loc.T("Twirl on cursor tile"), () => Apply(x => x.ToggleTwirl(_cursor)));
+            y = K.PrimaryRow(y, Loc.T("Rebuild"), Rebuild);
+            y = K.PrimaryRow(y, Loc.T("Delete multitrack"), DeleteCurrent);
+            K.Status(Loc.T("Tile keys add after the cursor · Backspace deletes · ←/→ move · I twirls · Esc exits"), y);
+            y -= 32f;
+            K.SetHeight(y);
+        }
+
+        // 6-digit hex only; anything else keeps the old colour.
+        private static string Hex(string v, string old)
+        {
+            v = (v ?? "").Trim().TrimStart('#').ToLowerInvariant();
+            if (v.Length != 6) return old;
+            foreach (char c in v) if (!Uri.IsHexDigit(c)) return old;
+            return v;
+        }
+
+        /* Recovery only: rewrite, then ONE full decoration reload. The edit path never does this,
+           but if a game update leaves an object behind, this puts the scene back in step. */
+        private static void Rebuild()
+        {
+            var ed = scnEditor.instance;
+            Apply(_ => { });
+            try { ed.UpdateDecorationObjects(); } catch { }
+        }
+
+        private static void DeleteCurrent()
+        {
+            var ed = scnEditor.instance;
+            int host;
+            var m = Current(out host);
+            if (m == null) return;
+            try { MultitrackWriter.Delete(ed, host, m); } catch (Exception ex) { SapphireLog.Log("Multitrack: delete failed: " + ex); }
+            Exit();
+        }
+
         internal static void Dispose()
         {
             Exit();
             if (_ring != null) UnityEngine.Object.Destroy(_ring);
             _ring = null;
+            K.Dispose(); _sig = long.MinValue;
         }
     }
 }

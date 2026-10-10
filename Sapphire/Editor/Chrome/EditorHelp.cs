@@ -765,6 +765,16 @@ Build the events on a tile with the game's inspector, select that tile, Capture.
 <b>Note</b>
 Needs Experimental tools on (Features tab). The tile menu adds Hide / show tile and Place track segment.");
 
+            Add(d, "SapphireMultitrack", "Multitrack (experimental)",
+@"<b>What it does</b>
+A second, decorative track that two fake planets play at their own BPM. Everything it writes is ordinary decorations and events, so the level plays without the mod.
+
+<b>How to use</b>
+Right-click a tile → Create multitrack here. The tile keys now add fake tiles after the cursor ring; Backspace deletes, ←/→ move the cursor, I toggles a twirl, Esc leaves. Select any fake tile later to keep editing. Drag the first fake tile to move the whole track.
+
+<b>Note</b>
+Each edit touches only this track's own decorations — never the level's others. Rebuild forces one full reload if the scene ever falls out of step.");
+
             Add(d, "SapphireCameraCard", "Camera keyframe card",
 @"<b>What it does</b>
 Details for the selected camera keyframe: floor, relativeTo, offset, zoom, rotation, duration, ease. ▶ previews the move on the overlay box.");
