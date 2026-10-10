@@ -1333,14 +1333,20 @@ namespace Sapphire
                 UnityEngine.Object.Destroy(_gridContent.GetChild(i).gameObject);
 
             string cur = CurrentFilter(_target);
-            string q = (_search ?? "").Trim().ToLowerInvariant();
+            string q = (_search ?? "").Trim();
             float cellW = (_gridView.rect.width - GridPad * (GridCols - 1)) / GridCols;
             int made = 0;
+            var shown = new List<KeyValuePair<int, (string full, string cat, string name)>>();
             foreach (var f in Active)
             {
                 if (_category != null && f.cat != _category) continue;
-                if (q.Length > 0 && !f.full.ToLowerInvariant().Contains(q)
-                    && !f.name.ToLowerInvariant().Contains(q)) continue;
+                int sc = PrismBridge.ScoreAny(q, f.name, f.full);
+                if (sc >= 0) shown.Add(new KeyValuePair<int, (string, string, string)>(sc, f));
+            }
+            if (q.Length > 0) UI.SettingsSearch.StableSortByKey(shown);
+            foreach (var kv in shown)
+            {
+                var f = kv.Value;
                 int col = made % GridCols, row = made / GridCols;
                 MakeFilterCell(f, f.full == cur, col * (cellW + GridPad), -row * (CellH + 6f), cellW);
                 made++;

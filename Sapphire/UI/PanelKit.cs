@@ -1580,10 +1580,19 @@ namespace Sapphire.UI
         }
 
         internal float FloatRow(float y, string label, float value, Action<float> set, string fmt = "0.###")
-            => FieldRow(y, label, value.ToString(fmt), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); });
+            => NumRow(y, label, value.ToString(fmt), v => { float f; if (ExprEval.TryParseFloat(v, out f)) set(f); }, false);
 
         internal float IntRow(float y, string label, int value, Action<int> set)
-            => FieldRow(y, label, value.ToString(), v => { int n; if (ExprEval.TryParseInt(v, out n)) set(n); });
+            => NumRow(y, label, value.ToString(), v => { int n; if (ExprEval.TryParseInt(v, out n)) set(n); }, true);
+
+        // FieldRow whose label scrubs the number (drag) — see ScrubLabel.
+        private float NumRow(float y, string label, string value, Action<string> commit, bool isInt)
+        {
+            var l = Label(label, Pad, y, LblW, RowH, Theme.TextMuted);
+            var f = InputField(Pad + LblW + 4f, y, W - Pad * 2f - LblW - 4f, value, commit);
+            ScrubLabel.Attach(l.gameObject, f.GetComponent<TMP_InputField>(), isInt);
+            return y - (RowH + Gap);
+        }
 
         // [label] [a] [b] — two int fields
         internal float PairRow(float y, string label, Func<int> getA, Func<int> getB, Action<int, int> set)

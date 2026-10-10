@@ -474,6 +474,16 @@ type `180*2`, `100/3`, `(1+2)*45` or `360/8` and the field evaluates on commit. 
 window. While a field has the keyboard, digits and Enter never reach palette or toolbar
 shortcuts.
 
+**Drag a number's label to scrub it** — in the event, level and decoration inspectors and the
+palettes' number rows. Hold **Shift** for fine steps, **Ctrl/Cmd** for coarse ones; the cursor
+wraps at the window edge, so a drag never runs out of room. The value commits once on release,
+as one undo step. **Middle-click** an inspector label to restore the game's default. Fields
+driven by a formula don't scrub.
+
+**Search boxes rank their results** — event picker, filter browser, settings search and the
+manual's index. Letters in order are enough (`mvcam` finds *Move Camera*), and exact and prefix
+matches come first.
+
 ---
 
 ## Updates
@@ -528,6 +538,16 @@ Everything below writes ordinary game events, one undo per write.
   hidden tiles get a dotted ring while editing), *Place track segment* (move the mouse, click to
   drop; snaps to ½ tile, Alt for free, Esc cancels), and on a multi-selection *Retime…* /
   *Patterns…*.
+- **Multitrack** (tile menu · *Create multitrack here*). A decorative second track charted with
+  the normal tile keys: they add fake tiles after a cursor ring, Backspace deletes, ←/→ move,
+  **I** twirls, Esc leaves. Two fake planets play it at its own BPM, starting a set number of host
+  beats after the host tile. The palette sets BPM, start, size, colours, hiding outside the run and
+  fading passed tiles, a **fake end tile** (Portal icon on the last tile) and a **hit event tag**:
+  events carrying that event tag are copied onto every fake hit (keep the originals off). The
+  editor's direction-button ring follows the cursor, and the key pointing back deletes, as on a
+  real tile. Each edit touches only that track's decorations, never the level's others,
+  and stays one undo step. It is saved in an editor comment on the host, so the level plays
+  without the mod.
 - Keybinds for all three ship **unbound** (Keybinds tab → Experimental).
 
 ## Playback & misc tweaks

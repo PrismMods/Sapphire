@@ -120,7 +120,7 @@ namespace Sapphire
             }
             // Enabled + can-disable: clicking the label row also toggles (a transparent hit over the
             // label only — clear of the field below).
-            if (canDisable) LabelToggle(content, x, y, w, 16f, toggleDisabled);
+            var lblHit = canDisable ? LabelToggle(content, x, y, w, 16f, toggleDisabled) : null;
             string k = key;
             var e2 = evt;
             var p2 = pi;
@@ -252,7 +252,11 @@ namespace Sapphire
             // browse button on exactly the field that most needs one.
             bool isFile = false;
             try { isFile = pi.type == ADOFAI.PropertyType.File; } catch { }
-            Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
+            // A LongString (an editor comment) is multi-line in vanilla; one line hid all but its start.
+            bool longText = false;
+            try { longText = pi.type == ADOFAI.PropertyType.LongString; } catch { }
+            int lines = longText ? 3 : 1;
+            var lblGo = Label(content, lbl, x, y, w, 16f, lblCol); y -= 18f;
             /* data[key] holds the BOXED, TYPED value. Anything the branches above didn't claim
                would be rendered by FormatVal as a type name and written back by CommitText as
                a STRING — that is what destroys a particle's FloatPair/gradient values. Show it
@@ -270,8 +274,17 @@ namespace Sapphire
             float inputW = w - (rightW > 0f ? rightW + Gap : 0f);
             bool numeric = val is int || val is long || val is float || val is double;
             string shown = numeric ? LevelVars.FormulaOf(e2, k) ?? FormatVal(val) : FormatVal(val);
-            var field = InputRow(content, x, y, inputW, shown, sv => CommitText(c, ed, e2, p2, k, sv, val));
+            var field = InputRow(content, x, y, inputW, shown, sv => CommitText(c, ed, e2, p2, k, sv, val), lines);
             if (numeric) MarkFormula(field, e2, k, FormatVal(val));
+            /* Drag the label to scrub; middle-click restores the game's registry default. Skipped for
+               formula-driven fields, which a scrub would overwrite with a plain number. Where the
+               label also toggles the property, the scrub rides that hit target (it sits on top). */
+            if (numeric && LevelVars.FormulaOf(e2, k) == null)
+            {
+                double? def = null;
+                try { if (p2.value_default != null) def = Convert.ToDouble(p2.value_default); } catch { }
+                UI.ScrubLabel.Attach(lblHit ?? lblGo, field, val is int || val is long, def);
+            }
             // The artist field gets the game's verified-artist autocomplete (name + approval badge).
             if (k == "artist" && e2.eventType == ADOFAI.LevelEventType.LevelSettings)
                 EditorArtistPicker.Bind(field, sv => CommitText(c, ed, e2, p2, k, sv, val));
@@ -304,7 +317,7 @@ namespace Sapphire
                 Cell(content, Loc.T("Audio"), x + inputW + Gap, y, rightW, RowH,
                     () => { EditorVisualizer.Open(); EditorVisualizer.Kit.BringToFront(); }, true);
             }
-            return y - (RowH + Gap);
+            return y - (RowH * lines + Gap);
         }
 
         // ── commits ──────────────────────────────────────────────────────────
@@ -488,9 +501,9 @@ namespace Sapphire
         // Transparent, raycastable hit target over a property's label so clicking the label toggles
         // its enable radio. Sits under the non-raycast label text; covers only the label height so
         // it never steals clicks from the field below.
-        private static void LabelToggle(RectTransform content, float x, float y, float w, float h, Action onClick)
+        private static GameObject LabelToggle(RectTransform content, float x, float y, float w, float h, Action onClick)
         {
-            if (onClick == null) return;
+            if (onClick == null) return null;
             var go = new GameObject("LblHit", typeof(RectTransform));
             go.transform.SetParent(content, false);
             var r = (RectTransform)go.transform;
@@ -502,6 +515,7 @@ namespace Sapphire
             bg.color = new Color(0f, 0f, 0f, 0.01f); // invisible but catches the click
             bg.raycastTarget = true;
             UI.ClickHandler.Attach(go, onClick);
+            return go;
         }
 
         // RowH-square colour chip for a hex string; magenta marks an unparseable value.
@@ -537,7 +551,7 @@ namespace Sapphire
                 ? col : Color.magenta;
         }
 
-        internal static void Label(RectTransform content, string text, float x, float y, float w, float h, Color color)
+        internal static GameObject Label(RectTransform content, string text, float x, float y, float w, float h, Color color)
         {
             var go = new GameObject("L", typeof(RectTransform));
             go.transform.SetParent(content, false);
@@ -550,6 +564,7 @@ namespace Sapphire
             t.textWrappingMode = TextWrappingModes.NoWrap;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
+            return go;
         }
 
         // A 2-option enum as a side-by-side segmented toggle (label row already emitted): the
@@ -595,7 +610,8 @@ namespace Sapphire
             return bg;
         }
 
-        internal static TMP_InputField InputRow(RectTransform content, float x, float y, float w, string value, Action<string> commit)
+        internal static TMP_InputField InputRow(RectTransform content, float x, float y, float w, string value, Action<string> commit,
+                                                int lines = 1)
         {
             var go = new GameObject("F", typeof(RectTransform));
             go.transform.SetParent(content, false);
@@ -603,7 +619,7 @@ namespace Sapphire
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f);
             r.pivot = new Vector2(0f, 1f);
             r.anchoredPosition = new Vector2(x, y);
-            r.sizeDelta = new Vector2(w, RowH);
+            r.sizeDelta = new Vector2(w, RowH * lines);
             var bg = go.AddComponent<RoundedRectGraphic>();
             bg.Radius = 5f;
             bg.color = new Color(1f, 1f, 1f, 0.08f);
@@ -613,11 +629,14 @@ namespace Sapphire
             txtGo.transform.SetParent(go.transform, false);
             var tr = (RectTransform)txtGo.transform;
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-            tr.offsetMin = new Vector2(7f, 0f); tr.offsetMax = new Vector2(-7f, 0f);
-            var txt = UIBuilder.Tmp(txtGo, value, 12f, TextAnchor.MiddleLeft, Theme.Text);
+            bool multi = lines > 1;
+            tr.offsetMin = new Vector2(7f, multi ? 4f : 0f); tr.offsetMax = new Vector2(-7f, multi ? -4f : 0f);
+            var txt = UIBuilder.Tmp(txtGo, value, 12f, multi ? TextAnchor.UpperLeft : TextAnchor.MiddleLeft, Theme.Text);
             txt.richText = false;
+            if (multi) txt.textWrappingMode = TextWrappingModes.Normal;
             var field = UIBuilder.BuildInputField(go, txt);
-            field.lineType = TMP_InputField.LineType.SingleLine;
+            // Enter makes a new line in a multi-line field; it commits when focus leaves.
+            field.lineType = multi ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;
             field.text = value;
             field.onEndEdit.AddListener(v => commit(v));
             return field;

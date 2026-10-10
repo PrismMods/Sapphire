@@ -58,27 +58,33 @@ namespace Sapphire.UI
             var result = new List<Result>();
             if (string.IsNullOrWhiteSpace(q)) return result;
             q = q.Trim();
-            foreach (var e in _entries) // label prefix matches rank first
-                if (e.Label.StartsWith(q, StringComparison.OrdinalIgnoreCase))
-                    AddUnique(result, e, null, max);
+            // Ranked, best first; a keyword hit ranks below any label hit and is shown with the hit.
+            var scored = new List<KeyValuePair<int, Result>>();
             foreach (var e in _entries)
             {
-                if (result.Count >= max) break;
-                if (e.Label.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
-                    AddUnique(result, e, null, max);
-            }
-            foreach (var e in _entries) // keyword matches rank last, shown with the hit
-            {
-                if (result.Count >= max) break;
-                if (e.Keywords == null) continue;
-                foreach (var k in e.Keywords)
-                    if (k.Length > 0 && k.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                int best = PrismBridge.Score(e.Label, q);
+                string via = null;
+                if (e.Keywords != null)
+                    foreach (var k in e.Keywords)
                     {
-                        AddUnique(result, e, k, max);
-                        break;
+                        int ks = PrismBridge.Score(k, q);
+                        if (ks >= 0 && (best < 0 || ks + 5000 < best)) { best = ks + 5000; via = k; }
                     }
+                if (best >= 0) scored.Add(new KeyValuePair<int, Result>(best, new Result { E = e, Via = via }));
             }
+            StableSortByKey(scored);
+            foreach (var kv in scored) AddUnique(result, kv.Value.E, kv.Value.Via, max);
             return result;
+        }
+
+        // List.Sort is unstable; equal scores must keep build order (tab order) or results shuffle.
+        internal static void StableSortByKey<T>(List<KeyValuePair<int, T>> items)
+        {
+            var idx = new int[items.Count];
+            for (int i = 0; i < idx.Length; i++) idx[i] = i;
+            var copy = items.ToArray();
+            Array.Sort(idx, (a, b) => { int c = copy[a].Key.CompareTo(copy[b].Key); return c != 0 ? c : a.CompareTo(b); });
+            for (int i = 0; i < idx.Length; i++) items[i] = copy[idx[i]];
         }
 
         private static void AddUnique(List<Result> list, Entry e, string via, int max)
