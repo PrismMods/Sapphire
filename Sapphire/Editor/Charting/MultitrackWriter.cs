@@ -112,7 +112,9 @@ namespace Sapphire
                 var mine = new List<LevelEvent>();
                 foreach (var d in ed.levelData.decorations)
                     if (d != null && MultitrackLayout.HasToken(Str(d, "tag"), m.Tag)) mine.Add(d);
-                for (int i = mine.Count - 1; i >= 0; i--) RemoveDecoration(ed, mine[i]);
+                bool sel = false;
+                for (int i = mine.Count - 1; i >= 0; i--) sel |= RemoveDecoration(ed, mine[i]);
+                if (mine.Count > 0) AfterRemovals(ed, sel);
                 ed.events.RemoveAll(e => e != null && IsOurs(e, m));
             }
         }
@@ -154,7 +156,9 @@ namespace Sapphire
             var gone = new List<int>();
             foreach (var kv in have) if (kv.Key >= tiles.Length) gone.Add(kv.Key);
             gone.Sort();
-            for (int i = gone.Count - 1; i >= 0; i--) RemoveDecoration(ed, have[gone[i]]);
+            bool sel = false;
+            for (int i = gone.Count - 1; i >= 0; i--) sel |= RemoveDecoration(ed, have[gone[i]]);
+            if (gone.Count > 0) AfterRemovals(ed, sel);
         }
 
         // Returns true when any field changed, so an unchanged tile costs no Setup call.
@@ -225,23 +229,38 @@ namespace Sapphire
         /* One decoration out, with no reload. levelData.decorations and the manager's allDecorations
            are index-aligned (GetDecoration(int) is how the editor's list selects), so both lose the
            same index. Fake floors and planets are object decorations, so the private texture cache
-           (visual decorations only) never held them. */
-        private static void RemoveDecoration(scnEditor ed, LevelEvent e)
+           (visual decorations only) never held them. Returns true when it was selected; the caller
+           then runs AfterRemovals once for the batch. */
+        private static bool RemoveDecoration(scnEditor ed, LevelEvent e)
         {
             var list = ed.levelData.decorations;
             int idx = list.IndexOf(e);
-            if (idx < 0) return;
+            if (idx < 0) return false;
             list.RemoveAt(idx);
-            try { ed.selectedDecorations.Remove(e); } catch { }
+            bool wasSelected = false;
+            try { wasSelected = ed.selectedDecorations.Remove(e); } catch { }
             var mgr = scrDecorationManager.instance;
             var obj = ObjectOf(e);
-            if (mgr == null || obj == null) return;
+            if (mgr == null || obj == null) return wasSelected;
             int oi = mgr.allDecorations.IndexOf(obj);
             if (oi != idx) SapphireLog.Log("Multitrack: decoration index drift " + oi + " vs " + idx);
             mgr.allDecorations.Remove(obj);
             foreach (var l in mgr.taggedDecorations.Values) l.Remove(obj);
             foreach (var l in mgr.hitboxEventTagDecorations.Values) l.Remove(obj);
             UnityEngine.Object.DestroyImmediate(obj.gameObject);
+            return wasSelected;
+        }
+
+        /* What vanilla RemoveEvent does besides the reload: DecorationsArray flags the editor's
+           decoration list only on Add/Insert, so a removal leaves a stale row whose click selects a
+           shifted index; and a removed selected decoration leaves the gizmo and inspector on an
+           orphan LevelEvent. */
+        private static void AfterRemovals(scnEditor ed, bool selectionChanged)
+        {
+            try { ed.propertyControlDecorationsList.OnDecorationUpdate(); } catch { }
+            if (!selectionChanged) return;
+            try { ed.decTransformGizmo.UpdateGizmosVisibility(); } catch { }
+            try { ed.levelEventsPanel.HideAllInspectorTabs(); } catch { }
         }
 
         // ── events ─────────────────────────────────────────────────────

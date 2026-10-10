@@ -96,6 +96,7 @@ namespace Sapphire
             try
             {
                 if (ed.playMode) return false;
+                if (EditorMultitrack.Editing) return false;   // W/A/S/D place fake tiles there
                 if (ed.selectedFloors != null && ed.selectedFloors.Count > 0) return false;
                 if (ed.userIsEditingAnInputField) return false;
                 // Sapphire's own TMP fields (event selector search etc.) don't set the

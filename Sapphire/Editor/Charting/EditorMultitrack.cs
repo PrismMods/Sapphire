@@ -41,7 +41,7 @@ namespace Sapphire
         }
 
         // Read, change, write: one undo step. Exits edit mode if the track is gone (undone).
-        internal static void Apply(Action<MultitrackModel> change)
+        internal static void Apply(Action<MultitrackModel> change, bool force = false)
         {
             var ed = scnEditor.instance;
             int host;
@@ -49,8 +49,12 @@ namespace Sapphire
             if (m == null) { Exit(); return; }
             try
             {
+                string before = m.Serialize();
                 change(m);
                 _cursor = m.Clamp(_cursor);
+                // A no-op (refused delete, focus-out of an untouched field) writes nothing: no
+                // empty undo step, and no undone value written back from a stale palette field.
+                if (!force && m.Serialize() == before) return;
                 MultitrackWriter.Write(ed, host, m);
                 _jumpPending = true;
                 _scanCd = 0;
@@ -157,7 +161,13 @@ namespace Sapphire
 
             // Clicking a real tile or Esc leaves edit mode.
             if (Input.GetKeyDown(KeyCode.Escape) || (ed.selectedFloors != null && ed.selectedFloors.Count > 0)) { Exit(); return; }
-            if (Keybinds.Down(Bind.QcSwirl)) Apply(m => m.ToggleTwirl(_cursor));
+            // Guarded like quick chart: the fake floor's inspector is open while editing, and an
+            // "i" typed there (or Ctrl+I) must not toggle a twirl.
+            if (!FieldNav.Typing && !ed.userIsEditingAnInputField && !CtrlOrCmd() && Keybinds.Down(Bind.QcSwirl))
+                Apply(m => m.ToggleTwirl(_cursor));
+            // Clicking another fake tile (or another multitrack's) while editing re-targets.
+            WatchSelection(ed);
+            if (!Editing) return;
 
             if (--_scanCd <= 0 || _jumpPending) { _scanCd = 30; if (!Rescan(ed)) { Exit(); return; } }
             DrawRing(_cursorObj != null ? (Vector2)_cursorObj.transform.position : (Vector2?)null,
@@ -192,6 +202,10 @@ namespace Sapphire
             int id; int k = MultitrackWriter.TileOf(cur, out id);
             if (k >= 0 && MultitrackWriter.Find(ed, id) != null) Enter(id, k);
         }
+
+        private static bool CtrlOrCmd()
+            => Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+            || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
 
         private static bool InView(scnEditor ed, Vector3 p)
         {
@@ -242,7 +256,7 @@ namespace Sapphire
         }
 
         private static readonly PanelKit K = new PanelKit("SapphireMultitrack", 945, PanelKit.PaletteW, focusable: true);
-        private static long _sig = long.MinValue;
+        private static string _sig;
 
         // Palette while editing. Its number rows scrub; every change is one Write (one undo).
         // Reads the cached model; a full lookup per frame would walk every event in the level.
@@ -250,8 +264,10 @@ namespace Sapphire
         {
             var m = Editing ? _model : null;
             if (m == null) { K.Show(false); return; }
-            long sig = (m.Id * 31L + m.TileCount) * 31L + (m.HideOutside ? 1 : 0) * 2 + (m.FadePassed ? 1 : 0);
-            if (K.SyncWidth()) _sig = long.MinValue;
+            // Everything the palette shows, so an undo or redo rebuilds it with the restored values.
+            string sig = string.Join("|", new[] { m.Id.ToString(), m.Bpm.ToString("R"), m.StartBeat.ToString("R"),
+                m.Size.ToString("R"), m.TrackColor, m.PlanetColor, m.HideOutside.ToString(), m.FadePassed.ToString() });
+            if (K.SyncWidth()) _sig = null;
             if (!K.Built || sig != _sig) { _sig = sig; BuildPalette(m); }
             K.Show(true);
             K.TickScroll();
@@ -294,7 +310,7 @@ namespace Sapphire
         private static void Rebuild()
         {
             var ed = scnEditor.instance;
-            Apply(_ => { });
+            Apply(_ => { }, true);
             try { ed.UpdateDecorationObjects(); } catch { }
         }
 
@@ -313,7 +329,7 @@ namespace Sapphire
             Exit();
             if (_ring != null) UnityEngine.Object.Destroy(_ring);
             _ring = null;
-            K.Dispose(); _sig = long.MinValue;
+            K.Dispose(); _sig = null;
         }
     }
 }

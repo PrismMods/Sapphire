@@ -459,12 +459,28 @@ namespace Sapphire
             private static bool Prefix() { try { return !EditorMultitrack.OnDelete(); } catch { return true; } }
         }
 
-        // A selected fake floor is a decoration, so Delete arrives here; the vanilla path would
-        // also reload every decoration in the level.
+        /* Backspace and Delete are each bound to BOTH DeleteFloorsEditorAction and
+           DeleteDecorationsEditorAction in one keybind list, and the editor runs every action in
+           it. The floors prefix does the fake delete; this one only stops the vanilla decoration
+           delete (a selected fake floor is a decoration, and that path reloads every decoration). */
         [HarmonyPatch(typeof(ADOFAI.Editor.Actions.DeleteDecorationsEditorAction), "Execute")]
         private static class MultitrackDeleteDecosPatch
         {
-            private static bool Prefix() { try { return !EditorMultitrack.OnDelete(); } catch { return true; } }
+            private static bool Prefix() { try { return !EditorMultitrack.Editing; } catch { return true; } }
+        }
+
+        // With no real floor selected (always, in multitrack edit mode) N toggles No-Fail and A
+        // toggles autoplay alongside placing a tile. Stand both down while the tile keys chart.
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.ToggleNoFailEditorAction), "Execute")]
+        private static class MultitrackNoFailGuardPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.Editing; } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.ToggleAutoEditorAction), "Execute")]
+        private static class MultitrackAutoGuardPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.Editing; } catch { return true; } }
         }
 
         [HarmonyPatch(typeof(ADOFAI.Editor.Actions.SelectPreviousFloorEditorAction), "Execute")]
