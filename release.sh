@@ -31,7 +31,14 @@ else
 fi
 
 # Release config: Debug sets <Optimize>false</Optimize> and no source is gated on DEBUG.
-xbuild /p:Configuration=Release Sapphire.sln > /dev/null
+# ADOFAI_ROOT, if set, overrides Sapphire.csproj's own per-OS Steam-path autodetection
+# (passing it through empty is harmless — the csproj only applies its default when unset).
+BUILD_LOG="${TMPDIR:-/tmp}/sapphire-build.log"
+if ! xbuild /p:Configuration=Release "/p:AdofaiRoot=$ADOFAI_ROOT" Sapphire.sln > "$BUILD_LOG" 2>&1; then
+    grep -E "error" "$BUILD_LOG" | sort -u >&2
+    echo "BUILD FAILED (full log: $BUILD_LOG)" >&2
+    exit 1
+fi
 
 # Stage the UMM payload (single Sapphire/ folder at the zip root).
 STAGE=$(mktemp -d)

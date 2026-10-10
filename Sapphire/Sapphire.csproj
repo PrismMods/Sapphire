@@ -14,8 +14,12 @@
         <FileAlignment>512</FileAlignment>
         <Deterministic>true</Deterministic>
         <!-- Never hardcode a developer's home here: it builds on exactly one machine and
-             silently breaks every other clone. Defaults to the macOS Steam location under
-             $(HOME); override with xbuild /p:AdofaiRoot=... for a non-standard install. -->
+             silently breaks every other clone. Steam's install root differs per OS (and Linux
+             has two in the wild — the real data dir and the legacy ~/.steam symlink to it) so
+             try each candidate and keep whichever actually exists; override with
+             xbuild /p:AdofaiRoot=... for a non-standard install. -->
+        <AdofaiRoot Condition=" '$(AdofaiRoot)' == '' AND Exists('$(HOME)/.local/share/Steam/steamapps/common/A Dance of Fire and Ice') ">$(HOME)/.local/share/Steam/steamapps/common/A Dance of Fire and Ice</AdofaiRoot>
+        <AdofaiRoot Condition=" '$(AdofaiRoot)' == '' AND Exists('$(HOME)/.steam/steam/steamapps/common/A Dance of Fire and Ice') ">$(HOME)/.steam/steam/steamapps/common/A Dance of Fire and Ice</AdofaiRoot>
         <AdofaiRoot Condition=" '$(AdofaiRoot)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice</AdofaiRoot>
         <GameRoot>$(AdofaiRoot)</GameRoot>
         <!-- Two directory layouts ship in the wild: the game as a .app bundle, and a plain

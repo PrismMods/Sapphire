@@ -1,7 +1,23 @@
 #!/bin/bash
 set -e
 
-GAME_DIR="${ADOFAI_ROOT:-$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice}"
+# Steam's install root differs per OS (and Linux has two in the wild — the real data dir and
+# the legacy ~/.steam symlink to it); try each candidate and keep whichever actually exists.
+# Must match Sapphire.csproj's AdofaiRoot search so build references and deploy target agree.
+if [ -n "$ADOFAI_ROOT" ]; then
+    GAME_DIR="$ADOFAI_ROOT"
+else
+    for candidate in \
+        "$HOME/.local/share/Steam/steamapps/common/A Dance of Fire and Ice" \
+        "$HOME/.steam/steam/steamapps/common/A Dance of Fire and Ice" \
+        "$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice"; do
+        if [ -d "$candidate" ]; then
+            GAME_DIR="$candidate"
+            break
+        fi
+    done
+    GAME_DIR="${GAME_DIR:-$HOME/Library/Application Support/Steam/steamapps/common/A Dance of Fire and Ice}"
+fi
 
 # Compile-time reference only — the copy the game runs is installed by PrismBootstrap. Fetched
 # rather than committed so the checked-in tree never disagrees with the published release.
@@ -9,8 +25,16 @@ GAME_DIR="${ADOFAI_ROOT:-$HOME/Library/Application Support/Steam/steamapps/commo
 [ -f "$(dirname "$0")/lib/PrismLib.UI.dll" ] || "$(dirname "$0")/lib/update-prismlib.sh"
 
 # Two loader layouts in the wild: MelonLoader + UMMCompat reads UMMMods/, native UMM reads
-# Mods/. Pick whichever this machine actually has instead of assuming one.
-if [ -d "$GAME_DIR/UMMMods" ]; then
+# Mods/. Existence alone does not disambiguate — some installs carry a stale, empty UMMMods/
+# alongside the Mods/ folder UMM is actually configured to read, so prefer whichever one
+# actually HAS mods in it over whichever merely exists.
+UMM_N=0; [ -d "$GAME_DIR/UMMMods" ] && UMM_N=$(find "$GAME_DIR/UMMMods" -mindepth 1 -maxdepth 1 -type d | wc -l)
+MODS_N=0; [ -d "$GAME_DIR/Mods" ]    && MODS_N=$(find "$GAME_DIR/Mods"    -mindepth 1 -maxdepth 1 -type d | wc -l)
+if [ "$UMM_N" -gt 0 ]; then
+    MODS_DIR="$GAME_DIR/UMMMods/Sapphire"
+elif [ "$MODS_N" -gt 0 ]; then
+    MODS_DIR="$GAME_DIR/Mods/Sapphire"
+elif [ -d "$GAME_DIR/UMMMods" ]; then
     MODS_DIR="$GAME_DIR/UMMMods/Sapphire"
 elif [ -d "$GAME_DIR/Mods" ]; then
     MODS_DIR="$GAME_DIR/Mods/Sapphire"
@@ -24,7 +48,7 @@ fi
 # Quiet on success, but a failed build must say why — with set -e and the output discarded,
 # a compile error used to end the script with no message at all.
 BUILD_LOG="${TMPDIR:-/tmp}/sapphire-build.log"
-if ! xbuild /p:Configuration=Release Sapphire.sln > "$BUILD_LOG" 2>&1; then
+if ! xbuild /p:Configuration=Release "/p:AdofaiRoot=$GAME_DIR" Sapphire.sln > "$BUILD_LOG" 2>&1; then
     grep -E "error" "$BUILD_LOG" | sort -u >&2
     echo "BUILD FAILED (full log: $BUILD_LOG)" >&2
     exit 1
