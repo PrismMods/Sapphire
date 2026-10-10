@@ -348,16 +348,26 @@ namespace Sapphire
            frame the game activates it (while Sapphire's Edit mode suppresses the HUD), so on the
            first playtest of a session the ticks never start and Show NREs — inside scrPlayer.Hit,
            after the planet switch and before UpdateFollowCam, so the follow camera froze until one
-           Play-mode run let the ticks start. Assign what Start would have, where it is needed. */
-        [HarmonyPatch(typeof(ADOFAI.ErrorMeterTick), "Show")]
+           Play-mode run let the ticks start. Assign what Start would have, where it is needed.
+
+           Everything is looked up by NAME: older game builds have no ErrorMeterTick, and a
+           typeof() in the attribute threw TypeLoadException while PatchAll decoded it, which kept
+           the whole mod from loading. Prepare() skips the patch where the members are missing. */
+        [HarmonyPatch]
         private static class ErrorMeterTickColoursPatch
         {
-            private static readonly AccessTools.FieldRef<ADOFAI.ErrorMeterTick, ColourSchemeHitMargin> _colours =
-                AccessTools.FieldRefAccess<ADOFAI.ErrorMeterTick, ColourSchemeHitMargin>("_hitMarginColors");
+            private static readonly System.Type _tick = AccessTools.TypeByName("ADOFAI.ErrorMeterTick");
+            private static readonly System.Reflection.FieldInfo _colours =
+                _tick != null ? AccessTools.Field(_tick, "_hitMarginColors") : null;
+            private static readonly System.Reflection.FieldInfo _source = AccessTools.Field(typeof(RDConstants), "hitMarginColoursUI");
 
-            private static void Prefix(ADOFAI.ErrorMeterTick __instance)
+            private static bool Prepare() => _colours != null && _source != null && AccessTools.Method(_tick, "Show") != null;
+
+            private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(_tick, "Show");
+
+            private static void Prefix(object __instance)
             {
-                try { if (_colours(__instance) == null) _colours(__instance) = RDConstants.data.hitMarginColoursUI; }
+                try { if (_colours.GetValue(__instance) == null) _colours.SetValue(__instance, _source.GetValue(RDConstants.data)); }
                 catch { }
             }
         }
