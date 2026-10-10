@@ -292,7 +292,7 @@ namespace Sapphire
                 EditorShapeLibrary.Tick(); Acc(27);
                 // Experimental modules get their own catch: an exception here must not take
                 // down every module ticked after them (there is no per-module guard otherwise).
-                try { EditorPatterns.Tick(); EditorTrackKit.Tick(); }
+                try { EditorPatterns.Tick(); EditorTrackKit.Tick(); EditorMultitrack.Tick(); }
                 catch (Exception ex) { if (!_expFailLogged) { _expFailLogged = true; SapphireLog.Log("Experimental tick failed: " + ex); } }
                 EditorMasterSwitch.Tick(); Acc(23);
                 EditorKeyHints.Tick();
@@ -488,6 +488,7 @@ namespace Sapphire
             EditorHzTool.Dispose();
             EditorPatterns.Dispose();
             EditorTrackKit.Dispose();
+            EditorMultitrack.Dispose();
             GhostPreview.Dispose();
             EditorMasterSwitch.Dispose();
             EditorKeyHints.Dispose();

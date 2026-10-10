@@ -186,7 +186,13 @@ namespace Sapphire
             if (EditorPatterns.TabAvailable())
             {
                 entries.Add(Row(Loc.T("Hide / show tile"), EditorTrackKit.ToggleHideSelection));
-                if (!multi) entries.Add(Row(Loc.T("Place track segment"), EditorTrackKit.ArmPlace));
+                if (!multi)
+                {
+                    entries.Add(Row(Loc.T("Place track segment"), EditorTrackKit.ArmPlace));
+                    entries.Add(Row(Loc.T("Create multitrack here"), EditorMultitrack.CreateHere));
+                    if (EditorMultitrack.HostHasOne(scnEditor.instance))
+                        entries.Add(Row(Loc.T("Edit multitrack"), EditorMultitrack.EditHere));
+                }
                 else
                 {
                     entries.Add(Row(Loc.T("Retime…"), _ => EditorPatterns.OpenTab(3)));

@@ -107,7 +107,7 @@ namespace Sapphire
             // Keybinds.Down matches the Shift state as part of the bind, so bare keys and Shift
             // combos live in ONE chain — a user who moves the angle pad off Shift+G onto a bare
             // key needs no branch of its own.
-            if (Keybinds.Down(Bind.QcSwirl)) QuickSwirl(ed);
+            if (Keybinds.Down(Bind.QcSwirl) && !EditorMultitrack.Editing) QuickSwirl(ed);
             else if (Keybinds.Down(Bind.QcSetSpeed)) OpenSpeedPrompt(ed);
             // [ / ] halve/double the selected tile's SetSpeed (only when it has one — else the
             // game's event-page nav still works; a Harmony guard suppresses nav when we act).

@@ -193,6 +193,7 @@
         <Compile Include="Editor\Charting\PseudoBuild.cs" />
         <Compile Include="Editor\Charting\MultitrackLayout.cs" />
         <Compile Include="Editor\Charting\MultitrackWriter.cs" />
+        <Compile Include="Editor\Charting\EditorMultitrack.cs" />
         <Compile Include="Editor\Charting\GhostPreview.cs" />
         <Compile Include="Editor\Level\EditorLevelMenu.cs" />
         <Compile Include="Editor\Level\LevelVars.cs" />

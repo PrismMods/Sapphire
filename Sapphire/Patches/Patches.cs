@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Reflection.Emit;
 using DG.Tweening;
 using HarmonyLib;
@@ -423,6 +424,59 @@ namespace Sapphire
                 }
                 catch { }
             }
+        }
+        /* Multitrack edit mode: the editor's own tile keys chart the fake track. The action keeps
+           its angle in private fields (or Funcs); a letter key resolves through the same
+           FloorHelper.TryGetPathInDegrees the editor uses, a raw angle (999 = midspin) passes as is. */
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.CreateFloorWithCharOrAngleEditorAction), "Execute")]
+        private static class MultitrackAnglePatch
+        {
+            private static readonly FieldInfo FAngle = AccessTools.Field(typeof(ADOFAI.Editor.Actions.CreateFloorWithCharOrAngleEditorAction), "angle");
+            private static readonly FieldInfo FAngleFunc = AccessTools.Field(typeof(ADOFAI.Editor.Actions.CreateFloorWithCharOrAngleEditorAction), "angleFunc");
+            private static readonly FieldInfo FChar = AccessTools.Field(typeof(ADOFAI.Editor.Actions.CreateFloorWithCharOrAngleEditorAction), "chara");
+            private static readonly FieldInfo FCharFunc = AccessTools.Field(typeof(ADOFAI.Editor.Actions.CreateFloorWithCharOrAngleEditorAction), "charaFunc");
+
+            private static bool Prefix(object __instance)
+            {
+                try
+                {
+                    if (!EditorMultitrack.Editing) return true;
+                    var af = FAngleFunc.GetValue(__instance) as Func<float>;
+                    var cf = FCharFunc.GetValue(__instance) as Func<char>;
+                    float angle = af != null ? af() : (float)FAngle.GetValue(__instance);
+                    char ch = cf != null ? cf() : (char)FChar.GetValue(__instance);
+                    float deg;
+                    if (!ADOFAI.FloorHelper.TryGetPathInDegrees(ch, out deg)) deg = angle;
+                    return !EditorMultitrack.OnAngleKey(deg);
+                }
+                catch (Exception ex) { SapphireLog.Log("Multitrack angle key: " + ex.Message); return true; }
+            }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.DeleteFloorsEditorAction), "Execute")]
+        private static class MultitrackDeleteFloorsPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.OnDelete(); } catch { return true; } }
+        }
+
+        // A selected fake floor is a decoration, so Delete arrives here; the vanilla path would
+        // also reload every decoration in the level.
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.DeleteDecorationsEditorAction), "Execute")]
+        private static class MultitrackDeleteDecosPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.OnDelete(); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.SelectPreviousFloorEditorAction), "Execute")]
+        private static class MultitrackPrevPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.OnStep(-1); } catch { return true; } }
+        }
+
+        [HarmonyPatch(typeof(ADOFAI.Editor.Actions.SelectNextFloorEditorAction), "Execute")]
+        private static class MultitrackNextPatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.OnStep(+1); } catch { return true; } }
         }
     }
 }
