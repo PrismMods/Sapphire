@@ -453,6 +453,27 @@ namespace Sapphire
             }
         }
 
+        /* Every other placement path ends here: a click on the direction-button ring (shown around
+           the fake cursor in edit mode), the mouse free-angle placement, a key whose action was
+           already resolved. Keys never reach it in edit mode — the action prefix above consumes
+           them first — so nothing is placed twice. */
+        [HarmonyPatch(typeof(scnEditor), "CreateFloor", new[] { typeof(float), typeof(bool), typeof(bool) })]
+        private static class MultitrackCreateFloorPatch
+        {
+            private static bool Prefix(float floorAngle)
+            {
+                try { return !EditorMultitrack.OnAngleKey(floorAngle); }
+                catch (Exception ex) { SapphireLog.Log("Multitrack CreateFloor: " + ex.Message); return true; }
+            }
+        }
+
+        // The ring's ⊗ button deletes through here, not through the delete key action.
+        [HarmonyPatch(typeof(scnEditor), "DeleteSingleSelection")]
+        private static class MultitrackDeleteSinglePatch
+        {
+            private static bool Prefix() { try { return !EditorMultitrack.OnDelete(); } catch { return true; } }
+        }
+
         [HarmonyPatch(typeof(ADOFAI.Editor.Actions.DeleteFloorsEditorAction), "Execute")]
         private static class MultitrackDeleteFloorsPatch
         {

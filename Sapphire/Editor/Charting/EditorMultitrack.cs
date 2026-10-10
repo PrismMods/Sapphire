@@ -23,6 +23,8 @@ namespace Sapphire
         private static int _host = -1, _scanCd;
         private static ADOFAI.LevelEvent _cursorDeco, _lastSel;
         private static scrDecoration _cursorObj;
+        private static FakeTile _cursorTile;
+        private static string _btnSig;
 
         internal static bool Editing => _id >= 0;
         internal static int Cursor => _cursor;
@@ -115,6 +117,15 @@ namespace Sapphire
             // The fake tile that was selected stays selected; don't let WatchSelection re-enter on it.
             try { var sel = scnEditor.instance.selectedDecorations; _lastSel = sel != null && sel.Count == 1 ? sel[0] : null; } catch { }
             if (_ring != null) _ring.SetActive(false);
+            _btnSig = null;
+            // The ring belongs to the real selection again; with none, the editor would leave ours up.
+            try
+            {
+                var ed = scnEditor.instance;
+                if (ed != null && (ed.selectedFloors == null || ed.selectedFloors.Count == 0))
+                    ed.floorButtonCanvas.gameObject.SetActive(false);
+            }
+            catch { }
         }
 
         // ── hooks called by Patches.cs ─────────────────────────────────
@@ -122,7 +133,7 @@ namespace Sapphire
         internal static bool OnAngleKey(float deg)
         {
             if (!Editing) return false;
-            Apply(m => _cursor = m.Insert(_cursor, deg));
+            Apply(m => _cursor = m.Press(_cursor, deg));
             return true;
         }
 
@@ -177,7 +188,43 @@ namespace Sapphire
                 _jumpPending = false;
                 if (!InView(ed, _cursorObj.transform.position)) { try { ed.MoveCameraToDecoration(_cursorDeco); } catch { } }
             }
+            ShowFloorButtons(ed);
             TickPalette(ed);
+        }
+
+        // FloorDirectionButtonType order (D W A S E Q Z C Y V T B H J N M, then the backquote eight)
+        // → the angle vanilla UpdateDirectionButton gives each; Space and Tab have none.
+        private static readonly int[] ButtonAngles =
+            { 0, 90, 180, 270, 45, 135, 225, 315, 60, 240, 120, 300, 150, 30, 210, 330,
+              75, 255, 105, 285, 165, 15, 195, 345 };
+
+        /* The editor's direction-button ring, around the fake cursor. Vanilla UpdateDirectionButton
+           reads selectedFloors[0], which is empty in edit mode, so its rule is reproduced here: the
+           button pointing back along the entry is the delete button (MultitrackModel.IsBack), hidden
+           on tile 0. Clicking a button lands in scnEditor.CreateFloor, which Patches routes here. */
+        private static void ShowFloorButtons(scnEditor ed)
+        {
+            try
+            {
+                var canvas = ed.floorButtonCanvas;
+                if (canvas == null || _cursorObj == null) return;
+                canvas.transform.position = _cursorObj.transform.position;
+                if (!canvas.gameObject.activeSelf) { canvas.gameObject.SetActive(true); _btnSig = null; }
+                string sig = _id + ":" + _cursor + ":" + _cursorTile.Tail + ":" + _cursorTile.Midspin + ":" + _cursorTile.Sweep;
+                if (sig == _btnSig || ed.floorDirectionButtons == null) return;
+                _btnSig = sig;
+                var layout = MultitrackLayout.Build(_model.Angles, _model.Twirls, _model.Size);
+                foreach (var btn in ed.floorDirectionButtons)
+                {
+                    if (btn == null) continue;
+                    int type = (int)btn.btnType;
+                    bool del = type < ButtonAngles.Length && MultitrackModel.IsBack(layout, _cursor, ButtonAngles[type]);
+                    btn.delete = del;
+                    btn.gameObject.SetActive(!del || _cursor > 0);
+                    btn.Init();
+                }
+            }
+            catch (Exception ex) { SapphireLog.Log("Multitrack: floor buttons: " + ex.Message); }
         }
 
         // False when the multitrack is gone (deleted, or undone past its creation).
@@ -188,6 +235,7 @@ namespace Sapphire
             _cursor = _model.Clamp(_cursor);
             _cursorDeco = MultitrackWriter.FloorDeco(ed, _model, _cursor);
             _cursorObj = _cursorDeco != null ? MultitrackWriter.ObjectOf(_cursorDeco) : null;
+            _cursorTile = MultitrackLayout.Build(_model.Angles, _model.Twirls, _model.Size)[_cursor];
             return true;
         }
 
@@ -266,7 +314,8 @@ namespace Sapphire
             if (m == null) { K.Show(false); return; }
             // Everything the palette shows, so an undo or redo rebuilds it with the restored values.
             string sig = string.Join("|", new[] { m.Id.ToString(), m.Bpm.ToString("R"), m.StartBeat.ToString("R"),
-                m.Size.ToString("R"), m.TrackColor, m.PlanetColor, m.HideOutside.ToString(), m.FadePassed.ToString() });
+                m.Size.ToString("R"), m.TrackColor, m.PlanetColor, m.HideOutside.ToString(), m.FadePassed.ToString(),
+                m.EndTile.ToString(), m.HitTag });
             if (K.SyncWidth()) _sig = null;
             if (!K.Built || sig != _sig) { _sig = sig; BuildPalette(m); }
             K.Show(true);
@@ -288,6 +337,8 @@ namespace Sapphire
             y = K.FieldRow(y, Loc.T("Planet colour"), m.PlanetColor, v => Apply(x => x.PlanetColor = Hex(v, x.PlanetColor)));
             y = K.ToggleRow(y, Loc.T("Hidden outside its run"), m.HideOutside, v => Apply(x => x.HideOutside = v));
             y = K.ToggleRow(y, Loc.T("Fade passed tiles"), m.FadePassed, v => Apply(x => x.FadePassed = v));
+            y = K.ToggleRow(y, Loc.T("Fake end tile"), m.EndTile, v => Apply(x => x.EndTile = v));
+            y = K.FieldRow(y, Loc.T("Hit event tag"), m.HitTag, v => Apply(x => x.HitTag = MultitrackModel.CleanTag(v)));
             y = K.PrimaryRow(y, Loc.T("Twirl on cursor tile"), () => Apply(x => x.ToggleTwirl(_cursor)));
             y = K.PrimaryRow(y, Loc.T("Rebuild"), Rebuild);
             y = K.PrimaryRow(y, Loc.T("Delete multitrack"), DeleteCurrent);

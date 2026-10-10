@@ -532,7 +532,10 @@ Everything below writes ordinary game events, one undo per write.
   the normal tile keys: they add fake tiles after a cursor ring, Backspace deletes, ←/→ move,
   **I** twirls, Esc leaves. Two fake planets play it at its own BPM, starting a set number of host
   beats after the host tile. The palette sets BPM, start, size, colours, hiding outside the run and
-  fading passed tiles. Each edit touches only that track's decorations, never the level's others,
+  fading passed tiles, a **fake end tile** (Portal icon on the last tile) and a **hit event tag**:
+  events carrying that event tag are copied onto every fake hit (keep the originals off). The
+  editor's direction-button ring follows the cursor, and the key pointing back deletes, as on a
+  real tile. Each edit touches only that track's decorations, never the level's others,
   and stays one undo step. It is saved in an editor comment on the host, so the level plays
   without the mod.
 - Keybinds for all three ship **unbound** (Keybinds tab → Experimental).

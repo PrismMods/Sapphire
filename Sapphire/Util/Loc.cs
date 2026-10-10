@@ -304,6 +304,8 @@ namespace Sapphire
             ["Twirl on cursor tile"] = "커서 타일 소용돌이",
             ["Rebuild"] = "다시 만들기",
             ["Delete multitrack"] = "멀티트랙 삭제",
+            ["Fake end tile"] = "가짜 끝 타일",
+            ["Hit event tag"] = "히트 이벤트 태그",
             ["Tile keys add after the cursor · Backspace deletes · ←/→ move · I twirls · Esc exits"] = "타일 키는 커서 뒤에 추가 · Backspace 삭제 · ←/→ 이동 · I 소용돌이 · Esc 종료",
             ["Multitrack created — chart it with the tile keys"] = "멀티트랙을 만들었습니다. 타일 키로 차팅하세요.",
             ["The first fake tile can't be deleted"] = "첫 가짜 타일은 지울 수 없습니다.",

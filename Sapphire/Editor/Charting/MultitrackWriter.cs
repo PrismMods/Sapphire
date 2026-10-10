@@ -143,14 +143,14 @@ namespace Sapphire
                 LevelEvent d;
                 if (have.TryGetValue(k, out d))
                 {
-                    if (ApplyFloor(d, m, tiles[k])) ed.UpdateDecorationObject(d);
+                    if (ApplyFloor(d, m, tiles[k], k == tiles.Length - 1)) ed.UpdateDecorationObject(d);
                     continue;
                 }
                 d = new LevelEvent(host, LevelEventType.AddObject);
                 d["tag"] = m.Tag + " " + m.Tag + "f" + k;
                 d["objectType"] = ObjectDecorationType.Floor;
                 d["relativeTo"] = DecPlacementType.Tile;
-                ApplyFloor(d, m, tiles[k]);
+                ApplyFloor(d, m, tiles[k], k == tiles.Length - 1);
                 ed.AddDecoration(d, InsertIndex(ed, m));
             }
             var gone = new List<int>();
@@ -162,7 +162,7 @@ namespace Sapphire
         }
 
         // Returns true when any field changed, so an unchanged tile costs no Setup call.
-        private static bool ApplyFloor(LevelEvent d, MultitrackModel m, FakeTile t)
+        private static bool ApplyFloor(LevelEvent d, MultitrackModel m, FakeTile t, bool last)
         {
             bool ch = false;
             Set(d, "trackType", t.Midspin ? FloorDecorationType.Midspin : FloorDecorationType.Normal, ref ch);
@@ -173,8 +173,10 @@ namespace Sapphire
             Set(d, "trackColorType", TrackColorType.Single, ref ch);
             Set(d, "trackColor", m.TrackColor, ref ch);
             Set(d, "trackStyle", TrackStyle.Standard, ref ch);
-            Set(d, "trackIcon", t.Twirl ? CustomFloorIcon.Swirl : CustomFloorIcon.None, ref ch);
-            if (t.Twirl)
+            // The end tile is the game's own Portal icon, like a real level's last tile.
+            var icon = last && m.EndTile ? CustomFloorIcon.Portal : t.Twirl ? CustomFloorIcon.Swirl : CustomFloorIcon.None;
+            Set(d, "trackIcon", icon, ref ch);
+            if (icon == CustomFloorIcon.Swirl)
             {
                 // Swirl points at the middle of the sweep, like a real twirl tile.
                 double mid = t.Tail + (t.Ccw ? 1 : -1) * t.Sweep / 2;
@@ -272,14 +274,15 @@ namespace Sapphire
                 var p = MultitrackModel.Parse(Str(e, "comment"));
                 return p != null && p.Id == m.Id;
             }
-            return e.eventType == LevelEventType.MoveDecorations && Str(e, "eventTag") == m.Tag;
+            return Str(e, "eventTag") == m.Tag;
         }
 
         /* Events own no scene objects, so the whole set is replaced. No ApplyEventsToFloors per
            edit: editor Play runs RemakePath, which applies every event (verified in IL). */
         private static void ReplaceEvents(scnEditor ed, int host, MultitrackModel m, FakeTile[] t, double hostBpm)
         {
-            ed.events.RemoveAll(e => e != null && e.eventType == LevelEventType.MoveDecorations && Str(e, "eventTag") == m.Tag);
+            // Every generated event carries eventTag smt{Id}: planet moves, fades, and hit copies.
+            ed.events.RemoveAll(e => e != null && e.eventType != LevelEventType.EditorComment && Str(e, "eventTag") == m.Tag);
             string both = m.Tag + "p0 " + m.Tag + "p1", orbit = m.Tag + "p1";
             if (m.HideOutside)
             {
@@ -296,10 +299,48 @@ namespace Sapphire
                 else
                     Add(ed, Move(host, m, orbit, k.Offset, k.Duration, Ease.Linear, "rotationOffset", (float)k.Rotation));
             }
+            if (m.HitTag.Length > 0) CopyHitEvents(ed, host, m, t, hostBpm);
             if (m.FadePassed)
                 for (int i = 0; i < t.Length - 1; i++)
                     Add(ed, Move(host, m, m.Tag + "f" + i, MultitrackLayout.LeaveOffset(t, i, m.StartBeat, hostBpm, m.Bpm),
                         0.5, Ease.OutSine, "opacity", 0f));
+        }
+
+        /* "Trigger on hit": every event tagged m.HitTag is copied onto the host at each fake hit,
+           keeping its own angleOffset on top. A decoration hitbox can't do this: fake floors and
+           planets are object decorations, which have no hitbox, and an imageless decoration gets no
+           collider. Copies are re-made on every write, so they follow the track; editing a template
+           shows up on the next write (Rebuild forces one). Only timed events (with an angleOffset)
+           are copied — a Twirl or SetSpeed copied onto the host would rewrite the real chart.
+           Copies are enabled even when the template is switched off, so templates can stay off. */
+        private static void CopyHitEvents(scnEditor ed, int host, MultitrackModel m, FakeTile[] t, double hostBpm)
+        {
+            var templates = new List<LevelEvent>();
+            foreach (var e in ed.events)
+            {
+                if (e == null || e.eventType == LevelEventType.EditorComment) continue;
+                string et = Str(e, "eventTag");
+                if (et == m.Tag || !MultitrackLayout.HasToken(et, m.HitTag)) continue;
+                bool timed = false;
+                try { timed = e.ContainsKey("angleOffset"); } catch { }
+                if (timed) templates.Add(e);
+            }
+            if (templates.Count == 0) return;
+            foreach (double beat in MultitrackLayout.HitBeats(t))
+            {
+                double at = MultitrackLayout.HostOffset(beat, m.StartBeat, hostBpm, m.Bpm);
+                foreach (var tp in templates)
+                {
+                    var c = tp.Copy();
+                    c.floor = host;
+                    float own = 0f;
+                    try { own = Convert.ToSingle(tp["angleOffset"]); } catch { }
+                    c["angleOffset"] = (float)(at + own);
+                    c["eventTag"] = m.Tag;
+                    c.active = true;
+                    ed.events.Add(c);
+                }
+            }
         }
 
         // A MoveDecorations with ONLY the named fields enabled; every other optional field off.

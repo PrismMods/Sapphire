@@ -130,6 +130,15 @@ namespace Sapphire
         internal static double EndOffset(FakeTile[] t, double startBeat, double hostBpm, double fakeBpm)
             => HostOffset(t[t.Length - 1].Beat, startBeat, hostBpm, fakeBpm) + 180.0;
 
+        // Fake beats the hit tag fires on: every landing from tile 1 on. A midspin stub and the tile
+        // after it are hit in the same instant, so the stub is skipped and the pair fires once.
+        internal static List<double> HitBeats(FakeTile[] t)
+        {
+            var b = new List<double>();
+            for (int i = 1; i < t.Length; i++) if (!t[i].Midspin) b.Add(t[i].Beat);
+            return b;
+        }
+
         // Tags are space-separated tokens; "smt1" must not match "smt12".
         internal static bool HasToken(string tags, string token)
         {
@@ -154,6 +163,8 @@ namespace Sapphire
         public HashSet<int> Twirls = new HashSet<int>();
         public string TrackColor = "ffffff", PlanetColor = "ffffff";
         public bool HideOutside = true, FadePassed = true;
+        public bool EndTile;           // Portal icon on the last fake tile, like a real level's end
+        public string HitTag = "";     // events tagged this are copied onto every fake hit
 
         internal string Tag => "smt" + Id;
         internal int TileCount => Angles.Count + 1;
@@ -178,6 +189,28 @@ namespace Sapphire
             return cursor - 1;
         }
 
+        /* A tile key, as the editor treats it: the key pointing back along the cursor tile's entry
+           deletes that tile (the red ⊗ button), any other key inserts after it. */
+        internal int Press(int cursor, double deg)
+        {
+            cursor = Clamp(cursor);
+            if (IsBack(MultitrackLayout.Build(Angles, Twirls, Size), cursor, deg))
+            {
+                int d = Delete(cursor);
+                return d < 0 ? cursor : d;
+            }
+            return Insert(cursor, deg);
+        }
+
+        // Vanilla UpdateDirectionButton's rule: never on tile 0, a midspin, or a 360 tile.
+        internal static bool IsBack(FakeTile[] t, int cursor, double deg)
+        {
+            if (deg == MultitrackLayout.MidspinAngle || cursor <= 0 || cursor >= t.Length) return false;
+            var f = t[cursor];
+            if (f.Midspin || f.Sweep >= 360) return false;
+            return Math.Abs(MultitrackLayout.Norm(f.Tail - deg + 180) - 180) < 0.01;
+        }
+
         internal void ToggleTwirl(int cursor)
         {
             cursor = Clamp(cursor);
@@ -194,6 +227,7 @@ namespace Sapphire
 
         internal string Serialize()
         {
+            HitTag = CleanTag(HitTag);
             var sb = new StringBuilder(Prefix).Append(" v1");
             sb.Append(" id=").Append(Id);
             sb.Append(" bpm=").Append(Bpm.ToString("R", Inv));
@@ -211,6 +245,8 @@ namespace Sapphire
             sb.Append(" tw=").Append(string.Join(",", ts.ToArray()));
             sb.Append(" tc=").Append(TrackColor).Append(" pc=").Append(PlanetColor);
             sb.Append(" hide=").Append(HideOutside ? 1 : 0).Append(" fade=").Append(FadePassed ? 1 : 0);
+            sb.Append(" end=").Append(EndTile ? 1 : 0);
+            if (HitTag.Length > 0) sb.Append(" ht=").Append(HitTag);
             return sb.ToString();
         }
 
@@ -240,12 +276,24 @@ namespace Sapphire
                     case "pc": m.PlanetColor = v; break;
                     case "hide": m.HideOutside = v == "1"; break;
                     case "fade": m.FadePassed = v == "1"; break;
+                    case "end": m.EndTile = v == "1"; break;
+                    case "ht": m.HitTag = v; break;
                 }
             }
+            m.HitTag = CleanTag(m.HitTag);
             m.Bpm = Math.Max(1, m.Bpm);
             m.StartBeat = Math.Max(0, m.StartBeat);
             if (m.Size <= 0) m.Size = 1;
             return m;
+        }
+
+        // One token: the saved line splits on spaces, and an eventTag is matched per token.
+        internal static string CleanTag(string t)
+        {
+            if (string.IsNullOrEmpty(t)) return "";
+            var sb = new StringBuilder();
+            foreach (char c in t) if (!char.IsWhiteSpace(c)) sb.Append(c);
+            return sb.ToString();
         }
 
         private static double Num(string s, double fallback)

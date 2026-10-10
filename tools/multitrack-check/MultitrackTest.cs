@@ -84,6 +84,27 @@ static class T {
     Check(MultitrackModel.Parse("113.5 BPM") == null && MultitrackModel.Parse(null) == null, "a normal editor comment is not ours");
     var bad = MultitrackModel.Parse(MultitrackModel.Prefix + " v1 id=1 bpm=0 start=-3 size=0");
     Check(bad != null && bad.Bpm >= 1 && bad.StartBeat >= 0 && bad.Size > 0, "bpm/start/size clamp");
+    // 9. Hits the tag fires on: every landing (tile 1 on), a midspin and its follower count once.
+    t = MultitrackLayout.Build(new List<double> { 0, 999, 180 }, null, 1);
+    var hb = MultitrackLayout.HitBeats(t);
+    Check(hb.Count == 2 && Near(hb[0], 1) && Near(hb[1], 2), "hit beats skip tile 0 and the midspin stub, got " + string.Join(",", hb));
+    t = MultitrackLayout.Build(new List<double> { 0, 0 }, null, 1);
+    hb = MultitrackLayout.HitBeats(t);
+    Check(hb.Count == 2 && Near(hb[0], 1) && Near(hb[1], 2), "straight track hits at 1 and 2");
+    // 10. End tile + hit tag persist; a tag cannot carry spaces (the saved line splits on them).
+    var e2 = new MultitrackModel { EndTile = true, HitTag = "kick drum" };
+    var eb = MultitrackModel.Parse(e2.Serialize());
+    Check(eb != null && eb.EndTile && eb.HitTag == "kickdrum", "end tile + hit tag round trip, got " + (eb == null ? "null" : eb.HitTag));
+    Check(MultitrackModel.Parse(new MultitrackModel().Serialize()).HitTag == "" && !MultitrackModel.Parse(new MultitrackModel().Serialize()).EndTile, "defaults: no tag, no end tile");
+    // 11. Press mirrors the editor: the key pointing back along the entry deletes, others insert.
+    var pm = new MultitrackModel(); pm.Angles.Add(0);           // tile 1 entered moving right; back = 180
+    Check(pm.Press(1, 90) == 2 && pm.TileCount == 3, "a side key inserts after the cursor");
+    pm = new MultitrackModel(); pm.Angles.Add(0);
+    Check(pm.Press(1, 180) == 0 && pm.TileCount == 1, "the back key deletes the cursor tile");
+    Check(pm.Press(0, 180) == 1 && pm.TileCount == 2, "tile 0 has no tile behind it: back key inserts a U-turn");
+    pm = new MultitrackModel(); pm.Angles.Add(0);
+    Check(pm.Press(1, 999) == 2 && pm.Angles[1] == 999, "midspin key never deletes");
+    Check(MultitrackModel.IsBack(MultitrackLayout.Build(new List<double> { 0 }, null, 1), 1, 180), "IsBack: 180 behind a rightward tile");
     Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");
     Environment.Exit(fails == 0 ? 0 : 1);
   }
