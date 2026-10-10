@@ -111,6 +111,7 @@
         <Compile Include="Settings\Settings.cs" />
         <Compile Include="Settings\ColorGradient.cs" />
         <Compile Include="UI\UIBuilder.cs" />
+        <Compile Include="UI\ScrubLabel.cs" />
         <Compile Include="UI\ConfirmBox.cs" />
         <Compile Include="Editor\Events\EditorBulkEdit.cs" />
         <Compile Include="Editor\Events\PatternEngine.cs" />

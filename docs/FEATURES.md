@@ -474,6 +474,16 @@ type `180*2`, `100/3`, `(1+2)*45` or `360/8` and the field evaluates on commit. 
 window. While a field has the keyboard, digits and Enter never reach palette or toolbar
 shortcuts.
 
+**Drag a number's label to scrub it** — in the event, level and decoration inspectors and the
+palettes' number rows. Hold **Shift** for fine steps, **Ctrl/Cmd** for coarse ones; the cursor
+wraps at the window edge, so a drag never runs out of room. The value commits once on release,
+as one undo step. **Middle-click** an inspector label to restore the game's default. Fields
+driven by a formula don't scrub.
+
+**Search boxes rank their results** — event picker, filter browser, settings search and the
+manual's index. Letters in order are enough (`mvcam` finds *Move Camera*), and exact and prefix
+matches come first.
+
 ---
 
 ## Updates

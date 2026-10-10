@@ -370,16 +370,18 @@ namespace Sapphire
             _visible.Clear();
             if (searching)
             {
-                string q = _search.Trim().ToLowerInvariant();
+                string q = _search.Trim();
                 var seen = new HashSet<int>();
+                var scored = new List<KeyValuePair<int, int>>();
                 foreach (var types in _catTypes)
                     foreach (var t in types)
                     {
                         if (!seen.Add(t)) continue;
-                        if (TypeName(t).ToLowerInvariant().Contains(q)
-                            || ((ADOFAI.LevelEventType)t).ToString().ToLowerInvariant().Contains(q))
-                            _visible.Add(t);
+                        int sc = PrismBridge.ScoreAny(q, TypeName(t), ((ADOFAI.LevelEventType)t).ToString());
+                        if (sc >= 0) scored.Add(new KeyValuePair<int, int>(sc, t));
                     }
+                UI.SettingsSearch.StableSortByKey(scored);
+                foreach (var kv in scored) _visible.Add(kv.Value);
             }
             else if (_cat >= 0 && _cat < _catTypes.Count)
                 _visible.AddRange(_catTypes[_cat]);

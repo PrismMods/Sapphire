@@ -117,6 +117,34 @@ namespace Sapphire
             catch { return false; }
         }
 
+        /* Ranked search match, lower is better, -1 for none. PrismLib's shared scorer: exact >
+           prefix > word start > letters in order, so "mvcam" finds Move Camera and Sapphire's
+           pickers rank the way the Prism settings window does. Without the library it is the plain
+           substring test every picker used before. Idea from Overlayer v5's completion popups, which
+           rank; PrismLib's scorer was already the house answer, so nothing new was written. */
+        internal static int Score(string text, string query)
+        {
+            if (string.IsNullOrEmpty(query) || query.Trim().Length == 0) return 0;
+            if (string.IsNullOrEmpty(text)) return -1;
+            if (Available) try { return SharedScore(text, query); } catch { }
+            return text.IndexOf(query.Trim(), StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : -1;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int SharedScore(string text, string query) => PrismLib.Search.Score(text, query);
+
+        /// Best of several fields; -1 when none match.
+        internal static int ScoreAny(string query, params string[] fields)
+        {
+            int best = -1;
+            foreach (var f in fields)
+            {
+                int sc = Score(f, query);
+                if (sc >= 0 && (best < 0 || sc < best)) best = sc;
+            }
+            return best;
+        }
+
         /// True while ANOTHER mod is swallowing the keyboard game-wide (Bismuth does it while its
         /// panel is open). Sapphire's hotkeys stand down rather than firing on keys meant for it.
         [MethodImpl(MethodImplOptions.NoInlining)]

@@ -419,13 +419,16 @@ namespace Sapphire
             const float rowH = 24f, headH = 22f, gap = 2f;
             foreach (var cat in Index)
             {
-                var matches = new List<string>();
+                var scored = new List<KeyValuePair<int, string>>();
                 foreach (var k in cat.Keys)
                 {
                     if (!Topics.ContainsKey(k)) continue;
-                    if (f.Length == 0 || Topics[k].Key.IndexOf(f, System.StringComparison.OrdinalIgnoreCase) >= 0)
-                        matches.Add(k);
+                    int sc = PrismBridge.Score(Topics[k].Key, f);
+                    if (sc >= 0) scored.Add(new KeyValuePair<int, string>(sc, k));
                 }
+                if (f.Length > 0) UI.SettingsSearch.StableSortByKey(scored);
+                var matches = new List<string>();
+                foreach (var kv in scored) matches.Add(kv.Value);
                 if (matches.Count == 0) continue;
                 MakeIndexHeader(Loc.Korean ? cat.Ko : cat.En, y, headH); y -= headH + gap;
                 foreach (var k in matches) { MakeIndexRow(k, Topics[k].Key, y, rowH); y -= rowH + gap; }

@@ -28,3 +28,6 @@ Integrated with permission, UI rebuilt on Sapphire's framework:
 Also thanks to:
 
 - **EditorCustomModules** — inspiration for the Inspector's event save/copy/paste feature.
+- **[Overlayer v5](https://github.com/modlist-org/Overlayer)** / **[O5Kit](https://github.com/modlist-org/O5Kit)**
+  by modlist-org — inspiration for label scrubbing with a wrapping cursor, middle-click reset and
+  ranked search.
