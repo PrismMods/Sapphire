@@ -28,7 +28,8 @@ namespace Sapphire
         {
             get
             {
-                float w = UnityEngine.Input.mouseScrollDelta.y;
+                // Our own panels: real wheel even while a Prism window withholds it from the game.
+                float w = PrismLib.UI.Toolkit.InputGate.Exempt(() => UnityEngine.Input.mouseScrollDelta.y);
                 return Settings != null && Settings.InvertScroll ? -w : w;
             }
         }
@@ -60,8 +61,15 @@ namespace Sapphire
             modEntry.OnSaveGUI = OnSaveGUI;
             modEntry.OnUpdate = (_, __) =>
             {
-                UICore.HandleUpdate();
-                PrismBridge.TickDebug();
+                // Our own menu hotkeys and the Prism polls (chords, Escape, undo, wheel) read real
+                // input even while a Prism window withholds it from the game.
+                PrismLib.UI.Toolkit.InputGate.Exempt(UICore.HandleUpdate);
+                PrismLib.UI.Toolkit.InputGate.Exempt(PrismBridge.TickDebug);
+                if (IsEnabled && harmony != null)
+                {
+                    PrismLib.UI.Toolkit.InputGate.EnsureInstalled("Sapphire", GatePatch);
+                    PrismLib.UI.Toolkit.FontFix.EnsureInstalled("Sapphire", GatePatch);
+                }
                 if (_forceReloadPending) { _forceReloadPending = false; DoForceReload(); }
             };
             // Opting into OnUnload makes the mod hot-reloadable.
@@ -98,6 +106,36 @@ namespace Sapphire
             return true;
         }
 
+        private static bool _gateRegistered;
+
+        // InputGate's patches go through our Harmony — PrismLib.UI has none of its own.
+        private static void GatePatch(MethodBase target, MethodInfo patch, string kind)
+        {
+            var proc = harmony.CreateProcessor(target);
+            if (kind == "redirect")
+                proc.AddTranspiler(new HarmonyMethod(typeof(MainClass).GetMethod(nameof(RedirectMouse), BindingFlags.NonPublic | BindingFlags.Static)));
+            else if (kind == "prefix") proc.AddPrefix(new HarmonyMethod(patch));
+            else if (kind == "finalizer") proc.AddFinalizer(new HarmonyMethod(patch));
+            else proc.AddPostfix(new HarmonyMethod(patch));
+            proc.Patch();
+        }
+
+        // The game's mouse-button reads are engine calls Harmony cannot patch here, so the gate
+        // redirects their callers: each call becomes InputGate's gated equivalent.
+        private static IEnumerable<CodeInstruction> RedirectMouse(IEnumerable<CodeInstruction> code)
+        {
+            foreach (var ins in code)
+            {
+                if ((ins.opcode == System.Reflection.Emit.OpCodes.Call || ins.opcode == System.Reflection.Emit.OpCodes.Callvirt)
+                    && ins.operand is MethodBase called)
+                {
+                    var to = PrismLib.UI.Toolkit.InputGate.RedirectFor(called);
+                    if (to != null) { ins.opcode = System.Reflection.Emit.OpCodes.Call; ins.operand = to; }
+                }
+                yield return ins;
+            }
+        }
+
         private static void StartMod(UnityModManager.ModEntry modEntry)
         {
             _modEntry = modEntry;
@@ -107,6 +145,15 @@ namespace Sapphire
             PrismBridge.Init();
             harmony = new Harmony(modEntry.Info.Id);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+            if (!_gateRegistered)
+            {
+                // Prism windows keep keys and the wheel from the game (InputGate) — not while
+                // autoplay drives hits through the same input path.
+                _gateRegistered = true;
+                PrismLib.UI.Toolkit.InputGate.AddBypass(() => { try { return RDC.auto; } catch { return false; } });
+                // Our floating panels stay clickable beside an open Prism window.
+                PrismLib.UI.Toolkit.InputGate.AddMouseExemption(() => UI.PanelKit.AnyPanelHovered());
+            }
             SceneManager.sceneLoaded += OnSceneLoaded;
 
             if (IsEngineReady() && TryEagerInit())
@@ -530,6 +577,8 @@ namespace Sapphire
             DisposeEditorModules();
             UI.UpdateToast.Dispose();
             UnpatchOurId();
+            PrismLib.UI.Toolkit.InputGate.Uninstalled("Sapphire");
+            PrismLib.UI.Toolkit.FontFix.Uninstalled("Sapphire");
             if (_tickerGo != null)
             {
                 UnityEngine.Object.Destroy(_tickerGo);

@@ -787,7 +787,7 @@ namespace Sapphire
             /* Zoom about the cursor: the time under the pointer stays put, which is the only
                zoom that lets you keep a transient in view while closing in on it. */
             float wheel = MainClass.WheelY;
-            float wheelX = Input.mouseScrollDelta.x;
+            float wheelX = PrismLib.UI.Toolkit.InputGate.Exempt(() => Input.mouseScrollDelta.x);
             bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             if (over && haveLocal && Mathf.Abs(wheel) > 0.01f && !shift)
             {

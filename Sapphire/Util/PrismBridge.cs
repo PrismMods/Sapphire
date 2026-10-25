@@ -32,7 +32,7 @@ namespace Sapphire
         {
             try
             {
-                if (!PrismLib.Bootstrap.PrismBootstrap.Ensure(SapphireLog.Log, new Version(0, 2, 0))) return;
+                if (!PrismLib.Bootstrap.PrismBootstrap.Ensure(SapphireLog.Log, new Version(0, 3, 9))) return;
                 Wire();
                 Available = true;
             }
@@ -173,8 +173,13 @@ namespace Sapphire
         // Plain bool, so TickDebug can consult it without touching a PrismLib type.
         private static bool _ownsDebug;
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool FpsShown() => PrismLib.Config.GetBool(PrismLib.Prism.FpsKey);
+
         internal static void TickDebug()
         {
+            PrismLib.UI.Toolkit.FpsCounter.Tick(Available && FpsShown());
+
             /* Alt+Shift+D and Alt+Shift+S.
 
                Plain Alt+letter does not arrive on macOS: Option+D and Option+S compose a character
@@ -269,6 +274,8 @@ namespace Sapphire
                 if (k >= KeyCode.Mouse0 && k <= KeyCode.Mouse6) continue;
                 var done = _capture;
                 _capture = null;
+                // Escape cancelled the capture; it must not also close the window this frame.
+                if (k == KeyCode.Escape) PrismLib.UI.Toolkit.Ui.ConsumeEscape();
                 done(k == KeyCode.Escape ? null : k.ToString());
                 return;
             }
