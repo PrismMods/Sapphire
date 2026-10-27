@@ -38,6 +38,9 @@ namespace Sapphire.UI
                 _toast.Theme.CloseHover = Theme.CloseHover;
             }
             _toast.Theme.Accent = Theme.Accent;     // re-skinned at runtime by ApplyAccent
+            // Unset = TMP's default, which is the game's own font and unreadable at toast size.
+            // Read once, when the card is first built.
+            _toast.Theme.Font = Theme.TmpFont;
             _toast.Set(Current());
             _toast.Tick();
         }
