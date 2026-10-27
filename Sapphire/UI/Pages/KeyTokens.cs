@@ -45,7 +45,7 @@ namespace Sapphire.UI.Pages
             return kc.ToString();
         }
 
-        // Reverse of TokenFromKeyCode (inlined from Bismuth's KeyViewer parser).
+        // Reverse of TokenFromKeyCode (inlined from Topaz's KeyViewer parser).
         public static bool TryParseKey(string token, out KeyCode kc)
         {
             kc = KeyCode.None;

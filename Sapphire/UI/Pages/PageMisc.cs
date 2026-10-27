@@ -5,7 +5,7 @@ namespace Sapphire.UI.Pages
     /* "Misc" tab: everything that is neither a feature, a key nor the updater. Language and the
        two behaviour switches, then APPEARANCE — UI scale and the accent colour. Those two were
        live settings with working appliers (UICore.ApplyScale / ApplyAccent) and no control
-       anywhere: they were Bismuth's UI-tab rows and did not cross over in the split. */
+       anywhere: they were Topaz's UI-tab rows and did not cross over in the split. */
     internal static class PageMisc
     {
         private static readonly string[] LangLabels = { "Auto (follow game)", "English", "한국어" };

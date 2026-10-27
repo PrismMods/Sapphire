@@ -345,7 +345,7 @@ namespace Sapphire
         }
 
         /* ErrorMeterTick gets its colour scheme only in Start, which Unity runs only after the
-           tick has been active through a frame. Bismuth deactivates the hit error meter in the same
+           tick has been active through a frame. Topaz deactivates the hit error meter in the same
            frame the game activates it (while Sapphire's Edit mode suppresses the HUD), so on the
            first playtest of a session the ticks never start and Show NREs — inside scrPlayer.Hit,
            after the planet switch and before UpdateFollowCam, so the follow camera froze until one
@@ -417,7 +417,7 @@ namespace Sapphire
         }
 
         /* Edit mode hides the autoplay status label. Disabling the Text directly is the
-           safe way — Bismuth's approach of flipping RDC.auto around the update made
+           safe way — Topaz's approach of flipping RDC.auto around the update made
            autoplay turn itself off in the editor. Restores itself: with Edit mode off
            the component re-enables its own Text next frame. */
         [HarmonyPatch(typeof(scrShowIfDebug), "Update")]

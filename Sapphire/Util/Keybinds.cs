@@ -104,7 +104,7 @@ namespace Sapphire
             int i = (int)b;
             var k = _key[i];
             if (k == KeyCode.None) return false;            // deliberately unbound
-            // Another mod is swallowing the keyboard game-wide (Bismuth does it while its panel is
+            // Another mod is swallowing the keyboard game-wide (Topaz does it while its panel is
             // open, and its block exempts only its own key). Firing here would act on a keystroke
             // the user aimed at that panel.
             if (PrismBridge.Available && PrismBridge.InputHeldElsewhere()) return false;

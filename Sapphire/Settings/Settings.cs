@@ -33,7 +33,7 @@ namespace Sapphire
         public List<ShapeVariantDto> Variants = new List<ShapeVariantDto>();
     }
 
-    /* Sapphire's settings. Everything here has a consumer — the Bismuth overlay / key-viewer /
+    /* Sapphire's settings. Everything here has a consumer — the Topaz overlay / key-viewer /
        combo / judgement / game-HUD model that came across in the July 2026 split (~170 fields
        and five DTO classes, nothing read them) was stripped on Sept 8 2026. Old settings files
        still load: XmlSerializer ignores elements it has no member for. */
@@ -190,7 +190,7 @@ namespace Sapphire
             if (PanelStates == null) PanelStates = new List<PanelStateDto>();
 
             // July 11: Sapphire's accent is blue now — migrate settings still on the old
-            // Bismuth-red default.
+            // Topaz-red default.
             if (System.Math.Abs(UiAccentR - 0.886f) < 0.005f
                 && System.Math.Abs(UiAccentG - 0.404f) < 0.005f
                 && System.Math.Abs(UiAccentB - 0.427f) < 0.005f)

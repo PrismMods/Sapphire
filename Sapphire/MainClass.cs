@@ -601,7 +601,7 @@ namespace Sapphire
             SceneManager.sceneLoaded -= OnSceneLoaded;
             _deferredApplyPending = false;
             PrismBridge.Shutdown();          // drops claims and the debug window; safe with PrismLib absent
-            Tweaks.ReleaseBismuthSuppress();
+            Tweaks.ReleaseTopazSuppress();
             Tweaks.DisposeEditorMode();
             Tweaks.RestoreControlsTip();
             Tweaks.DisposeTileAngle();

@@ -1,7 +1,7 @@
 # Sapphire
 
-ADOFAI editor-suite mod (UnityModManager) by QuartzTeam, split out of Bismuth in July 2026.
-Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens with Ctrl+E.
+ADOFAI editor-suite mod (UnityModManager) by QuartzTeam, split out of Topaz in July 2026.
+Standalone: carries its own copy of Topaz's UI framework. Settings panel opens with Ctrl+E.
 
 ## Build & deploy
 
@@ -32,7 +32,7 @@ Standalone: carries its own copy of Bismuth's UI framework. Settings panel opens
     run), shape library + store, quick chart, Hz tool.
   - `ModTools/` — the ported MSM / MappingHelper tools and their engines.
   - `Level/` — level settings menu, game settings, artist picker, decoration inspector.
-- `UI/` — panel framework carried from Bismuth (UICore/UIBuilder/TabRail/PageStack/Theme +
+- `UI/` — panel framework carried from Topaz (UICore/UIBuilder/TabRail/PageStack/Theme +
   `PanelKit`, the floating-window shell every palette is built on).
   Settings panel = four tabs, one file each under `UI/Pages/` (Features / Keybinds /
   Updates / Misc). Rebindable hotkeys: `Util/Keybinds.cs`.

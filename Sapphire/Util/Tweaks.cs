@@ -30,40 +30,42 @@ namespace Sapphire
         private static bool _cornersFaded;
         private static int _cornerCooldown;
 
-        // Bismuth interop: Bismuth's overlays/key viewer honor Edit mode through a
-        // static hook (`Bismuth.Settings.ExternalEditorSuppress`, Bismuth ≥1.4.0), set via
-        // reflection so the dependency stays soft — no-op when Bismuth isn't installed.
-        private static System.Reflection.FieldInfo _bismuthSuppress;
-        private static bool _bismuthLookedUp;
-        private static bool _bismuthSent;
+        // Topaz interop: Topaz's overlays/key viewer honor Edit mode through a
+        // static hook (`Topaz.Settings.ExternalEditorSuppress`, Topaz ≥1.4.0), set via
+        // reflection so the dependency stays soft — no-op when Topaz isn't installed. Builds
+        // up to 1.3.x were still called Bismuth, assembly and namespace both.
+        private static System.Reflection.FieldInfo _topazSuppress;
+        private static bool _topazLookedUp;
+        private static bool _topazSent;
 
-        private static void SetBismuthSuppress(bool on)
+        private static void SetTopazSuppress(bool on)
         {
-            if (on == _bismuthSent) return;
+            if (on == _topazSent) return;
             try
             {
-                if (!_bismuthLookedUp)
+                if (!_topazLookedUp)
                 {
-                    _bismuthLookedUp = true;
+                    _topazLookedUp = true;
                     foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
                     {
-                        if (asm.GetName().Name != "Bismuth") continue;
-                        _bismuthSuppress = asm.GetType("Bismuth.Settings")?.GetField(
+                        string name = asm.GetName().Name;
+                        if (name != "Topaz" && name != "Bismuth") continue;
+                        _topazSuppress = asm.GetType(name + ".Settings")?.GetField(
                             "ExternalEditorSuppress",
                             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                         break;
                     }
                 }
-                if (_bismuthSuppress != null) _bismuthSuppress.SetValue(null, on);
-                _bismuthSent = on;
+                if (_topazSuppress != null) _topazSuppress.SetValue(null, on);
+                _topazSent = on;
             }
-            catch { _bismuthSent = on; }
+            catch { _topazSent = on; }
         }
 
-        // StopMod: never leave Bismuth's overlays suppressed by a mod that's gone.
-        internal static void ReleaseBismuthSuppress()
+        // StopMod: never leave Topaz's overlays suppressed by a mod that's gone.
+        internal static void ReleaseTopazSuppress()
         {
-            SetBismuthSuppress(false);
+            SetTopazSuppress(false);
             if (PrismBridge.Available) PrismBridge.ClaimHud(false);
         }
 
@@ -360,7 +362,7 @@ namespace Sapphire
             }
             catch { }
             _wasEditorPlay = playing;
-            SetBismuthSuppress(active);
+            SetTopazSuppress(active);
             if (PrismBridge.Available) PrismBridge.ClaimHud(active);
 
             /* The mode cluster carries difficulty / no-fail / autoplay itself and sits in the
@@ -396,7 +398,7 @@ namespace Sapphire
                 try { FadeCorner(ed.speedIndicator, fade); } catch { }
                 try { FadeCorner(ed.buttonNoFail, fade); } catch { }
                 // The autoplay icon has no corner container of its own — the game drives
-                // the Image directly, so flip component .enabled (Bismuth's proven way).
+                // the Image directly, so flip component .enabled (Topaz's proven way).
                 try { if (ed.autoImage != null) ed.autoImage.enabled = !fade; } catch { }
                 try { if (ed.buttonAuto != null) ed.buttonAuto.enabled = !fade; } catch { }
             }

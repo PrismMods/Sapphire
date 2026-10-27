@@ -8,7 +8,7 @@ namespace Sapphire
 {
     /* Sapphire's side of PrismLib (github.com/PrismMods/PrismLib).
 
-       Sapphire, Bismuth and Quartz write the same globals and read the same keyboard, and neither
+       Sapphire, Topaz and Quartz write the same globals and read the same keyboard, and neither
        can see the other doing it. PrismLib is where they say so. It installs itself — see
        PrismBootstrap — so there is nothing for the user to add.
 
@@ -92,9 +92,9 @@ namespace Sapphire
         private static object _hud;
 
         /* Editor Mode owns the gameplay HUD: the mode cluster carries difficulty / no-fail /
-           autoplay itself, so the game's own corner icons come down. Bismuth's overlays sit in the
+           autoplay itself, so the game's own corner icons come down. Topaz's overlays sit in the
            same corner, hence the claim — and hence Tweaks' older reflection hook into
-           Bismuth.Settings.ExternalEditorSuppress, which stays for Bismuth builds that predate
+           Topaz.Settings.ExternalEditorSuppress, which stays for Topaz builds that predate
            PrismLib. */
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ClaimHud(bool on)
@@ -145,7 +145,7 @@ namespace Sapphire
             return best;
         }
 
-        /// True while ANOTHER mod is swallowing the keyboard game-wide (Bismuth does it while its
+        /// True while ANOTHER mod is swallowing the keyboard game-wide (Topaz does it while its
         /// panel is open). Sapphire's hotkeys stand down rather than firing on keys meant for it.
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static bool InputHeldElsewhere()

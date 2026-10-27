@@ -6,10 +6,10 @@ geometric shapes like ▲▼●○, ⚙ ♪, ✓ ✕. Without a fallback we cont
 whatever asset happens to have them — the game's CJK font — whose normalized metrics draw
 them tiny and off-baseline, or shows tofu. This subsets DejaVu Sans down to the symbol blocks
 Sapphire's UI uses, renames it (the license requires derivatives not carry the original
-name), and applies Bismuth's two keycap glyph fixes so a shared key label looks the same in
+name), and applies Topaz's two keycap glyph fixes so a shared key label looks the same in
 both mods.
 
-Ported from Bismuth's tools/build-symbol-font.py with three more blocks (Geometric Shapes,
+Ported from Topaz's tools/build-symbol-font.py with three more blocks (Geometric Shapes,
 Misc Symbols, Dingbats) — the ones Sapphire's icons and key hints actually draw from.
 
 Usage:  python3 tools/build-symbol-font.py [path/to/DejaVuSans.ttf]

@@ -2,7 +2,7 @@ using PrismLib.UI;
 
 namespace Sapphire.UI
 {
-    /* Sapphire's update toast: the card itself is PrismLib.UI.Toast, shared with Bismuth. What
+    /* Sapphire's update toast: the card itself is PrismLib.UI.Toast, shared with Topaz. What
        stays here is the part only Sapphire can answer — what UpdateService is doing, what the
        message says, and what clicking it does.
 
