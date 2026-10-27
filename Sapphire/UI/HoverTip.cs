@@ -98,7 +98,7 @@ namespace Sapphire.UI
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(PadX, PadY); tr.offsetMax = new Vector2(-PadX, -PadY);
             _tmp = UIBuilder.Tmp(tGo, "", 12f, TextAnchor.MiddleLeft, Theme.Text);
-            _tmp.textWrappingMode = TextWrappingModes.Normal;
+            _tmp.enableWordWrapping = true;
             _tmp.raycastTarget = false;
             _cardGo.SetActive(false);
         }

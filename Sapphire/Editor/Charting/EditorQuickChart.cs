@@ -442,7 +442,7 @@ namespace Sapphire
         {
             try
             {
-                if (!ev.ContainsKey(key)) return false;
+                if (!ev.HasKey(key)) return false;
                 object cur = ev[key];
                 if (cur is int) ev[key] = (int)Math.Round(val);
                 else if (cur is long) ev[key] = (long)Math.Round(val);
@@ -458,7 +458,7 @@ namespace Sapphire
             var v = new Vector2((float)x, (float)y);
             try
             {
-                if (!ev.ContainsKey(key)) { ev[key] = v; return false; }
+                if (!ev.HasKey(key)) { ev[key] = v; return false; }
                 object cur = ev[key];
                 var t = cur != null ? cur.GetType() : null;
                 if (t != null && t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Tuple<,>))
@@ -490,7 +490,7 @@ namespace Sapphire
         {
             try
             {
-                var d = ev.GetData();
+                var d = ev.Data();
                 SapphireLog.Log("QuickChart: " + name + " missing key; has [" +
                     (d != null ? string.Join(", ", d.Keys) : "null") + "]");
             }

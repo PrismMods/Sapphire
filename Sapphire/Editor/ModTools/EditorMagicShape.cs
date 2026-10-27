@@ -149,7 +149,7 @@ namespace Sapphire
                 case -3:
                     var types = r.Item2["eventTypes"] as List<ADOFAI.LevelEventType>;
                     string names = string.Join(", ", types.Select(t =>
-                    { try { return RDString.Get("editor." + t); } catch { return t.ToString(); } }).ToArray());
+                    { try { return GameCompat.Str("editor." + t); } catch { return t.ToString(); } }).ToArray());
                     return string.Format(Loc.T("Range contains unsupported events: {0}"), names);
                 case -4: return string.Format(Loc.T("Angle exceeds 360° at tile {0} — set Angle fix"), r.Item2["floor"]);
                 case -5: return string.Format(Loc.T("Tile {0}: old levels need 15° multiples"), r.Item2["floor"]);

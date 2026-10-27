@@ -213,7 +213,7 @@ namespace Sapphire
             }
             RowText(go, EditorEventPanel.EventTitle(e) + EditorEventPanel.TagSuffix(e), 44f, 6f, w - 50f, 18f, 12.5f, Theme.Text);
             var pv = RowText(go, preview, 24f, 26f, w - 30f, 0f, 11f, Theme.TextMuted);
-            pv.textWrappingMode = TextWrappingModes.Normal;
+            pv.enableWordWrapping = true;
             float ph = Mathf.Min(pv.GetPreferredValues(preview, w - 30f, 0f).y, 70f);
             ((RectTransform)pv.transform).sizeDelta = new Vector2(w - 30f, ph);
             float h = 30f + ph + 6f;
@@ -263,7 +263,7 @@ namespace Sapphire
             r.anchorMin = r.anchorMax = new Vector2(0f, 1f); r.pivot = new Vector2(0f, 1f);
             r.anchoredPosition = new Vector2(x, -top); r.sizeDelta = new Vector2(w, h);
             var t = UIBuilder.Tmp(go, s, size, TextAnchor.UpperLeft, col);
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
             return t;

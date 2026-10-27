@@ -227,7 +227,7 @@ namespace Sapphire
                     float hw2 = PanelW - Pad * 2f - 10f;
                     var th = K.Label(autoHelp, Pad + 10f, y, hw2, 20f, new Color(1f, 1f, 1f, 0.52f), 10.5f);
                     th.alignment = TMPro.TextAlignmentOptions.TopLeft;
-                    th.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                    th.enableWordWrapping = true;
                     float hh2 = Mathf.Ceil(th.GetPreferredValues(autoHelp, hw2, 0f).y) + 2f;
                     th.rectTransform.sizeDelta = new Vector2(hw2, hh2);
                     _wrapped.Add(new WrapBox { T = th, BaseY = y, BaseH = hh2 });
@@ -363,7 +363,7 @@ namespace Sapphire
                wrapped to three lines and printed straight through the buttons above and the
                volume sliders below. Full width, one line, elided if it still will not fit. */
             _bpmLbl = K.Label("", Pad, y, PanelW - Pad * 2f, RowH, Theme.TextMuted, 11.5f);
-            _bpmLbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            _bpmLbl.enableWordWrapping = false;
             _bpmLbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             Mark(_bpmLbl.gameObject); Below(_bpmLbl.rectTransform); Wide(_bpmLbl.rectTransform);
             y -= RowH + Gap;
@@ -409,7 +409,7 @@ namespace Sapphire
             y -= RowH + Gap;
 
             _noteLbl = K.Label("", Pad, y, PanelW - Pad * 2f, 30f, Theme.TextMuted, 11.5f);
-            _noteLbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            _noteLbl.enableWordWrapping = false;
             _noteLbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             Mark(_noteLbl.gameObject); Below(_noteLbl.rectTransform); Wide(_noteLbl.rectTransform);
             y -= 30f;
@@ -614,7 +614,7 @@ namespace Sapphire
                 float hw = PanelW - Pad * 2f - 10f;
                 var t = K.Label(help, Pad + 10f, y, hw, 20f, new Color(1f, 1f, 1f, 0.52f), 10.5f);
                 t.alignment = TMPro.TextAlignmentOptions.TopLeft;
-                t.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                t.enableWordWrapping = true;
                 float hh = Mathf.Ceil(t.GetPreferredValues(help, hw, 0f).y) + 2f;
                 t.rectTransform.sizeDelta = new Vector2(hw, hh);
                 _wrapped.Add(new WrapBox { T = t, BaseY = y, BaseH = hh });

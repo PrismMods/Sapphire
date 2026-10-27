@@ -357,7 +357,7 @@ namespace Sapphire
         [HarmonyPatch]
         private static class ErrorMeterTickColoursPatch
         {
-            private static readonly System.Type _tick = AccessTools.TypeByName("ADOFAI.ErrorMeterTick");
+            private static readonly System.Type _tick = typeof(scrController).Assembly.GetType("ADOFAI.ErrorMeterTick");   // silent: AccessTools logs a miss
             private static readonly System.Reflection.FieldInfo _colours =
                 _tick != null ? AccessTools.Field(_tick, "_hitMarginColors") : null;
             private static readonly System.Reflection.FieldInfo _source = AccessTools.Field(typeof(RDConstants), "hitMarginColoursUI");
@@ -456,7 +456,7 @@ namespace Sapphire
                     float angle = af != null ? af() : (float)FAngle.GetValue(__instance);
                     char ch = cf != null ? cf() : (char)FChar.GetValue(__instance);
                     float deg;
-                    if (!ADOFAI.FloorHelper.TryGetPathInDegrees(ch, out deg)) deg = angle;
+                    if (!GameCompat.TryPathDegrees(ch, out deg)) deg = angle;
                     return !EditorMultitrack.OnAngleKey(deg);
                 }
                 catch (Exception ex) { SapphireLog.Log("Multitrack angle key: " + ex.Message); return true; }

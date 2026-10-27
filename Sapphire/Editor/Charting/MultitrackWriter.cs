@@ -322,7 +322,7 @@ namespace Sapphire
                 string et = Str(e, "eventTag");
                 if (et == m.Tag || !MultitrackLayout.HasToken(et, m.HitTag)) continue;
                 bool timed = false;
-                try { timed = e.ContainsKey("angleOffset"); } catch { }
+                try { timed = e.HasKey("angleOffset"); } catch { }
                 if (timed) templates.Add(e);
             }
             if (templates.Count == 0) return;

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using UnityEngine;
 using Sapphire.UI;
 
@@ -94,17 +96,47 @@ namespace Sapphire
 
         // ── MinMaxGradient ───────────────────────────────────────────────────
 
-        private static string D(decimal v)
-            => ((double)v).ToString("0.####", CultureInfo.InvariantCulture);
+        private static string D(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
 
-        private static bool TryDec(string raw, out decimal d)
+        /* The gradient models are public fields on 2.9 and auto-properties on 3.x, and a key's
+           time/alpha is float there, decimal here — so their members go by name and numbers convert
+           to whatever this build declares. Naming one binds the dll to one build's shape. Plain
+           reflection, not AccessTools: MelonLoader logs a warning for every AccessTools miss. */
+        private static readonly Dictionary<string, MemberInfo> _mem = new Dictionary<string, MemberInfo>();
+
+        private static MemberInfo Mem(Type t, string name)
         {
-            d = 0m;
-            double v;
-            if (!ExprEval.TryParseDouble(raw, out v)) return false;
-            d = (decimal)v;
-            return true;
+            string k = t.FullName + "." + name;
+            MemberInfo m;
+            if (!_mem.TryGetValue(k, out m))
+            {
+                const BindingFlags F = BindingFlags.Public | BindingFlags.Instance;
+                m = (MemberInfo)t.GetProperty(name, F) ?? t.GetField(name, F);
+                _mem[k] = m;
+            }
+            return m;
         }
+
+        private static object Get(object o, string name)
+        {
+            var m = Mem(o.GetType(), name);
+            var p = m as System.Reflection.PropertyInfo;
+            return p != null ? p.GetValue(o, null) : ((FieldInfo)m).GetValue(o);
+        }
+
+        // Returns the changed copy: these are structs.
+        private static T Set<T>(T o, string name, object v)
+        {
+            object box = o;
+            var m = Mem(typeof(T), name);
+            var p = m as System.Reflection.PropertyInfo;
+            Type mt = p != null ? p.PropertyType : ((FieldInfo)m).FieldType;
+            if (v is double) v = Convert.ChangeType(v, mt, CultureInfo.InvariantCulture);
+            if (p != null) p.SetValue(box, v, null); else ((FieldInfo)m).SetValue(box, v);
+            return (T)box;
+        }
+
+        private static double Num(object key, string name) => Convert.ToDouble(Get(key, name), CultureInfo.InvariantCulture);
 
         private static ADOFAI.Editor.Models.SerializedMinMaxGradient Grad(
             ADOFAI.LevelEvent evt, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient fallback)
@@ -116,10 +148,10 @@ namespace Sapphire
         private static ADOFAI.Editor.Models.SerializedGradient SlotGrad(
             ADOFAI.Editor.Models.SerializedMinMaxGradient mm, int slot)
         {
-            var gr = slot == 1 ? mm.gradient1 : mm.gradient2;
+            var gr = Get(mm, slot == 1 ? "gradient1" : "gradient2");
             // Not `new SerializedGradient()`: that leaves BOTH key arrays null, so adding only a
             // colour stop still ships a null alphaKeys into ToGradient's unguarded Select.
-            return gr.HasValue ? gr.Value : DefaultGrad();
+            return gr != null ? (ADOFAI.Editor.Models.SerializedGradient)gr : DefaultGrad();
         }
 
         /* Vanilla's PropertyControl_MinMaxGradient backfills on every mode change, and it must:
@@ -131,19 +163,19 @@ namespace Sapphire
             switch (g.mode)
             {
                 case ParticleSystemGradientMode.Color:
-                    if (g.color1 == null) g.color1 = "ffffff";
+                    if (Get(g, "color1") == null) g = Set(g, "color1", "ffffff");
                     break;
                 case ParticleSystemGradientMode.TwoColors:
-                    if (g.color1 == null) g.color1 = "ffffff";
-                    if (g.color2 == null) g.color2 = "ffffff";
+                    if (Get(g, "color1") == null) g = Set(g, "color1", "ffffff");
+                    if (Get(g, "color2") == null) g = Set(g, "color2", "ffffff");
                     break;
                 case ParticleSystemGradientMode.Gradient:
                 case ParticleSystemGradientMode.RandomColor:   // reads gradient1, not color1
-                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
+                    if (Get(g, "gradient1") == null) g = Set(g, "gradient1", DefaultGrad());
                     break;
                 case ParticleSystemGradientMode.TwoGradients:
-                    if (!g.gradient1.HasValue) g.gradient1 = DefaultGrad();
-                    if (!g.gradient2.HasValue) g.gradient2 = DefaultGrad();
+                    if (Get(g, "gradient1") == null) g = Set(g, "gradient1", DefaultGrad());
+                    if (Get(g, "gradient2") == null) g = Set(g, "gradient2", DefaultGrad());
                     break;
             }
         }
@@ -152,12 +184,12 @@ namespace Sapphire
         private static ADOFAI.Editor.Models.SerializedGradient DefaultGrad()
         {
             var g = new ADOFAI.Editor.Models.SerializedGradient();
-            var c0 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c0.time = 0m; c0.color = "ffffff";
-            var c1 = new ADOFAI.Editor.Models.SerializedGradient.ColorKey(); c1.time = 1m; c1.color = "ffffff";
-            var a0 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a0.time = 0m; a0.alpha = 1m;
-            var a1 = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(); a1.time = 1m; a1.alpha = 1m;
-            g.colorKeys = new[] { c0, c1 };
-            g.alphaKeys = new[] { a0, a1 };
+            var c0 = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.ColorKey(), "color", "ffffff"), "time", 0.0);
+            var c1 = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.ColorKey(), "color", "ffffff"), "time", 1.0);
+            var a0 = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(), "time", 0.0), "alpha", 1.0);
+            var a1 = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(), "time", 1.0), "alpha", 1.0);
+            g = Set(g, "colorKeys", new[] { c0, c1 });
+            g = Set(g, "alphaKeys", new[] { a0, a1 });
             return g;
         }
 
@@ -166,7 +198,7 @@ namespace Sapphire
             int slot, ADOFAI.Editor.Models.SerializedGradient g)
         {
             var mm = Grad(evt, key, val);
-            if (slot == 1) mm.gradient1 = g; else mm.gradient2 = g;
+            mm = Set(mm, slot == 1 ? "gradient1" : "gradient2", g);
             EventRows.Commit(c, ed, evt, pi, key, mm);
         }
 
@@ -176,7 +208,7 @@ namespace Sapphire
             int slot, float x, float w, float y)
         {
             var g = SlotGrad(Grad(evt, key, val), slot);
-            var keys = g.colorKeys ?? new ADOFAI.Editor.Models.SerializedGradient.ColorKey[0];
+            var keys = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])Get(g, "colorKeys") ?? new ADOFAI.Editor.Models.SerializedGradient.ColorKey[0];
             EventRows.Label(c.Content, Loc.T("Colour stops"), x, y, w, 16f, Theme.TextMuted);
             y -= 18f;
             const float tw = 52f, bw = 24f;
@@ -184,29 +216,29 @@ namespace Sapphire
             for (int i = 0; i < keys.Length; i++)
             {
                 int idx = i;
-                EventRows.InputRow(c.Content, x, y, tw, D(keys[i].time), s =>
+                EventRows.InputRow(c.Content, x, y, tw, D(Num(keys[i], "time")), s =>
                 {
-                    decimal d;
-                    if (!TryDec(s, out d)) return;
+                    double d;
+                    if (!ExprEval.TryParseDouble(s, out d)) return;
                     var cg = SlotGrad(Grad(evt, key, val), slot);
-                    var arr = cg.colorKeys;
+                    var arr = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])Get(cg, "colorKeys");
                     if (arr == null || idx >= arr.Length) return;
                     // Clone: the array is the SAME reference the undo snapshot's shallow-copied
                     // boxed gradient points at (SaveStateScope's ctor snapshots BEFORE this runs) —
                     // mutating in place corrupts undo. Append/RemoveAt already allocate fresh arrays.
                     var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
-                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
-                    cg.colorKeys = arr2;
+                    arr2[idx] = Set(arr2[idx], "time", d);
+                    cg = Set(cg, "colorKeys", arr2);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
-                EventRows.InputRow(c.Content, x + tw + Gap, y, hw, keys[i].color ?? "", s =>
+                EventRows.InputRow(c.Content, x + tw + Gap, y, hw, (string)Get(keys[i], "color") ?? "", s =>
                 {
                     var cg = SlotGrad(Grad(evt, key, val), slot);
-                    var arr = cg.colorKeys;
+                    var arr = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])Get(cg, "colorKeys");
                     if (arr == null || idx >= arr.Length) return;
                     var arr2 = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])arr.Clone();
-                    var kk = arr2[idx]; kk.color = (s ?? "").Trim().TrimStart('#'); arr2[idx] = kk;
-                    cg.colorKeys = arr2;
+                    arr2[idx] = Set(arr2[idx], "color", (s ?? "").Trim().TrimStart('#'));
+                    cg = Set(cg, "colorKeys", arr2);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.Cell(c.Content, "×", x + tw + hw + Gap * 2f, y, bw, RowH, () =>
@@ -214,8 +246,9 @@ namespace Sapphire
                     var cg = SlotGrad(Grad(evt, key, val), slot);
                     // Re-read the LIVE array: the rebuild is deferred, so two quick clicks would
                     // otherwise empty it — and ToGradient/SetKeys can't take a zero-length array.
-                    if (cg.colorKeys == null || cg.colorKeys.Length <= 1) return;
-                    cg.colorKeys = RemoveAt(cg.colorKeys, idx);
+                    var live = (ADOFAI.Editor.Models.SerializedGradient.ColorKey[])Get(cg, "colorKeys");
+                    if (live == null || live.Length <= 1) return;
+                    cg = Set(cg, "colorKeys", RemoveAt(live, idx));
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 }, true);
                 y -= RowH + Gap;
@@ -223,9 +256,8 @@ namespace Sapphire
             EventRows.Cell(c.Content, "+", x, y, w, RowH, () =>
             {
                 var cg = SlotGrad(Grad(evt, key, val), slot);
-                var add = new ADOFAI.Editor.Models.SerializedGradient.ColorKey();
-                add.time = 1m; add.color = "ffffff";
-                cg.colorKeys = Append(cg.colorKeys, add);
+                var add = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.ColorKey(), "color", "ffffff"), "time", 1.0);
+                cg = Set(cg, "colorKeys", Append((ADOFAI.Editor.Models.SerializedGradient.ColorKey[])Get(cg, "colorKeys"), add));
                 PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
             }, true);
             return y - (RowH + Gap);
@@ -237,7 +269,7 @@ namespace Sapphire
             int slot, float x, float w, float y)
         {
             var g = SlotGrad(Grad(evt, key, val), slot);
-            var keys = g.alphaKeys ?? new ADOFAI.Editor.Models.SerializedGradient.AlphaKey[0];
+            var keys = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])Get(g, "alphaKeys") ?? new ADOFAI.Editor.Models.SerializedGradient.AlphaKey[0];
             EventRows.Label(c.Content, Loc.T("Alpha stops"), x, y, w, 16f, Theme.TextMuted);
             y -= 18f;
             const float tw = 52f, bw = 24f;
@@ -245,36 +277,37 @@ namespace Sapphire
             for (int i = 0; i < keys.Length; i++)
             {
                 int idx = i;
-                EventRows.InputRow(c.Content, x, y, tw, D(keys[i].time), s =>
+                EventRows.InputRow(c.Content, x, y, tw, D(Num(keys[i], "time")), s =>
                 {
-                    decimal d;
-                    if (!TryDec(s, out d)) return;
+                    double d;
+                    if (!ExprEval.TryParseDouble(s, out d)) return;
                     var cg = SlotGrad(Grad(evt, key, val), slot);
-                    var arr = cg.alphaKeys;
+                    var arr = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])Get(cg, "alphaKeys");
                     if (arr == null || idx >= arr.Length) return;
                     // Clone: see ColorStops — mutating the live array corrupts the undo snapshot.
                     var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
-                    var kk = arr2[idx]; kk.time = d; arr2[idx] = kk;
-                    cg.alphaKeys = arr2;
+                    arr2[idx] = Set(arr2[idx], "time", d);
+                    cg = Set(cg, "alphaKeys", arr2);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
-                EventRows.InputRow(c.Content, x + tw + Gap, y, aw, D(keys[i].alpha), s =>
+                EventRows.InputRow(c.Content, x + tw + Gap, y, aw, D(Num(keys[i], "alpha")), s =>
                 {
-                    decimal d;
-                    if (!TryDec(s, out d)) return;
+                    double d;
+                    if (!ExprEval.TryParseDouble(s, out d)) return;
                     var cg = SlotGrad(Grad(evt, key, val), slot);
-                    var arr = cg.alphaKeys;
+                    var arr = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])Get(cg, "alphaKeys");
                     if (arr == null || idx >= arr.Length) return;
                     var arr2 = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])arr.Clone();
-                    var kk = arr2[idx]; kk.alpha = d; arr2[idx] = kk;
-                    cg.alphaKeys = arr2;
+                    arr2[idx] = Set(arr2[idx], "alpha", d);
+                    cg = Set(cg, "alphaKeys", arr2);
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 });
                 EventRows.Cell(c.Content, "×", x + tw + aw + Gap * 2f, y, bw, RowH, () =>
                 {
                     var cg = SlotGrad(Grad(evt, key, val), slot);
-                    if (cg.alphaKeys == null || cg.alphaKeys.Length <= 1) return;   // see ColorStops
-                    cg.alphaKeys = RemoveAt(cg.alphaKeys, idx);
+                    var live = (ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])Get(cg, "alphaKeys");
+                    if (live == null || live.Length <= 1) return;   // see ColorStops
+                    cg = Set(cg, "alphaKeys", RemoveAt(live, idx));
                     PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
                 }, true);
                 y -= RowH + Gap;
@@ -282,9 +315,8 @@ namespace Sapphire
             EventRows.Cell(c.Content, "+", x, y, w, RowH, () =>
             {
                 var cg = SlotGrad(Grad(evt, key, val), slot);
-                var add = new ADOFAI.Editor.Models.SerializedGradient.AlphaKey();
-                add.time = 1m; add.alpha = 1m;
-                cg.alphaKeys = Append(cg.alphaKeys, add);
+                var add = Set(Set(new ADOFAI.Editor.Models.SerializedGradient.AlphaKey(), "time", 1.0), "alpha", 1.0);
+                cg = Set(cg, "alphaKeys", Append((ADOFAI.Editor.Models.SerializedGradient.AlphaKey[])Get(cg, "alphaKeys"), add));
                 PutSlotGrad(c, ed, evt, pi, key, val, slot, cg);
             }, true);
             return y - (RowH + Gap);
@@ -363,19 +395,19 @@ namespace Sapphire
             ADOFAI.PropertyInfo pi, string key, ADOFAI.Editor.Models.SerializedMinMaxGradient val,
             int slot, float x, float w, float y)
         {
-            string hex = (slot == 1 ? val.color1 : val.color2) ?? "";
+            string hex = (string)Get(val, slot == 1 ? "color1" : "color2") ?? "";
             float fw = w - RowH - Gap;
             EventRows.InputRow(c.Content, x, y, fw, hex, s =>
             {
                 var g = Grad(evt, key, val);
                 string h = (s ?? "").Trim().TrimStart('#');
-                if (slot == 1) g.color1 = h; else g.color2 = h;
+                g = Set(g, slot == 1 ? "color1" : "color2", h);
                 EventRows.Commit(c, ed, evt, pi, key, g);
             });
             EventRows.Swatch(c.Content, hex, x + fw + Gap, y, null, nv =>
             {
                 var g = Grad(evt, key, val);
-                if (slot == 1) g.color1 = nv; else g.color2 = nv;
+                g = Set(g, slot == 1 ? "color1" : "color2", nv);
                 EventRows.Commit(c, ed, evt, pi, key, g);
             });
             return y - (RowH + Gap);

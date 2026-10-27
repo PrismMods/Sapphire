@@ -533,7 +533,7 @@ namespace Sapphire
             _angleText.fontSize = 26;
             _angleText.color = Color.white;
             _angleText.alignment = TextAlignmentOptions.Center;
-            _angleText.textWrappingMode = TextWrappingModes.NoWrap;
+            _angleText.enableWordWrapping = false;
             _angleText.overflowMode = TextOverflowModes.Overflow;
             _angleText.raycastTarget = false;
             var sh = txtGo.AddComponent<TmpShadow>();

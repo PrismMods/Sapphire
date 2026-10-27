@@ -525,7 +525,7 @@ namespace Sapphire.UI
             title.color = Theme.Text;
             title.fontStyle = FontStyles.Bold;
             title.alignment = TextAlignmentOptions.Left;
-            title.textWrappingMode = TextWrappingModes.NoWrap;
+            title.enableWordWrapping = false;
             title.overflowMode = TextOverflowModes.Overflow;
             title.raycastTarget = false;
 
@@ -627,7 +627,11 @@ namespace Sapphire.UI
             if (_canvasGo == null) return;
             if (_rebuildPending) { _rebuildPending = false; DoRebuildBody(); }
             bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-            if (ctrl && Input.GetKeyDown(KeyCode.E)) Toggle();
+            // Exactly Ctrl+E: Ctrl+Shift+E is the game's open-the-editor chord, and opening the
+            // panel on the way into the editor stacked the two.
+            bool extra = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)
+                || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+            if (ctrl && !extra && Input.GetKeyDown(KeyCode.E)) Toggle();
         }
 
         public static void Toggle() { if (_isOpen) Close(); else Open(); }

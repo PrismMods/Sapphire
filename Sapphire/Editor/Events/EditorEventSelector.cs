@@ -198,7 +198,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var loc = RDString.GetWithCheck("editor." + (ADOFAI.LevelEventType)type, out ex, null);
+                var loc = GameCompat.StrCheck("editor." + (ADOFAI.LevelEventType)type, out ex, null);
                 if (ex && !string.IsNullOrEmpty(loc)) return loc;
             }
             catch { }
@@ -429,7 +429,7 @@ namespace Sapphire
                 lr2.anchorMin = Vector2.zero; lr2.anchorMax = Vector2.one;
                 lr2.offsetMin = new Vector2(RowH + 2f, 0f); lr2.offsetMax = new Vector2(-4f, 0f);
                 var lt2 = UIBuilder.Tmp(lGo2, prefix + name, 12f, TextAnchor.MiddleLeft, Theme.Text);
-                lt2.textWrappingMode = TextWrappingModes.NoWrap;
+                lt2.enableWordWrapping = false;
                 lt2.overflowMode = TextOverflowModes.Ellipsis;
                 lt2.raycastTarget = false;
 

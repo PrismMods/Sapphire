@@ -50,7 +50,7 @@ namespace Sapphire.UI
             t.fontSize = size;
             t.color = color;
             t.alignment = Align(anchor);
-            t.textWrappingMode = wrap ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            t.enableWordWrapping = wrap;
             t.overflowMode = TextOverflowModes.Overflow;
             t.raycastTarget = false;
             return t;

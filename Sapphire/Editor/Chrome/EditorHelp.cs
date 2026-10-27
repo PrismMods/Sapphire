@@ -283,7 +283,7 @@ namespace Sapphire
             _bodyRect.pivot = new Vector2(0.5f, 1f);
             _body = UIBuilder.Tmp(contentGo, "", 13f, TextAnchor.UpperLeft, Theme.Text);
             _body.richText = true;
-            _body.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            _body.enableWordWrapping = true;
             _body.raycastTarget = false;
 
             var scroll = viewGo.AddComponent<ScrollRect>();
@@ -479,7 +479,7 @@ namespace Sapphire
             lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
             lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
             var lbl = UIBuilder.Tmp(lGo, title, 12.5f, TextAnchor.MiddleLeft, Theme.Text);
-            lbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            lbl.enableWordWrapping = false;
             lbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
             lbl.raycastTarget = false;
 

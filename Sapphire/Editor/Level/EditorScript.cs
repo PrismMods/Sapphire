@@ -162,7 +162,7 @@ namespace Sapphire
                         if (!byTag.TryGetValue(spec.Template, out l)) continue;
                         foreach (var tmpl in l)
                         {
-                            if (NotTriggerable.Contains(tmpl.eventType.ToString()) || !tmpl.ContainsKey("eventTag")) { skipped++; continue; }
+                            if (NotTriggerable.Contains(tmpl.eventType.ToString()) || !tmpl.HasKey("eventTag")) { skipped++; continue; }
                             var c = tmpl.Copy();
                             c.floor = spec.Floor;
                             c["eventTag"] = spec.Props["eventTag"];
@@ -219,7 +219,7 @@ namespace Sapphire
         private static IEnumerable<string> Tags(ADOFAI.LevelEvent e)
         {
             string t = null;
-            try { if (e.ContainsKey("eventTag")) t = e["eventTag"] as string; } catch { }
+            try { if (e.HasKey("eventTag")) t = e["eventTag"] as string; } catch { }
             return string.IsNullOrEmpty(t) ? Enumerable.Empty<string>() : t.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         }
 
@@ -231,7 +231,7 @@ namespace Sapphire
             if (type != "SetInputEvent" && type != "SetConditionalEvents") return false;
             try
             {
-                var d = e.GetData();
+                var d = e.Data();
                 foreach (var kv in d) if (kv.Key.EndsWith("Tag") && kv.Value is string && ((string)kv.Value).StartsWith(Compiler.Prefix)) return true;
             }
             catch { }
@@ -341,7 +341,7 @@ namespace Sapphire
             var stGo = Rect("S", bar, Vector2.zero, Vector2.one, new Vector2(x + 6f, 0f), Vector2.zero);
             _status = UIBuilder.Tmp(stGo.gameObject, Loc.T("Runs in the unmodded game: compiles to SetInputEvent / SetConditionalEvents"), 11f,
                 TextAnchor.MiddleLeft, Theme.TextMuted);
-            _status.textWrappingMode = TextWrappingModes.NoWrap;
+            _status.enableWordWrapping = false;
             _status.overflowMode = TextOverflowModes.Ellipsis;
             _status.raycastTarget = false;
 
@@ -355,7 +355,7 @@ namespace Sapphire
 
             var gut = Rect("Gutter", box, Vector2.zero, new Vector2(0f, 1f), new Vector2(0f, 6f), new Vector2(GutterW, -6f));
             _gutter = UIBuilder.Tmp(gut.gameObject, "1", FontSz, TextAnchor.UpperRight, new Color(1f, 1f, 1f, 0.28f));
-            _gutter.textWrappingMode = TextWrappingModes.NoWrap;
+            _gutter.enableWordWrapping = false;
             _gutter.raycastTarget = false;
 
             var fGo = Rect("Code", box, Vector2.zero, Vector2.one, new Vector2(GutterW + 8f, 0f), Vector2.zero);
@@ -363,11 +363,11 @@ namespace Sapphire
             var hlGo = Rect("H", fGo, Vector2.zero, Vector2.one, new Vector2(0f, 6f), new Vector2(-6f, -6f));
             hlGo.SetSiblingIndex(0);   // under the (transparent) field text and its caret
             _hl = UIBuilder.Tmp(hlGo.gameObject, "", FontSz, TextAnchor.UpperLeft, Theme.Text);
-            _hl.textWrappingMode = TextWrappingModes.NoWrap;
+            _hl.enableWordWrapping = false;
             _hl.richText = true;
             _hl.raycastTarget = false;
             _txt = UIBuilder.Tmp(txtGo.gameObject, "", FontSz, TextAnchor.UpperLeft, new Color(1f, 1f, 1f, 0f));
-            _txt.textWrappingMode = TextWrappingModes.NoWrap;
+            _txt.enableWordWrapping = false;
             _txt.richText = false;
             fGo.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.001f);   // click target
             _field = UIBuilder.BuildInputField(fGo.gameObject, _txt);
@@ -384,7 +384,7 @@ namespace Sapphire
             dGo.gameObject.AddComponent<RectMask2D>();
             var dtGo = Rect("T", dGo, Vector2.zero, Vector2.one, new Vector2(8f, 6f), new Vector2(-8f, -6f));
             _diag = UIBuilder.Tmp(dtGo.gameObject, "", 11.5f, TextAnchor.UpperLeft, Theme.Text);
-            _diag.textWrappingMode = TextWrappingModes.Normal;
+            _diag.enableWordWrapping = true;
             _diag.richText = true;
             _diag.raycastTarget = false;
 

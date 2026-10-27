@@ -198,7 +198,7 @@ namespace Sapphire
         private static bool Place(scnEditor ed, ADOFAI.LevelEvent e, int host, double offsetDeg)
         {
             e.floor = host;
-            if (e.ContainsKey("angleOffset"))
+            if (e.HasKey("angleOffset"))
             {
                 double baseOff = 0.0;
                 try { baseOff = Convert.ToDouble(e["angleOffset"]); } catch { }
@@ -281,7 +281,7 @@ namespace Sapphire
         {
             try
             {
-                object cur = e.ContainsKey(key) ? e[key] : null;
+                object cur = e.HasKey(key) ? e[key] : null;
                 e[key] = cur is Enum ? Enum.Parse(cur.GetType(), name) : (object)name;
             }
             catch { }
@@ -342,7 +342,7 @@ namespace Sapphire
 
         private static double Off(ADOFAI.LevelEvent e)
         {
-            try { return e.ContainsKey("angleOffset") ? Convert.ToDouble(e["angleOffset"]) : 0.0; } catch { return 0.0; }
+            try { return e.HasKey("angleOffset") ? Convert.ToDouble(e["angleOffset"]) : 0.0; } catch { return 0.0; }
         }
 
         private static ADOFAI.LevelEvent BpmEvent(int floor, double bpm)

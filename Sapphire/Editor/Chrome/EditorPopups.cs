@@ -174,7 +174,7 @@ namespace Sapphire
             msg.fontSize = 15;
             msg.color = new Color(0.93f, 0.93f, 0.94f, 1f);
             msg.alignment = TextAlignmentOptions.TopLeft;
-            msg.textWrappingMode = TextWrappingModes.Normal;
+            msg.enableWordWrapping = true;
             msg.raycastTarget = false;
             msg.text = message;
             float msgH = Mathf.Ceil(msg.GetPreferredValues(message, CardW - PadX * 2f, 0f).y);
@@ -257,7 +257,7 @@ namespace Sapphire
             t.fontSize = 14;
             t.color = new Color(0.93f, 0.93f, 0.94f, 1f);
             t.alignment = TextAlignmentOptions.Center;
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.raycastTarget = false;
             t.text = label;
 

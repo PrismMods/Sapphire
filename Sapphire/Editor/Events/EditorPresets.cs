@@ -64,15 +64,7 @@ namespace Sapphire
         }
 
         // ── serialization ───────────────────────────────────────────────────
-        private static System.Reflection.FieldInfo _dataFi;
-
-        private static Dictionary<string, object> DataOf(ADOFAI.LevelEvent e)
-        {
-            if (_dataFi == null)
-                _dataFi = typeof(ADOFAI.LevelEvent).GetField("data",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            return _dataFi?.GetValue(e) as Dictionary<string, object>;
-        }
+        private static Dictionary<string, object> DataOf(ADOFAI.LevelEvent e) => e.Data();
 
         private static PresetEvent Encode(ADOFAI.LevelEvent e)
         {

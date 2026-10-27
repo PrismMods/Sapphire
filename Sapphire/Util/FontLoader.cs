@@ -9,6 +9,21 @@ namespace Sapphire
 {
     internal static class FontLoader
     {
+        /* A TMP_FontAsset from a font FILE on every game build. Unity 6's TMP (ADOFAI 3.x) has a path
+           overload that keeps the path and reloads faces on demand; 2.9's Unity 2022 TMP has only
+           CreateFontAsset(Font), and there a Font built from a path does the same job (its ctor loads
+           from disk when the name has a directory). Found by reflection: naming the path overload
+           would bind the dll to Unity 6. A .ttc's other faces need the path overload; 2.9 gets face 0. */
+        private static readonly System.Reflection.MethodInfo _fromPath = typeof(TMP_FontAsset).GetMethod(
+            "CreateFontAsset", new[] { typeof(string), typeof(int), typeof(int), typeof(int), typeof(GlyphRenderMode), typeof(int), typeof(int) });
+
+        internal static TMP_FontAsset FromFile(string path, int faceIndex = 0)
+        {
+            if (_fromPath != null)
+                return (TMP_FontAsset)_fromPath.Invoke(null, new object[] { path, faceIndex, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024 });
+            return TMP_FontAsset.CreateFontAsset(new Font(path), 90, 9, GlyphRenderMode.SDFAA, 1024, 1024);
+        }
+
         internal class FontEntry
         {
             public readonly string Name;
@@ -36,7 +51,7 @@ namespace Sapphire
                             _tmp = TMP_FontAsset.CreateFontAsset(Font);
                         else if (!string.IsNullOrEmpty(_filePath))
                             // Match CreateFontAsset(Font)'s defaults: 90pt, 9 padding, SDFAA, 1024².
-                            _tmp = TMP_FontAsset.CreateFontAsset(_filePath, 0, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024);
+                            _tmp = FromFile(_filePath);
                         if (_tmp != null)
                         {
                             _tmp.name = Name + " (TMP)";
@@ -56,7 +71,8 @@ namespace Sapphire
                 if (atlases != null)
                     foreach (var tex in atlases)
                         if (tex != null) UnityEngine.Object.Destroy(tex);
-                if (_tmp.material != null) UnityEngine.Object.Destroy(_tmp.material);
+                var mat = GameCompat.MaterialOf(_tmp);
+                if (mat != null) UnityEngine.Object.Destroy(mat);
                 UnityEngine.Object.Destroy(_tmp);
                 _tmp = null;
             }
@@ -80,8 +96,7 @@ namespace Sapphire
             {
                 if (_symbolFont == null && !string.IsNullOrEmpty(_symbolFontPath))
                 {
-                    _symbolFont = TMP_FontAsset.CreateFontAsset(
-                        _symbolFontPath, 0, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024);
+                    _symbolFont = FromFile(_symbolFontPath);
                     if (_symbolFont != null) _symbolFont.name = SymbolFontName + " (TMP)";
                 }
                 /* Logged once: every way this fails looks identical in game — a symbol drawn
@@ -121,7 +136,8 @@ namespace Sapphire
             if (atlases != null)
                 foreach (var tex in atlases)
                     if (tex != null) UnityEngine.Object.Destroy(tex);
-            if (_symbolFont.material != null) UnityEngine.Object.Destroy(_symbolFont.material);
+            var mat = GameCompat.MaterialOf(_symbolFont);
+            if (mat != null) UnityEngine.Object.Destroy(mat);
             UnityEngine.Object.Destroy(_symbolFont);
             _symbolFont = null;
             _symbolFontLogged = false;

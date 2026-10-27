@@ -62,7 +62,7 @@ namespace Sapphire
         {
             if (evt == null) return;
             DG.Tweening.Ease current = DG.Tweening.Ease.Linear;
-            try { if (evt.ContainsKey("ease") && evt["ease"] is DG.Tweening.Ease cur) current = cur; }
+            try { if (evt.HasKey("ease") && evt["ease"] is DG.Tweening.Ease cur) current = cur; }
             catch { }
             OpenCore(Loc.T("Ease") + " · " + evt.eventType, current, screenPos, ApplyToTarget, true);
             _target = evt;
@@ -187,7 +187,7 @@ namespace Sapphire
             lr.anchoredPosition = new Vector2(0f, 2f);
             var lbl = UIBuilder.Tmp(lblGo, ease.ToString(), 9.5f, TextAnchor.MiddleCenter,
                 current ? Theme.Text : Theme.TextMuted);
-            lbl.textWrappingMode = TextWrappingModes.NoWrap;
+            lbl.enableWordWrapping = false;
             lbl.overflowMode = TextOverflowModes.Ellipsis;
             lbl.raycastTarget = false;
 

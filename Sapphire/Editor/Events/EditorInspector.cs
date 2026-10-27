@@ -419,7 +419,7 @@ namespace Sapphire
                 lbl.fontSize = 11.5f;
                 lbl.color = new Color(0.93f, 0.93f, 0.94f, 1f);
                 lbl.alignment = TextAlignmentOptions.Center;
-                lbl.textWrappingMode = TextWrappingModes.NoWrap;
+                lbl.enableWordWrapping = false;
                 lbl.overflowMode = TextOverflowModes.Ellipsis;
                 lbl.raycastTarget = false;
                 lbl.text = labels[i];
@@ -459,7 +459,7 @@ namespace Sapphire
             _cycleLabel.fontSize = 13;
             _cycleLabel.color = new Color(0.93f, 0.93f, 0.94f, 1f);
             _cycleLabel.alignment = TextAlignmentOptions.Center;
-            _cycleLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            _cycleLabel.enableWordWrapping = false;
             _cycleLabel.raycastTarget = false;
 
             _cycleGo.SetActive(false);

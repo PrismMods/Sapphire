@@ -59,19 +59,6 @@ namespace Sapphire
             modEntry.OnToggle = OnToggle;
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
-            modEntry.OnUpdate = (_, __) =>
-            {
-                // Our own menu hotkeys and the Prism polls (chords, Escape, undo, wheel) read real
-                // input even while a Prism window withholds it from the game.
-                PrismLib.UI.Toolkit.InputGate.Exempt(UICore.HandleUpdate);
-                PrismLib.UI.Toolkit.InputGate.Exempt(PrismBridge.TickDebug);
-                if (IsEnabled && harmony != null)
-                {
-                    PrismLib.UI.Toolkit.InputGate.EnsureInstalled("Sapphire", GatePatch);
-                    PrismLib.UI.Toolkit.FontFix.EnsureInstalled("Sapphire", GatePatch);
-                }
-                if (_forceReloadPending) { _forceReloadPending = false; DoForceReload(); }
-            };
             // Opting into OnUnload makes the mod hot-reloadable.
             modEntry.OnUnload = OnUnload;
         }
@@ -237,6 +224,7 @@ namespace Sapphire
         private class SapphireTicker : MonoBehaviour
         {
             private int _esFrame;
+            private static bool _panelTickFailed;
 
             // Effective UI language last seen (Loc.Korean already folds in UiLanguage AND, under
             // Auto, the game's RDString.language). Primed on the first frame so we never fire on
@@ -309,6 +297,27 @@ namespace Sapphire
                 // Same cadence drains the log buffer so a burst costs one write, not hundreds.
                 if (++_esFrame >= 45) { _esFrame = 0; UICore.DedupEventSystem(); SapphireLog.Flush(); }
                 UI.FieldNav.Poll();   // before any module reads a key
+
+                /* The panel hotkey and Prism polls ride this ticker, not UMM's OnUpdate: on 2.9
+                   under MelonLoader's UMM bridge, UMM's own Update never runs (Ctrl+F10 is dead
+                   too), so OnUpdate never fires. Caught here because nothing below is. */
+                try
+                {
+                    // Our own menu hotkeys and the Prism polls (chords, Escape, undo, wheel) read real
+                    // input even while a Prism window withholds it from the game.
+                    PrismLib.UI.Toolkit.InputGate.Exempt(UICore.HandleUpdate);
+                    PrismLib.UI.Toolkit.InputGate.Exempt(PrismBridge.TickDebug);
+                    if (IsEnabled && harmony != null)
+                    {
+                        PrismLib.UI.Toolkit.InputGate.EnsureInstalled("Sapphire", GatePatch);
+                        PrismLib.UI.Toolkit.FontFix.EnsureInstalled("Sapphire", GatePatch);
+                    }
+                    if (_forceReloadPending) { _forceReloadPending = false; DoForceReload(); }
+                }
+                catch (Exception ex)
+                {
+                    if (!_panelTickFailed) { _panelTickFailed = true; SapphireLog.Log("[tick] panel/Prism tick threw: " + ex); }
+                }
 
                 CheckLanguageFlip(); // drop stale-language overlays before this frame's ticks rebuild them
 
