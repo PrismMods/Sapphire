@@ -554,6 +554,25 @@ namespace Sapphire
             return outp;
         }
 
+        /* An update finished installing: offer to restart. RestartPrompt is new in PrismLib.UI
+           0.3.10 and another mod's older copy may be the one loaded this session, so it sits behind
+           its own NoInlining call and a catch. The remembered choice is PrismLib's Config key, read
+           through Config directly so a 0.3.9 PrismLib.dll serves it too. */
+        internal static void PromptRestart(string mod)
+        {
+            try { if (Available) PromptRestartRemembered(mod); else PromptRestartUi(mod, null, null); }
+            catch (Exception e) { SapphireLog.Log("[prism] restart prompt unavailable: " + e.Message); }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void PromptRestartRemembered(string mod) => PromptRestartUi(mod,
+            () => { int v; return int.TryParse(PrismLib.Config.Get(PrismLib.Prism.RestartKey), out v) ? v : 0; },
+            v => PrismLib.Config.Set(PrismLib.Prism.RestartKey, v.ToString()));
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void PromptRestartUi(string mod, Func<int> read, Action<int> write)
+            => RestartPrompt.Request(mod, read, write);
+
         /* Callable with PrismLib absent, so it mentions no PrismLib type: the debug window is a
            PrismLib.UI object that exists either way, and everything else is behind Available in a
            method that is only ever JITted when the library is there. */

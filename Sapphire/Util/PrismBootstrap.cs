@@ -76,6 +76,7 @@ namespace PrismLib.Bootstrap
             _dir = SharedDir();
             if (_dir == null) { Say("no mods folder found"); return false; }
             string path = Path.Combine(_dir, "PrismLib.dll");
+            PromotePending(path);
 
             Version have = VersionOf(path);
             if (have == null || have < minimum)
@@ -138,15 +139,25 @@ namespace PrismLib.Bootstrap
                     if (a.GetName().Name == "PrismLib.UI" && a.GetName().Version < bestV)
                         Say("PrismLib.UI " + a.GetName().Version + " already loaded this session; " + bestV + " takes over next launch");
 
+                // Per copy: on Windows a copy another mod already loaded is locked, and that must not
+                // stop the rest. It gets replaced on a later launch, when this runs first.
                 foreach (var p in copies)
                 {
                     var v = VersionOf(p);
                     if (v == null || v >= bestV) continue;
                     string tmp = p + ".new";
-                    File.Copy(best, tmp, true);
-                    File.Delete(p);
-                    File.Move(tmp, p);
-                    Say("PrismLib.UI " + v + " -> " + bestV + " in " + Path.GetFileName(Path.GetDirectoryName(p)));
+                    try
+                    {
+                        File.Copy(best, tmp, true);
+                        File.Delete(p);
+                        File.Move(tmp, p);
+                        Say("PrismLib.UI " + v + " -> " + bestV + " in " + Path.GetFileName(Path.GetDirectoryName(p)));
+                    }
+                    catch (Exception e)
+                    {
+                        try { File.Delete(tmp); } catch { }
+                        Say("PrismLib.UI in " + Path.GetFileName(Path.GetDirectoryName(p)) + " in use, next launch: " + e.Message);
+                    }
                 }
             }
             catch (Exception e) { Say("PrismLib.UI sync failed: " + e.Message); }
@@ -288,12 +299,41 @@ namespace PrismLib.Bootstrap
                 }
                 string tmp = path + ".new";
                 File.WriteAllBytes(tmp, dll);
-                if (File.Exists(path)) File.Delete(path);
-                File.Move(tmp, path);
+                try
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                    File.Move(tmp, path);
+                }
+                catch (Exception e)
+                {
+                    Say("installed " + feed.Version + " as pending (" + e.Message + ")");
+                    return false;
+                }
                 Say("installed " + feed.Version);
                 return true;
             }
             catch (Exception e) { Say("install failed: " + e.Message); return false; }
+        }
+
+        /* Windows will not delete a DLL the process has loaded, and the background update runs right
+           after Run loaded this one — so there the new copy stays as .new (already hash-checked) and
+           takes over here on the next launch, before anything has loaded the old one. */
+        private static void PromotePending(string path)
+        {
+            string pending = path + ".new";
+            if (!File.Exists(pending)) return;
+            try
+            {
+                Version pv = VersionOf(pending), hv = VersionOf(path);
+                if (pv != null && (hv == null || pv > hv))
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                    File.Move(pending, path);
+                    Say("activated pending " + pv);
+                }
+                else File.Delete(pending);
+            }
+            catch (Exception e) { Say("pending update not activated: " + e.Message); }
         }
 
         private sealed class FeedEntry { public Version Version; public string Url; public string Sha256; }
