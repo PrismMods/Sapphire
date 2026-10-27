@@ -144,7 +144,7 @@ namespace Sapphire
             // everything downstream checks PrismBridge.Available and runs standalone without it.
             PrismBridge.Init();
             harmony = new Harmony(modEntry.Info.Id);
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
+            PatchAllResilient(harmony, Assembly.GetExecutingAssembly());
             if (!_gateRegistered)
             {
                 // Prism windows keep keys and the wheel from the game (InputGate) — not while
@@ -159,6 +159,28 @@ namespace Sapphire
             if (IsEngineReady() && TryEagerInit())
                 return;
             _deferredApplyPending = true;
+        }
+
+        /* PatchAll aborts the WHOLE batch when one patch class can't bind its target, and the
+           target set differs across game builds. Patch each class in isolation so a missing
+           method drops only its own feature, and log which one. */
+        private static void PatchAllResilient(Harmony h, Assembly asm)
+        {
+            int applied = 0, skipped = 0;
+            foreach (var type in AccessTools.GetTypesFromAssembly(asm))
+            {
+                try
+                {
+                    var patched = h.CreateClassProcessor(type).Patch();
+                    if (patched != null && patched.Count > 0) applied++;
+                }
+                catch (Exception e)
+                {
+                    skipped++;
+                    SapphireLog.Log("[patch] SKIPPED " + type.FullName + " — " + e.Message);
+                }
+            }
+            SapphireLog.Log("[patch] applied " + applied + " class(es)" + (skipped > 0 ? ", SKIPPED " + skipped : ""));
         }
 
         // Time.frameCount == 0 during koren UMM's static-ctor injection window; asset APIs
