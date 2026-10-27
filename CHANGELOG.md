@@ -3,6 +3,44 @@
 
 # Changelog
 
+## 1.0.0-a10
+
+### Runs on ADOFAI 3.3.x and 2.9.8
+
+- One download now works on **2.9.8**, **3.3.x** (the current stable build) and **3.4**. On 3.3.x Sapphire didn't load at all.
+- If a game build is missing something a feature hooks into, only that feature turns off; the rest of Sapphire loads as usual.
+- The settings panel opens on exactly `Ctrl+E`. On Linux, the game's open-editor shortcut `Ctrl+Shift+E` opened the panel as well.
+
+### Updates
+
+- Once an update has installed, a prompt offers **Restart now** or **Later**, with **Remember my choice**.
+- Updating on Windows no longer fails on files the game keeps open. Unchanged files are skipped, and a PrismLib update that can't be replaced right away finishes on the next launch.
+- The update notification uses Sapphire's font. It showed the game's own, which is unreadable at that size.
+- Release notes in the Updates tab keep their blank lines around headings and lists.
+
+### Editor
+
+- **Drag a number field's label** to scrub its value: `Shift` for fine steps, `Ctrl`/`Cmd` for coarse, and middle-click resets it to the default. One drag is one undo step. Works in the event inspector and the tool palettes; fields holding a `$formula` are left alone.
+- **Search ranks its results** in help, the event selector, the filter browser and settings: exact matches first, then prefixes, word starts and letters in order.
+- Editor comments and other long-text fields get a multi-line box.
+- While a Prism window is open, keys, `Esc` and the scroll wheel no longer reach the editor behind it. Sapphire's own panels stay clickable beside it.
+- Pressing `Esc` to cancel a keybind capture no longer closes the window too.
+
+### Experimental tools (off by default)
+
+Turn on **Experimental tools** on the Features tab. Their keybinds ship unbound.
+
+- **Patterns panel** — capture a tile's events, then write them as a **Train** (every N beats), a **Ramp** (fields moving start → end through an ease) or **Camera** pulses. **Retime** gives a free-angle run an even rhythm.
+- **Tile menu** — hide / show a tile, and place a track segment.
+- **Multitrack** — a decorative second track charted with the normal tile keys and played by two fake planets at its own BPM. It's saved inside the level, so the level plays without the mod.
+
+### Prism
+
+- An older PrismLib.UI in another mod's folder no longer takes precedence over a newer one; every copy is brought up to the newest.
+- On ADOFAI 2.x, PrismLib stands Quartz down, since it breaks other mods' patches there.
+
+---
+
 ## 1.0.0-a9
 
 ### Fixed: the camera stopped following the player in Edit mode
@@ -187,6 +225,44 @@
 | --- | --- |
 
 # 변경 사항
+
+## 1.0.0-a10
+
+### ADOFAI 3.3.x 및 2.9.8 지원
+
+- 파일 하나로 **2.9.8**, **3.3.x**(현재 안정 버전), **3.4**에서 모두 동작합니다. 3.3.x에서는 Sapphire가 아예 로드되지 않았습니다.
+- 게임 버전에 어떤 기능이 연결할 대상이 없으면 그 기능만 꺼지고, 나머지는 평소대로 로드됩니다.
+- 설정 패널은 정확히 `Ctrl+E`에서만 열립니다. Linux에서는 게임의 편집기 열기 단축키인 `Ctrl+Shift+E`를 눌러도 패널이 함께 열렸습니다.
+
+### 업데이트
+
+- 업데이트 설치가 끝나면 **Restart now**(지금 재시작) / **Later**(나중에)를 묻는 창이 뜨며, **Remember my choice**(선택 기억하기)를 지원합니다.
+- Windows에서 게임이 열어 둔 파일 때문에 업데이트가 실패하지 않습니다. 바뀌지 않은 파일은 건너뛰고, 바로 교체할 수 없는 PrismLib 업데이트는 다음 실행 때 마무리됩니다.
+- 업데이트 알림이 Sapphire의 글꼴을 씁니다. 이전에는 게임 자체 글꼴이 쓰여 그 크기에서 읽기 어려웠습니다.
+- 업데이트 탭의 릴리스 노트에서 제목과 목록 주변의 빈 줄이 유지됩니다.
+
+### 편집기
+
+- **숫자 필드의 이름을 드래그**해 값을 조절합니다. `Shift`는 미세 조절, `Ctrl`/`Cmd`는 크게 조절하며, 가운데 클릭은 기본값으로 되돌립니다. 드래그 한 번이 실행 취소 한 번입니다. 이벤트 인스펙터와 도구 팔레트에서 동작하며, `$수식`이 든 필드는 건드리지 않습니다.
+- 도움말, 이벤트 선택기, 필터 브라우저, 설정의 **검색 결과가 정렬됩니다**. 정확히 일치하는 항목이 먼저 오고, 그다음 접두어, 단어 첫머리, 순서대로 포함된 글자 순입니다.
+- 편집기 메모처럼 긴 텍스트 필드는 여러 줄 입력 칸을 씁니다.
+- Prism 창이 열려 있는 동안 키 입력, `Esc`, 스크롤 휠이 뒤의 편집기로 전달되지 않습니다. Sapphire 패널은 그 옆에서 계속 클릭할 수 있습니다.
+- 단축키 지정을 `Esc`로 취소해도 창이 함께 닫히지 않습니다.
+
+### 실험 기능 도구 (기본값 꺼짐)
+
+기능 탭에서 **실험 기능 도구**를 켜십시오. 단축키는 지정되지 않은 상태로 제공됩니다.
+
+- **패턴 패널** — 타일의 이벤트를 캡처한 뒤 **반복열**(N박마다), **램프**(필드를 가감속에 따라 시작 값에서 끝 값으로), **카메라** 펄스로 씁니다. **리타임**은 자유 각도 구간의 리듬을 고르게 맞춥니다.
+- **타일 메뉴** — 타일 숨기기 / 보이기, 트랙 구간 배치를 지원합니다.
+- **멀티트랙** — 일반 타일 키로 차팅하고 가짜 행성 두 개가 자체 BPM으로 연주하는 장식용 두 번째 트랙입니다. 레벨 안에 저장되므로 모드 없이도 레벨이 재생됩니다.
+
+### Prism
+
+- 다른 모드 폴더에 있는 오래된 PrismLib.UI가 더 새로운 버전보다 우선하지 않습니다. 모든 사본을 가장 새로운 버전으로 맞춥니다.
+- ADOFAI 2.x에서는 Quartz가 다른 모드의 패치를 깨뜨리므로 PrismLib이 Quartz를 중지합니다.
+
+---
 
 ## 1.0.0-a9
 
