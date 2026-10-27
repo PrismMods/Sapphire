@@ -173,8 +173,24 @@ namespace Sapphire
         // Plain bool, so TickDebug can consult it without touching a PrismLib type.
         private static bool _ownsDebug;
 
+        /* PrismLib's stand-down of mods that break this game build (Quartz on 2.x). Guards is
+           newer than PrismLib 0.3.9, so an older installed copy throws here — once, then never
+           again; the loss is only that guard. */
+        private static bool _guardsGone;
+
+        private static void TickGuards()
+        {
+            if (_guardsGone || !Available) return;
+            try { TickGuardsShared(); }
+            catch (Exception) { _guardsGone = true; }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void TickGuardsShared() => PrismLib.Guards.Tick();
+
         internal static void TickDebug()
         {
+            TickGuards();
             /* Alt+Shift+D and Alt+Shift+S.
 
                Plain Alt+letter does not arrive on macOS: Option+D and Option+S compose a character
