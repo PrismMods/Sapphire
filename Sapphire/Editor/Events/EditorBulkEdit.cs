@@ -254,7 +254,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var loc = RDString.GetWithCheck("editor." + (ADOFAI.LevelEventType)type, out ex, null);
+                var loc = GameCompat.StrCheck("editor." + (ADOFAI.LevelEventType)type, out ex, null);
                 if (ex && !string.IsNullOrEmpty(loc)) return loc;
             }
             catch { }

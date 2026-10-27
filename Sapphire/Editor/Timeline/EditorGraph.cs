@@ -199,7 +199,7 @@ namespace Sapphire
 
         private static DG.Tweening.Ease EaseOf(ADOFAI.LevelEvent e)
         {
-            try { if (e.ContainsKey("ease") && e["ease"] is DG.Tweening.Ease es) return es; }
+            try { if (e.HasKey("ease") && e["ease"] is DG.Tweening.Ease es) return es; }
             catch { }
             return DG.Tweening.Ease.Linear;
         }

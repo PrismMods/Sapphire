@@ -405,7 +405,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var loc = RDString.GetWithCheck("editor." + evt.eventType, out ex, null);
+                var loc = GameCompat.StrCheck("editor." + evt.eventType, out ex, null);
                 if (ex && !string.IsNullOrEmpty(loc)) return loc;
             }
             catch { }
@@ -956,7 +956,7 @@ namespace Sapphire
                 pr.anchorMin = Vector2.zero; pr.anchorMax = Vector2.one;
                 pr.offsetMin = new Vector2(8f, 0f); pr.offsetMax = new Vector2(-8f, 0f);
                 var pt = UIBuilder.Tmp(pGo, preview, 11f, TextAnchor.MiddleRight, Theme.TextMuted);
-                pt.textWrappingMode = TextWrappingModes.NoWrap;
+                pt.enableWordWrapping = false;
                 pt.overflowMode = TextOverflowModes.Ellipsis;
                 pt.raycastTarget = false;
             }

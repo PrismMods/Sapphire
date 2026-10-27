@@ -276,7 +276,7 @@ namespace Sapphire
             {
                 try
                 {
-                    if (!e.ContainsKey(k)) continue;
+                    if (!e.HasKey(k)) continue;
                     if (e[k] is Vector2 v)
                     {
                         if (horizontal) v.x = -v.x; else v.y = -v.y;

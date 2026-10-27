@@ -134,7 +134,7 @@ namespace Sapphire
 
             var hint = MakeText(Loc.T("Write $name in any number field. The level saves the numbers, so it plays without Sapphire; the formulas are kept for editing."),
                 Pad, y, w, RowH * 2f, 11f, Theme.TextMuted);
-            hint.textWrappingMode = TextWrappingModes.Normal;
+            hint.enableWordWrapping = true;
             y -= RowH * 2f + Gap;
 
             var vals = LevelVars.Values(t);

@@ -209,7 +209,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var loc = RDString.GetWithCheck("editor." + type, out ex, null);
+                var loc = GameCompat.StrCheck("editor." + type, out ex, null);
                 if (ex && !string.IsNullOrEmpty(loc)) return loc;
             }
             catch { }
@@ -335,7 +335,7 @@ namespace Sapphire
             try { artist = (ed.levelData.artist ?? "").Trim(); } catch { }
             if (artist.Length == 0) return y;   // nothing to evaluate
             ApprovalLevel lvl;
-            try { lvl = ed.ApprovalLevelForArtist(artist); } catch { return y; }
+            try { if (!GameCompat.TryApprovalLevel(ed, artist, out lvl)) return y; } catch { return y; }
 
             float w = _ctx.PanelW - Pad * 2f;
             var bg = EventRows.Cell(_content,
@@ -373,7 +373,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var s = RDString.GetWithCheck("editor.artistDisclaimer." + lvl, out ex, null);
+                var s = GameCompat.StrCheck("editor.artistDisclaimer." + lvl, out ex, null);
                 if (ex && !string.IsNullOrEmpty(s)) return s;
             }
             catch { }
@@ -393,7 +393,7 @@ namespace Sapphire
                 // with a null dict RDString leaves the [artist] token unreplaced.
                 var args = new System.Collections.Generic.Dictionary<string, object> { ["artist"] = artist };
                 bool ex;
-                var s = RDString.GetWithCheck(key, out ex, args);
+                var s = GameCompat.StrCheck(key, out ex, args);
                 if (ex && !string.IsNullOrEmpty(s)) return s;
             }
             catch { }
@@ -472,7 +472,7 @@ namespace Sapphire
                     lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
                     lr.offsetMin = new Vector2(icon != null ? 29f : 8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
                     var lt = UIBuilder.Tmp(lGo, Tabs[i].Label != null ? Loc.T(Tabs[i].Label) : TabLabel(Tabs[i].Type), 12f, TextAnchor.MiddleLeft, Theme.Text);
-                    lt.textWrappingMode = TextWrappingModes.NoWrap;
+                    lt.enableWordWrapping = false;
                     lt.overflowMode = TextOverflowModes.Ellipsis;
                     lt.raycastTarget = false;
                 }

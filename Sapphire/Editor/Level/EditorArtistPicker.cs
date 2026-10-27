@@ -318,7 +318,7 @@ namespace Sapphire
             try
             {
                 bool ex;
-                var s = RDString.GetWithCheck("enum.ApprovalLevel." + lvl, out ex, null);
+                var s = GameCompat.StrCheck("enum.ApprovalLevel." + lvl, out ex, null);
                 if (ex && !string.IsNullOrEmpty(s)) return s;
             }
             catch { }

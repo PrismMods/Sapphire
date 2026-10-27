@@ -927,7 +927,7 @@ namespace Sapphire
                 t.fontSize = 15;
                 t.color = new Color(0.93f, 0.93f, 0.94f, 1f);
                 t.alignment = TextAlignmentOptions.Left;
-                t.textWrappingMode = TextWrappingModes.NoWrap;
+                t.enableWordWrapping = false;
                 t.overflowMode = TextOverflowModes.Ellipsis;
                 t.raycastTarget = false;
                 t.text = GameLabel(btn, e.Value);
@@ -1024,7 +1024,7 @@ namespace Sapphire
             _chipLabel.fontSize = 14;
             _chipLabel.color = new Color(0.93f, 0.93f, 0.94f, 1f);
             _chipLabel.alignment = TextAlignmentOptions.Left;
-            _chipLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            _chipLabel.enableWordWrapping = false;
             _chipLabel.overflowMode = TextOverflowModes.Ellipsis;
             _chipLabel.raycastTarget = false;
 

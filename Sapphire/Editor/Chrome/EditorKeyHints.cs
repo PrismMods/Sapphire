@@ -154,7 +154,7 @@ namespace Sapphire
             r.pivot = new Vector2(1f, 0f);
             r.sizeDelta = new Vector2(BoxW, 0f);
             _tmp = UIBuilder.Tmp(_textGo, "", FontSize, TextAnchor.LowerLeft, Theme.Text);
-            _tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            _tmp.enableWordWrapping = false;
             _tmp.lineSpacing = 6f;
             // No background plate, so the text has to survive a bright level on its own.
             TmpShadow.Attach(_textGo, new Color(0f, 0f, 0f, 0.85f), new Vector2(1.5f, -1.5f));

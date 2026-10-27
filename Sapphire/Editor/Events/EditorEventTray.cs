@@ -167,7 +167,7 @@ namespace Sapphire
             {
                 var ht = Text(Loc.T("Drag events here from the event panel — select several to take them all as one folder"),
                     Pad, y, w, RowH * 2f, 12f, Theme.TextMuted);
-                ht.textWrappingMode = TextWrappingModes.Normal;
+                ht.enableWordWrapping = true;
                 y -= RowH * 2f;
             }
             scnEditor ed = null;
@@ -284,7 +284,7 @@ namespace Sapphire
                 r.anchoredPosition = new Vector2(x, y); r.sizeDelta = new Vector2(w, h);
             }
             var t = UIBuilder.Tmp(go, s, size, TextAnchor.MiddleLeft, col);
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.raycastTarget = false;
             return t;
         }
@@ -464,7 +464,7 @@ namespace Sapphire
             lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
             lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-8f, 0f);
             _label = UIBuilder.Tmp(lGo, "", 12f, TextAnchor.MiddleLeft, Theme.Text);
-            _label.textWrappingMode = TextWrappingModes.NoWrap;
+            _label.enableWordWrapping = false;
             _label.raycastTarget = false;
             _cardGo.SetActive(false);
         }

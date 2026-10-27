@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using HarmonyLib;
@@ -364,6 +365,8 @@ namespace Sapphire
         [HarmonyPatch(typeof(ADOFAI.LevelData), "EncodeToDictionary")]
         private static class EncodePatch
         {
+            private static bool Prepare() => !EncodeTextPatchActive;
+
             private static void Postfix(ADOFAI.LevelData __instance, Dictionary<string, object> __result)
             {
                 try
@@ -371,6 +374,30 @@ namespace Sapphire
                     if (__result == null) return;
                     var sec = EncodeSection(__instance);
                     if (sec != null) __result[Section] = sec; else __result.Remove(Section);
+                }
+                catch (Exception ex) { SapphireLog.Log("LevelVars: save failed: " + ex.Message); }
+            }
+        }
+
+        private static readonly bool EncodeTextPatchActive =
+            typeof(ADOFAI.LevelData).GetMethod("EncodeToDictionary", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) == null;
+
+        /* 2.9 has no EncodeToDictionary: Encode writes the JSON text itself, so the section is
+           spliced in before the closing brace. Without it a save on 2.9 drops the section. */
+        [HarmonyPatch(typeof(ADOFAI.LevelData), "Encode", new Type[0])]
+        private static class EncodeTextPatch
+        {
+            private static bool Prepare() => EncodeTextPatchActive;
+
+            private static void Postfix(ADOFAI.LevelData __instance, ref string __result)
+            {
+                try
+                {
+                    var sec = EncodeSection(__instance);
+                    int end = __result == null ? -1 : __result.LastIndexOf('}');
+                    if (sec == null || end < 0) return;
+                    __result = __result.Substring(0, end).TrimEnd() + ",\n\t\"" + Section + "\": "
+                        + Newtonsoft.Json.JsonConvert.SerializeObject(sec) + "\n}" + __result.Substring(end + 1);
                 }
                 catch (Exception ex) { SapphireLog.Log("LevelVars: save failed: " + ex.Message); }
             }

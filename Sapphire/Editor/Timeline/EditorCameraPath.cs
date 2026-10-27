@@ -424,20 +424,20 @@ namespace Sapphire
                 bool hasPos = false;
                 try
                 {
-                    if (e.ContainsKey("position") && !KeyDisabled(e, "position") && e["position"] is Vector2 v)
+                    if (e.HasKey("position") && !KeyDisabled(e, "position") && e["position"] is Vector2 v)
                     { off = v; hasPos = true; }
                 }
                 catch { }
 
                 int rel = 0;
-                try { if (e.ContainsKey("relativeTo") && e["relativeTo"] is CamMovementType m) rel = (int)m; }
+                try { if (e.HasKey("relativeTo") && e["relativeTo"] is CamMovementType m) rel = (int)m; }
                 catch { }
                 // numeric fields box as int/double/float depending on source — Convert, don't pattern-match
                 if (!KeyDisabled(e, "zoom")) zoom = F(e, "zoom", zoom);
                 if (!KeyDisabled(e, "rotation")) rot = F(e, "rotation", rot);
                 float dur = F(e, "duration", 0f);
                 var ease = DG.Tweening.Ease.Linear;
-                try { if (e.ContainsKey("ease") && e["ease"] is DG.Tweening.Ease es) ease = es; } catch { }
+                try { if (e.HasKey("ease") && e["ease"] is DG.Tweening.Ease es) ease = es; } catch { }
 
                 Vector2 anchor;
                 bool isPlayer = false;
@@ -469,7 +469,7 @@ namespace Sapphire
 
         private static float F(ADOFAI.LevelEvent e, string key, float def)
         {
-            try { if (e.ContainsKey(key)) return Convert.ToSingle(e[key]); } catch { }
+            try { if (e.HasKey(key)) return Convert.ToSingle(e[key]); } catch { }
             return def;
         }
 

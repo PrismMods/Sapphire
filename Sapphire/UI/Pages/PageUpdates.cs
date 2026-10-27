@@ -120,9 +120,9 @@ namespace Sapphire.UI.Pages
         {
             if (string.IsNullOrEmpty(md)) return "";
             string t = md.Replace("\r\n", "\n");
-            t = Regex.Replace(t, @"^#{1,6}\s*(.+?)\s*#*\s*$", "<b>$1</b>", RegexOptions.Multiline);
+            t = Regex.Replace(t, @"^#{1,6}[ \t]*(.+?)[ \t]*#*[ \t]*$", "<b>$1</b>", RegexOptions.Multiline);
             t = Regex.Replace(t, @"\*\*(.+?)\*\*", "<b>$1</b>");
-            t = Regex.Replace(t, @"^\s*[-*+]\s+", "• ", RegexOptions.Multiline);
+            t = Regex.Replace(t, @"^[ \t]*[-*+][ \t]+", "• ", RegexOptions.Multiline);
             t = Regex.Replace(t, @"\[([^\]]+)\]\([^)]*\)", "$1");
             t = t.Replace("`", "");
             t = Regex.Replace(t, @"\n{3,}", "\n\n");

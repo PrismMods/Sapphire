@@ -252,7 +252,6 @@ namespace Sapphire
         private static TextMeshProUGUI _tooltipText;
         private const float TooltipMaxW = 440f;
 
-        private static FieldInfo _dataField; // LevelEvent.data is protected
 
         /* Camera keyframe mode (the "filtered view"): the strip shows only MoveCamera
            events, split into one LAYER per animated property. Duration renders as a bar
@@ -764,7 +763,7 @@ namespace Sapphire
             t.fontSize = 14;
             t.color = evt != null && !evt.active ? new Color(0.75f, 0.75f, 0.78f, 0.6f) : Color.white;
             t.alignment = TextAlignmentOptions.Center;
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.overflowMode = TextOverflowModes.Overflow;
             t.raycastTarget = false;
             t.text = label;
@@ -1286,7 +1285,7 @@ namespace Sapphire
             var t = go.AddComponent<TextMeshProUGUI>();
             t.font = UI.Theme.TmpFont; t.fontSize = 14f;
             t.color = UI.Theme.TextMuted; t.alignment = TextAlignmentOptions.Left;
-            t.textWrappingMode = TextWrappingModes.NoWrap; t.raycastTarget = false;
+            t.enableWordWrapping = false; t.raycastTarget = false;
             t.text = text;
             return x + w + 8f;
         }
@@ -1303,7 +1302,7 @@ namespace Sapphire
             var lt = lgo.AddComponent<TextMeshProUGUI>();
             lt.font = UI.Theme.TmpFont; lt.fontSize = 13f;
             lt.color = UI.Theme.TextMuted; lt.alignment = TextAlignmentOptions.Left;
-            lt.textWrappingMode = TextWrappingModes.NoWrap; lt.overflowMode = TextOverflowModes.Overflow;
+            lt.enableWordWrapping = false; lt.overflowMode = TextOverflowModes.Overflow;
             lt.raycastTarget = false;
             lt.text = label;
             float lw = Mathf.Min(72f, label.Length * 8f + 6f);
@@ -1951,7 +1950,7 @@ namespace Sapphire
                 }
                 t.color = CategoryColor(_lanes[i]);
                 t.alignment = TextAlignmentOptions.Right;
-                t.textWrappingMode = TextWrappingModes.NoWrap;
+                t.enableWordWrapping = false;
                 t.overflowMode = TextOverflowModes.Overflow;
                 if (!CamMode) t.raycastTarget = false;
                 if (TlMode >= 2 && i < _strLanes.Count)
@@ -1991,12 +1990,9 @@ namespace Sapphire
 
         /* "Touches" = the event actually animates that property. ADOFAI's null-means-keep
            semantics parse omitted tween fields to NaN, so a real number = a keyframe. */
-        internal static Dictionary<string, object> EventData(LevelEvent e)
-        {
-            if (_dataField == null)
-                _dataField = typeof(LevelEvent).GetField("data", BindingFlags.NonPublic | BindingFlags.Instance);
-            return _dataField?.GetValue(e) as Dictionary<string, object>;
-        }
+        // Public on 2.9, protected on 3.x: a NonPublic-only lookup found nothing on 2.9 and every
+        // settings/inspector row bailed. GameCompat reads it either way.
+        internal static Dictionary<string, object> EventData(LevelEvent e) => e.Data();
 
         // The editor's per-property on/off toggles live in LevelEvent.disabled (public).
         internal static bool CamDisabled(LevelEvent e, string key)
@@ -2685,9 +2681,7 @@ namespace Sapphire
             }
             if (!e.active) sb.Append("  <color=#C77>(off)</color>");
 
-            if (_dataField == null)
-                _dataField = typeof(LevelEvent).GetField("data", BindingFlags.NonPublic | BindingFlags.Instance);
-            var data = _dataField != null ? _dataField.GetValue(e) as Dictionary<string, object> : null;
+            var data = e.Data();
             if (data != null)
             {
                 int lines = 0;
@@ -3012,8 +3006,9 @@ namespace Sapphire
                         // the editor's Space handler instead (pause/resume the run).
                         var c = ADOBase.controller;
                         if (c == null) return;
-                        ed.pausedInPlayMode = !c.paused;
-                        if (ed.buttonAuto != null) ed.buttonAuto.interactable = !ed.pausedInPlayMode;
+                        bool pausing = !c.paused;
+                        GameCompat.SetPausedInPlayMode(ed, pausing);
+                        if (ed.buttonAuto != null) ed.buttonAuto.interactable = !pausing;
                         if (ed.blinkTimer != null) DG.Tweening.TweenExtensions.TogglePause(ed.blinkTimer);
                         c.TogglePauseGame();
                     }
@@ -3039,7 +3034,7 @@ namespace Sapphire
             _clockText.fontSize = 13;
             _clockText.color = new Color(0.85f, 0.85f, 0.88f, 1f);
             _clockText.alignment = TextAlignmentOptions.TopLeft;
-            _clockText.textWrappingMode = TextWrappingModes.NoWrap;
+            _clockText.enableWordWrapping = false;
             _clockText.overflowMode = TextOverflowModes.Overflow;
             _clockText.raycastTarget = false;
 
@@ -3058,7 +3053,7 @@ namespace Sapphire
             _bpmText.fontSize = 12;
             _bpmText.color = new Color(0.6f, 0.62f, 0.68f, 1f);
             _bpmText.alignment = TextAlignmentOptions.TopLeft;
-            _bpmText.textWrappingMode = TextWrappingModes.NoWrap;
+            _bpmText.enableWordWrapping = false;
             _bpmText.overflowMode = TextOverflowModes.Overflow;
             _bpmText.raycastTarget = false;
             _transportGo.SetActive(false);

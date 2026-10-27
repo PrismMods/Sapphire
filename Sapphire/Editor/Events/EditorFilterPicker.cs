@@ -202,7 +202,7 @@ namespace Sapphire
                         try
                         {
                             bool exists;
-                            var loc = RDString.GetWithCheck("editor.CameraFilterPack." + rest, out exists, null);
+                            var loc = GameCompat.StrCheck("editor.CameraFilterPack." + rest, out exists, null);
                             if (exists && !string.IsNullOrEmpty(loc)) name = loc;
                         }
                         catch { }
@@ -233,7 +233,7 @@ namespace Sapphire
                         string disp = v;
                         try
                         {
-                            var loc = RDString.Get("enum.Filter." + v);
+                            var loc = GameCompat.Str("enum.Filter." + v);
                             if (!string.IsNullOrEmpty(loc) && !loc.Contains("enum.Filter")) disp = loc;
                         }
                         catch { }
@@ -625,7 +625,7 @@ namespace Sapphire
             ir.offsetMin = new Vector2(14f + RailW + 12f, 10f);
             ir.offsetMax = new Vector2(-14f, 38f);
             _paramInfo = UIBuilder.Tmp(infoGo, "", 12f, TextAnchor.MiddleLeft, Theme.TextMuted);
-            _paramInfo.textWrappingMode = TextWrappingModes.NoWrap;
+            _paramInfo.enableWordWrapping = false;
             _paramInfo.overflowMode = TextOverflowModes.Ellipsis;
             _paramInfo.raycastTarget = false;
 
@@ -773,7 +773,7 @@ namespace Sapphire
                         try
                         {
                             bool ex2;
-                            var loc = RDString.GetWithCheck("editor.CameraFilterPackFields." + lbl, out ex2, null);
+                            var loc = GameCompat.StrCheck("editor.CameraFilterPackFields." + lbl, out ex2, null);
                             if (ex2 && !string.IsNullOrEmpty(loc)) lbl = loc;
                         }
                         catch { }
@@ -812,7 +812,7 @@ namespace Sapphire
             lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
             var lt = UIBuilder.Tmp(lGo, text, 12.5f, TextAnchor.MiddleLeft,
                 active ? Theme.Text : Theme.TextMuted);
-            lt.textWrappingMode = TextWrappingModes.NoWrap;
+            lt.enableWordWrapping = false;
             lt.overflowMode = TextOverflowModes.Ellipsis;
             lt.raycastTarget = false;
             UI.ClickHandler.Attach(go, onClick);
@@ -981,7 +981,7 @@ namespace Sapphire
                     try { if (pi != null) lockey = pi.customLocalizationKey; } catch { }
                     if (string.IsNullOrEmpty(lockey)) lockey = "editor." + key;
                     bool ex2;
-                    var loc = RDString.GetWithCheck(lockey, out ex2, null);
+                    var loc = GameCompat.StrCheck(lockey, out ex2, null);
                     lbl = ex2 && !string.IsNullOrEmpty(loc) ? loc : Loc.T(key); // our table last
                 }
                 catch { }
@@ -1054,7 +1054,7 @@ namespace Sapphire
                 try
                 {
                     bool ex;
-                    var loc = RDString.GetWithCheck("enum." + enumType + "." + value, out ex, null);
+                    var loc = GameCompat.StrCheck("enum." + enumType + "." + value, out ex, null);
                     if (ex && !string.IsNullOrEmpty(loc)) return loc;
                 }
                 catch { }
@@ -1133,7 +1133,7 @@ namespace Sapphire
             lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
             lr.offsetMin = new Vector2(8f, 0f); lr.offsetMax = new Vector2(-8f, 0f);
             var lt = UIBuilder.Tmp(lGo, label, 12f, TextAnchor.MiddleLeft, Theme.Text);
-            lt.textWrappingMode = TextWrappingModes.NoWrap;
+            lt.enableWordWrapping = false;
             lt.overflowMode = TextOverflowModes.Ellipsis;
             lt.raycastTarget = false;
             var vGo = new GameObject("V", typeof(RectTransform));
@@ -1167,7 +1167,7 @@ namespace Sapphire
             tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
             tr.offsetMin = new Vector2(7f, 0f); tr.offsetMax = new Vector2(-7f, 0f);
             var txt = UIBuilder.Tmp(tGo, text, 12.5f, TextAnchor.MiddleLeft, Theme.Text);
-            txt.textWrappingMode = TextWrappingModes.NoWrap;
+            txt.enableWordWrapping = false;
             txt.overflowMode = TextOverflowModes.Ellipsis;
             txt.raycastTarget = false;
             var ch = UI.ClickHandler.Attach(go, () => onClick(go));
@@ -1214,7 +1214,7 @@ namespace Sapphire
             r.anchoredPosition = new Vector2(0f, y);
             r.sizeDelta = new Vector2(-20f, 18f);
             var t = UIBuilder.Tmp(go, text, size, TextAnchor.MiddleLeft, col);
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
         }
@@ -1302,7 +1302,7 @@ namespace Sapphire
             lr.anchorMin = Vector2.zero; lr.anchorMax = Vector2.one;
             lr.offsetMin = new Vector2(10f, 0f); lr.offsetMax = new Vector2(-6f, 0f);
             var lt = UIBuilder.Tmp(lGo, label, 13f, TextAnchor.MiddleLeft, Theme.Text);
-            lt.textWrappingMode = TextWrappingModes.NoWrap;
+            lt.enableWordWrapping = false;
             lt.overflowMode = TextOverflowModes.Ellipsis;
             lt.raycastTarget = false;
             UI.ClickHandler.Attach(go, () => { _category = cat; _scroll = 0f; SyncRail(); RebuildGrid(); });
@@ -1382,7 +1382,7 @@ namespace Sapphire
             nr.offsetMin = new Vector2(12f, 0f); nr.offsetMax = new Vector2(-8f, -4f);
             var nt = UIBuilder.Tmp(nGo, f.name, 14.5f, TextAnchor.LowerLeft,
                 current ? Theme.Text : new Color(0.92f, 0.92f, 0.94f));
-            nt.textWrappingMode = TextWrappingModes.NoWrap;
+            nt.enableWordWrapping = false;
             nt.overflowMode = TextOverflowModes.Ellipsis;
             nt.raycastTarget = false;
 
@@ -1392,7 +1392,7 @@ namespace Sapphire
             cr.anchorMin = new Vector2(0f, 0f); cr.anchorMax = new Vector2(1f, 0.5f);
             cr.offsetMin = new Vector2(12f, 5f); cr.offsetMax = new Vector2(-8f, 0f);
             var ct = UIBuilder.Tmp(cGo, f.cat, 11.5f, TextAnchor.UpperLeft, Theme.TextMuted);
-            ct.textWrappingMode = TextWrappingModes.NoWrap;
+            ct.enableWordWrapping = false;
             ct.overflowMode = TextOverflowModes.Ellipsis;
             ct.raycastTarget = false;
 

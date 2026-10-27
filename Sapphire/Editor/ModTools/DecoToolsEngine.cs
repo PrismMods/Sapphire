@@ -445,7 +445,7 @@ namespace Sapphire
         private static TMP_FontAsset GetFont(string path)
         {
             if (_fonts.TryGetValue(path, out var cached) && cached != null) return cached;
-            var fa = TMP_FontAsset.CreateFontAsset(path, 0, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024);
+            var fa = FontLoader.FromFile(path);
             if (fa == null) throw new IOException("Font load failed: " + path);
             _fonts[path] = fa;
             return fa;
@@ -466,7 +466,7 @@ namespace Sapphire
             tmp.fontSize = fontSize;
             tmp.text = text;
             tmp.alignment = TextAlignmentOptions.Center;
-            tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            tmp.enableWordWrapping = false;
             tmp.color = Color.white;
 
             Material mat = new Material(tmp.fontMaterial);

@@ -39,7 +39,6 @@ namespace Sapphire
         private const float CurveW = 340f, CurveH = 230f;
         private const int TexW = 340, TexH = 230;
 
-        private static FieldInfo _dataFi;
 
         internal static bool IsOpen => _popupGo != null;
 
@@ -63,12 +62,7 @@ namespace Sapphire
             _canvasGo = null; _canvasRect = null;
         }
 
-        private static Dictionary<string, object> DataOf(ADOFAI.LevelEvent e)
-        {
-            if (_dataFi == null)
-                _dataFi = typeof(ADOFAI.LevelEvent).GetField("data", BindingFlags.NonPublic | BindingFlags.Instance);
-            return _dataFi?.GetValue(e) as Dictionary<string, object>;
-        }
+        private static Dictionary<string, object> DataOf(ADOFAI.LevelEvent e) => e.Data();
 
         // ── bezier math ─────────────────────────────────────────────────────
         private static float BezAxis(float a, float b, float t) // component with endpoints 0,1

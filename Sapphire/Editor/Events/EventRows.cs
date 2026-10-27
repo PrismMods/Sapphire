@@ -77,9 +77,9 @@ namespace Sapphire
                 try { lockey = pi.customLocalizationKey; } catch { }
                 bool ex = false;
                 string loc = null;
-                if (!string.IsNullOrEmpty(lockey)) loc = RDString.GetWithCheck(lockey, out ex, null);
-                if (!ex) loc = RDString.GetWithCheck("editor." + evt.eventType + "." + key, out ex, null);
-                if (!ex) loc = RDString.GetWithCheck("editor." + key, out ex, null);
+                if (!string.IsNullOrEmpty(lockey)) loc = GameCompat.StrCheck(lockey, out ex, null);
+                if (!ex) loc = GameCompat.StrCheck("editor." + evt.eventType + "." + key, out ex, null);
+                if (!ex) loc = GameCompat.StrCheck("editor." + key, out ex, null);
                 lbl = ex && !string.IsNullOrEmpty(loc) ? loc : Loc.T(key);
             }
             catch { }
@@ -346,9 +346,9 @@ namespace Sapphire
             {
                 string result;
                 int ft = (int)pi.fileType;
-                if (ft == 1) result = RDEditorUtils.ShowFileSelectorForImage(RDString.Get("editor.dialog.selectImage", null), -1L);
-                else if (ft == 2) result = RDEditorUtils.ShowFileSelectorForVideo(RDString.Get("editor.dialog.selectVideo", null), -1L);
-                else result = RDEditorUtils.ShowFileSelectorForAudio(RDString.Get("editor.dialog.selectSound", null), -1L);
+                if (ft == 1) result = RDEditorUtils.ShowFileSelectorForImage(GameCompat.Str("editor.dialog.selectImage", null), -1L);
+                else if (ft == 2) result = RDEditorUtils.ShowFileSelectorForVideo(GameCompat.Str("editor.dialog.selectVideo", null), -1L);
+                else result = RDEditorUtils.ShowFileSelectorForAudio(GameCompat.Str("editor.dialog.selectSound", null), -1L);
                 if (!string.IsNullOrEmpty(result)) Commit(c, ed, evt, pi, key, result);
             }
             catch (Exception ex) { SapphireLog.Log("EventRows: browse failed: " + ex.Message); }
@@ -561,7 +561,7 @@ namespace Sapphire
             r.anchoredPosition = new Vector2(x, y);
             r.sizeDelta = new Vector2(w, h);
             var t = UIBuilder.Tmp(go, text, 11.5f, TextAnchor.MiddleLeft, color);
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
             return go;
@@ -603,7 +603,7 @@ namespace Sapphire
             lr.offsetMin = new Vector2(anchor == TextAnchor.MiddleLeft ? 8f : 0f, 0f);
             lr.offsetMax = Vector2.zero;
             var t = UIBuilder.Tmp(lGo, text, 12f, anchor, Theme.Text);
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableWordWrapping = false;
             t.overflowMode = TextOverflowModes.Ellipsis;
             t.raycastTarget = false;
             UI.ClickHandler.Attach(go, onClick);
@@ -633,7 +633,7 @@ namespace Sapphire
             tr.offsetMin = new Vector2(7f, multi ? 4f : 0f); tr.offsetMax = new Vector2(-7f, multi ? -4f : 0f);
             var txt = UIBuilder.Tmp(txtGo, value, 12f, multi ? TextAnchor.UpperLeft : TextAnchor.MiddleLeft, Theme.Text);
             txt.richText = false;
-            if (multi) txt.textWrappingMode = TextWrappingModes.Normal;
+            if (multi) txt.enableWordWrapping = true;
             var field = UIBuilder.BuildInputField(go, txt);
             // Enter makes a new line in a multi-line field; it commits when focus leaves.
             field.lineType = multi ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;
@@ -650,7 +650,7 @@ namespace Sapphire
                 try
                 {
                     bool ex;
-                    var loc = RDString.GetWithCheck("enum." + enumType + "." + value, out ex, null);
+                    var loc = GameCompat.StrCheck("enum." + enumType + "." + value, out ex, null);
                     if (ex && !string.IsNullOrEmpty(loc)) return loc;
                 }
                 catch { }
