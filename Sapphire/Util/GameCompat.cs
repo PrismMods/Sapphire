@@ -52,6 +52,12 @@ namespace Sapphire
             return (Material)(_matProp != null ? _matProp.GetValue(a, null) : _matField?.GetValue(a));
         }
 
+        // TMP_FontAsset's on Unity 2022, TMP_Asset's on Unity 6: naming it binds to whichever the
+        // build ran against, and a 3.x-built dll then fails on 2.9.
+        private static readonly PropertyInfo _faceInfo = typeof(TMP_FontAsset).GetProperty("faceInfo", BindingFlags.Public | BindingFlags.Instance);
+
+        internal static FaceInfo FaceInfoOf(TMP_FontAsset fa) => fa == null || _faceInfo == null ? default(FaceInfo) : (FaceInfo)_faceInfo.GetValue(fa, null);
+
         // int on Unity 2022, float on Unity 6.
         private static readonly PropertyInfo _pointSize = typeof(FaceInfo).GetProperty("pointSize", BindingFlags.Public | BindingFlags.Instance);
 

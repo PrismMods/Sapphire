@@ -65,7 +65,7 @@ namespace Sapphire
                    the [-1, 1] clamp. */
                 float fs = _text.fontSize > 0f ? _text.fontSize : 1f;
                 var fa = _text.font;
-                float sampling = GameCompat.PointSize(fa.faceInfo);
+                float sampling = GameCompat.PointSize(GameCompat.FaceInfoOf(fa));
                 if (sampling <= 0f) sampling = 90f;
                 float padding = fa.atlasPadding;
                 if (padding <= 0f) padding = sampling * 0.1f;
