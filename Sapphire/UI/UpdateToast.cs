@@ -17,6 +17,7 @@ namespace Sapphire.UI
     {
         private static Toast _toast;
         private static bool _checkedOnce;
+        private static bool _restartOffered;
 
         internal static void Tick()
         {
@@ -41,6 +42,11 @@ namespace Sapphire.UI
             // Unset = TMP's default, which is the game's own font and unreadable at toast size.
             // Read once, when the card is first built.
             _toast.Theme.Font = Theme.TmpFont;
+            if (UpdateService.Status == UpdateStatus.Installed && !_restartOffered)
+            {
+                _restartOffered = true;
+                PrismBridge.PromptRestart("Sapphire");
+            }
             _toast.Set(Current());
             _toast.Tick();
         }

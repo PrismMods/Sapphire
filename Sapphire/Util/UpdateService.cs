@@ -283,12 +283,31 @@ namespace Sapphire
                         continue;
                     }
                     Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                    // Identical files are left alone: fonts and PrismLib.UI rarely change, and on
+                    // Windows a file the game holds open (a loaded font) can't be replaced at all.
+                    if (SameAsOnDisk(entry, dest)) continue;
                     string tmp = dest + ".sapnew";
                     try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
                     entry.ExtractToFile(tmp, true);
                     ReplaceFile(tmp, dest);
                 }
             }
+        }
+
+        private static bool SameAsOnDisk(ZipArchiveEntry entry, string dest)
+        {
+            try
+            {
+                if (!File.Exists(dest) || new FileInfo(dest).Length != entry.Length) return false;
+                var buf = new byte[entry.Length];
+                using (var s = entry.Open())
+                    for (int n = 0, r; n < buf.Length; n += r)
+                        if ((r = s.Read(buf, n, buf.Length - n)) == 0) return false;
+                var disk = File.ReadAllBytes(dest);
+                for (int i = 0; i < buf.Length; i++) if (buf[i] != disk[i]) return false;
+                return true;
+            }
+            catch { return false; }
         }
 
         /* The running Sapphire.dll is one of the files being replaced. Mono on macOS/Linux lets
